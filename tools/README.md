@@ -1,5 +1,7 @@
 # Tools
 
+**🌐 [中文](README.md) · [English](README.en.md)**
+
 配套工具脚本。可选，不影响 HTML 主功能。
 
 ## `generate_route_images.py`

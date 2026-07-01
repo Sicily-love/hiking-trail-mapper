@@ -1,4 +1,8 @@
-# 标注点自动分类规则
+# 标注点自动分类规则 · Waypoint tag classification rules
+
+**🌐 中英混合文档（tag 关键词以中文为主，代码注释与说明双语）**
+
+> This file documents how user-uploaded waypoint text is auto-classified into 13 tags. Keywords are Chinese-heavy since most trail data comes from Chinese hiking apps like 2bulu. The overall structure (Python-like pseudocode, priority-ordered matching) works the same regardless of language.
 
 把用户原始标注的文本归到统一 tag 系统，用于地图筛选和图标显示。
 

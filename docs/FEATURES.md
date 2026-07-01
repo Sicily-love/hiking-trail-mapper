@@ -1,5 +1,7 @@
 # 功能详解 · Features
 
+**🌐 [中文](FEATURES.md) · [English](FEATURES.en.md)**
+
 本文详细列出所有功能、交互方式、快捷键与设计考虑。
 
 ## 目录

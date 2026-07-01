@@ -1,5 +1,7 @@
 # Changelog
 
+**🌐 中英双语条目 · Chinese and English entries preserved per version**
+
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
 ## v1.14.1 — 2026-07-01

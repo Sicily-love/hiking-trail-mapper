@@ -1,5 +1,7 @@
 # Sample Trails · 示例轨迹
 
+**🌐 [中文](README.md) · [English](README.en.md)**
+
 这里提供一组「**格聂牧场+V**」四天穿越路线的 KML 样本，来自 [两步路](https://www.2bulu.com) 三位不同用户上传的变体。
 
 ## 用途

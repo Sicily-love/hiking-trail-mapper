@@ -1,5 +1,7 @@
 # Screenshots
 
+**🌐 [中文](README.md) · [English](README.en.md)**
+
 想让 README 看起来更吸引人？
 
 请贡献截图到这个目录，然后 PR。建议内容：

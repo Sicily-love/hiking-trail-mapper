@@ -1,5 +1,7 @@
 # 架构与设计决策 · Architecture
 
+**🌐 [中文](ARCHITECTURE.md) · [English](ARCHITECTURE.en.md)**
+
 给贡献者与技术好奇者。
 
 ## 概览
