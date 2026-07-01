@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Sicily-love
+Copyright (c) 2026 Hiking Trail Mapper contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Third-party libraries
+
+This project bundles the following third-party open-source libraries (all
+compatible with MIT):
+
+- Leaflet 1.9.4 — BSD-2-Clause © 2010-present Volodymyr Agafonkin, CloudMade
+  https://github.com/Leaflet/Leaflet
+- leaflet-polylineDecorator — MIT © Benjamin Becquet
+  https://github.com/bbecquet/Leaflet.PolylineDecorator
+- fflate 0.8.2 — MIT © 2020 Arjun Barrett
+  https://github.com/101arrowz/fflate
+
+Map tiles:
+- Esri World Imagery / World_Shaded_Relief / World_Boundaries_and_Places —
+  Please respect Esri's terms of use for the ArcGIS Online basemap services.
