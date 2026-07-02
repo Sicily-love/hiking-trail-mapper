@@ -147,24 +147,120 @@ H = max(140, min(340, 110 + (stackDepth + 1) * (lh + 2) + 16))
 - 每个状态只有**一个真源**（不搞 getter 反射多个 Set）
 - `state.activeTrails` = `Set<trailId>`（勾选叠加的）
 - `state.expandedTrails` = `Set<trailId>`（展开详情的）
-- `state.batchMode` = boolean
-- `state.batchSelected` = `Set<trailId>`（批量模式下选中的）
+- `state.batchSelected` = `Set<trailId>`（批量选中的；v1.15.0 起替代 batchMode 布尔，size>0 即视为进入批量模式）
 - `state.activeGroup` = string
 - `state.primaryTrailId` = string
-- 改状态后统一走 `rebuildAll()` / `buildTrailList()` / `saveToStorage()`
+- `state.visibleTags` = `Set<string>`（当前显示的标签类型）
+- `state.mode` = `'day' | 'waypoint'`（分天视图 vs 标注点视图）
+- 改状态后**必须**统一走 `applyChange()`（v1.17.0 起），不再散落调用 `rebuildAll + saveToStorage`
+
+## v1.17.0+ 函数拆分架构
+
+三个大函数（合计 703 行）拆成编排层 + 22 个语义辅助（v1.17.0-v1.18.0）：
+
+### buildTrailList（v1.17.0）
+```
+buildTrailList (25 行编排)
+├── renderGroupTabs()
+├── renderBatchToolbar(others)
+├── renderTrailCard(tr)
+│   ├── trailCardHeaderHtml(tr, ...)
+│   ├── trailCardExpandedHtml(tr)
+│   ├── handleTrailCardClick(tr, e)
+│   │   └── isDetailButtonTarget(el)
+│   ├── handleTrailDetailClick(tr, e)
+│   └── handleTrailGroupChange(tr, newGroup, sel)
+└── moveBatchToGroup(target)
+```
+
+### handleFiles（v1.18.0）
+```
+handleFiles (17 行编排)
+├── expandZipFiles(files)          → 展开 .zip → File-like 数组
+├── for each file:
+│   └── importSingleKml(f)
+│       ├── parseAndProcessKml(text, name)
+│       ├── findDuplicateTrail(trail) → 去重
+│       ├── ensureUniqueTrailId(trail)
+│       ├── renderKmlImportRow(label, trail)
+│       └── bindKmlImportRowEvents(row, trail)
+└── postImportFinalize(addedCount)
+```
+
+### parseAndProcessKml（v1.18.0）
+```
+parseAndProcessKml (36 行编排)
+├── parseKml(xmlText)                    → 原始 IO
+├── processTrack(trackPoints)
+├── enrichWaypoints(waypoints, trackPoints)
+├── computeCumulativeDistance(pts)
+├── buildDayMeta(pts, track, wps, cumD)
+├── computeTrailStats(elevs, cumD, smoothE)
+└── generateNextTrailId(DATA.trails)
+```
+
+### drawElevBar（v1.18.0）
+```
+drawElevBar (24 行编排)
+├── computeElevLayout(pts, opts)        → 坐标系 + km 数组
+├── updateElevBadges(alts)              → 顶部 ↑↓ 徽章
+├── drawElevBackground(layout)          → 米色卡纸 + 噪点
+├── drawElevGridLines(layout)           → 25/50/75% 虚线
+├── drawElevFill(pts, layout)           → 分段海拔色填充
+│   └── elevRatioColor(ratio)
+├── drawElevCurve(pts, layout)          → 曲线 + 底线
+├── collectElevAnnotations(pts, layout, opts) → 峰/谷/营地
+├── layoutElevLabels(annos, layout, pts)      → 避让 + 引线布局
+├── renderElevLabels(annos, layout)     → 绘制文字 + 黑点
+└── drawElevAxes(layout)                → Y 轴 + X 轴刻度
+```
+
+## v1.19.0 工程化基建
+
+**JSDoc 类型注解**：所有关键函数带 `@param` + `@returns`。`@typedef` 集中定义在文件顶部：
+
+- `TrackPoint / TrackTuple` — GPS 原始点与紧凑元组
+- `Waypoint / DayMeta / TrailStats / EscapeRoute` — 数据模型
+- `Trail` — 完整轨迹对象
+- `ElevLayout / ElevAnnotation` — 海拔图内部结构
+- `ImportedFile` — handleFiles 的 File-like
+
+**tests/ 完整目录**：
+
+```
+tests/
+├── run_full_check.sh    # 一键 6 阶段
+├── unit/
+│   ├── trail_core.js    # 纯函数镜像（供 Node 端复用）
+│   ├── test_math.js     # 30 个数学函数断言
+│   ├── test_enrich.js   # 12 个 snap/hash 断言
+│   └── verify_alignment.js  # 13 项 HTML↔trail_core 对齐校准
+└── e2e/
+    └── run_all.py       # 14 场景 · 39 断言（headless Chrome）
+```
+
+## 状态变更统一入口 applyChange
+
+```javascript
+applyChange({ save: true, fit: false, tracksOnly: false })
+```
+
+- `save`：是否触发 IndexedDB 保存（默认 true）
+- `fit`：是否 fitBounds 到主轨迹
+- `tracksOnly`：只重绘轨迹（跳过 UI 面板重建）
+
+所有 state 变更后调此函数，替代 v1.16.0 前散落的 `rebuildAll + saveToStorage` 模式。
 
 ## 版本发布检查清单
 
-改模板后必跑：
+改模板后必跑（v1.19.0+ 版本用 `./tests/run_full_check.sh` 一键完成 6 个阶段）：
 
 1. HTML 顶部注释 `APP_VERSION` + `BUILD_DATE`
 2. `<title>` 版本号
 3. `version-tag` DOM
 4. JS 内 `const APP_VERSION`
 5. `CHANGELOG` 数组追加 zh + en 条目
-6. Node syntax check：`node --check <(extract-inline-js.py)`
-7. Chrome headless dump-dom smoke test：`google-chrome --headless=new --dump-dom` 检查 DOM 完整
-8. Safari file:// 手动跑一遍所有交互（勾选/展开/切组/批量/导出）
+6. `./tests/run_full_check.sh` → 6/6 绿
 
 ## 常见性能陷阱
 

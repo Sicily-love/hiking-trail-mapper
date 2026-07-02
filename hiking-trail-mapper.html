@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <!-- ═══════════════════════════════════════════════════════════════
      徒步路线地图 (Hiking Trail Mapper) · 在线版
-     APP_VERSION: v1.14.1
-     BUILD_DATE:  2026-06-09
+     APP_VERSION: v1.31.0
+     BUILD_DATE:  2026-07-02
      ═══════════════════════════════════════════════════════════════ -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>徒步路线地图（在线版 v1.14.1）</title>
+<title>徒步路线地图（在线版 v1.31.0）</title>
 <style>
 /* Leaflet CSS (embedded) */
 /* required styles */
@@ -283,6 +283,13 @@ svg.leaflet-zoom-animated {
 svg.leaflet-image-layer.leaflet-interactive path {
 	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
 	pointer-events: auto;
+	}
+
+/* v1.30.0：测距/分段模式下，强制关闭 SVG path 的命中测试 —— 让浏览器跳过 O(n) 段命中检测
+   这是 pointerdown/mousemove 慢的真凶（不是 JS handler，是浏览器渲染层的命中测试） */
+.leaflet-container.measure-active .leaflet-pane > svg path.leaflet-interactive,
+.leaflet-container.measure-active svg.leaflet-image-layer.leaflet-interactive path {
+	pointer-events: none !important;
 	}
 
 /* visual tweaks */
@@ -1354,22 +1361,79 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
   background:linear-gradient(180deg, #fdf8e7 0%, #f0e6cc 100%);
   box-shadow:0 0 0 1px #3F5238 inset, 0 4px 10px rgba(58,40,20,0.22);
 }
+/* v1.21.0：分组内主轨迹卡视觉标记（左侧金色竖条 + 星号徽章） */
+.trail-card.is-primary {
+  border-left:3px solid #C6912D;
+}
+.trail-card.is-primary .trail-name::after {
+  content:' ★';
+  color:#C6912D;
+  font-size:11px;
+  vertical-align:baseline;
+}
 .trail-card-hdr { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
 .trail-checkbox {
   width:14px; height:14px; flex-shrink:0;
-  border:1.4px solid #7A6E54; border-radius:2px;
+  border:1.4px solid #B5A481; border-radius:3px;
   background:#FAF6EA;
   display:inline-flex; align-items:center; justify-content:center;
   font-size:11px; line-height:1; color:transparent;
   font-weight:700;
   transition:all 0.15s;
   cursor:pointer;
+  user-select:none;
 }
 .trail-checkbox.checked {
   background:var(--accent); border-color:var(--accent);
   color:#FBF6E6;
 }
 .trail-card:hover .trail-checkbox { border-color:var(--accent); }
+
+/* v1.16.0：展开/收起箭头（与批量复选框分离，各司其职） */
+.trail-expand-arrow {
+  width:14px; height:14px; flex-shrink:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:12px; line-height:1; color:var(--text-muted);
+  cursor:pointer; user-select:none;
+  transition:color 0.15s;
+}
+.trail-expand-arrow:hover,
+.trail-expand-arrow.expanded { color:var(--accent); }
+
+/* v1.16.0：批量工具栏样式（从 buildTrailList 抽离，减少 JS 内联样式） */
+.batch-toolbar {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 2px 8px; font-size:11px; flex-wrap:wrap;
+}
+.batch-toolbar .info { color:var(--accent); font-weight:600; }
+.batch-toolbar button {
+  padding:2px 8px; font-size:10px;
+  background:var(--bg-0); color:var(--text);
+  border:1px solid var(--line); border-radius:3px;
+  cursor:pointer;
+}
+.batch-toolbar button.muted { color:var(--text-muted); }
+.batch-toolbar select {
+  font-size:10px; padding:2px 4px;
+  border:1px solid var(--accent); border-radius:3px;
+  background:var(--bg-0); color:var(--text);
+  cursor:pointer; margin-left:auto;
+}
+.group-tab-bar {
+  display:flex; flex-wrap:wrap; gap:4px;
+  padding:6px 4px 8px; margin-bottom:8px;
+  border-bottom:1px dashed var(--line);
+}
+.group-tab {
+  padding:3px 10px; font-size:11px;
+  background:var(--bg-0); color:var(--text);
+  border:1px solid var(--line); border-radius:3px;
+  cursor:pointer; letter-spacing:0.02em;
+}
+.group-tab.active {
+  background:var(--accent); color:#000; font-weight:600;
+  border-color:var(--accent);
+}
 .trail-color-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 1.5px rgba(255,255,255,0.6); }
 .trail-name {
   font-size:14px; font-weight:600; color:#2a3a28; flex:1;
@@ -1624,6 +1688,7 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
       <button id="help-btn" class="tb-btn" title="帮助" data-i18n="action.help">❓ 帮助</button>
       <button id="reset-btn" class="tb-btn" title="复位到主轨迹" data-i18n="action.reset">🎯 复位</button>
       <button id="measure-btn" class="tb-btn" title="测距：在主轨迹上点两个点，计算爬升/下降/里程" data-i18n="action.measure">📏 测距</button>
+      <button id="segment-btn" class="tb-btn" title="分段：在主轨迹上依次选点标记每天行程" data-i18n="action.segment">📅 分段</button>
       <button id="reverse-btn" class="tb-btn" title="反向主轨迹" data-i18n="action.reverse">⇌ 反向</button>
       <button id="add-trail-btn" class="tb-btn" title="添加新轨迹" data-i18n="action.add">+ 添加</button>
       <button id="export-btn" class="tb-btn" title="导出：当前组 KML ZIP / 行程 MD" data-i18n="action.export">📤 导出</button>
@@ -1639,7 +1704,7 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
           <div style="font-size:28px;margin-bottom:6px">📂</div>
           <div style="font-size:12px;color:var(--text)">点击或拖拽 .kml 文件到此处</div>
           <div style="font-size:10px;color:var(--text-muted);margin-top:4px">支持多选 / 多次添加</div>
-          <input type="file" id="kml-file" accept=".kml,application/vnd.google-earth.kml+xml" multiple style="display:none">
+          <input type="file" id="kml-file" accept=".kml,.zip,application/vnd.google-earth.kml+xml,application/zip" multiple style="display:none">
         </div>
 
         <div id="kml-list" style="max-height:120px;overflow:auto;font-size:11px;color:var(--text-dim);margin-bottom:8px"></div>
@@ -1741,17 +1806,34 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
   <div id="measure-result" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #2d3748">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px">
       <div>📏 里程：<b id="m-dist" style="color:#fbbf24">-</b></div>
-      <div>⏱ 方向：<b id="m-dir" style="color:#94a3b8">-</b></div>
       <div>↑ 爬升：<b id="m-asc" style="color:#22c55e">-</b></div>
       <div>↓ 下降：<b id="m-desc" style="color:#ef4444">-</b></div>
+      <div>⛰ 段内最高：<b id="m-max" style="color:#fbbf24">-</b></div>
       <div>🏔 起点海拔：<b id="m-eA" style="color:#cbd5e1">-</b></div>
       <div>🏔 终点海拔：<b id="m-eB" style="color:#cbd5e1">-</b></div>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px">
-      <button id="measure-swap" class="btn-mini" style="flex:1;background:#374151;color:#a78bfa;font-size:11px;padding:5px 10px;border:none;border-radius:4px;cursor:pointer">⇄ 交换 A/B</button>
       <button id="measure-reset" class="btn-mini" style="flex:1;background:#374151;color:#e2e8f0;font-size:11px;padding:5px 10px;border:none;border-radius:4px;cursor:pointer">🔄 重新选点</button>
       <button id="measure-exit" class="btn-mini" style="flex:1;background:#1e2433;color:#94a3b8;font-size:11px;padding:5px 10px;border:1px solid #3a4154;border-radius:4px;cursor:pointer">✕ 退出</button>
     </div>
+  </div>
+</div>
+
+<!-- 分段面板：在主轨迹上依次选点标记每天行程 -->
+<div id="segment-panel" style="position:fixed;top:80px;right:14px;display:none;z-index:5500;background:#1e2433;border:1px solid #3a4154;border-radius:8px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,0.6);font-size:12px;color:#e2e8f0;width:360px;max-width:calc(100vw - 28px);max-height:calc(100vh - 100px);flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex:0 0 auto">
+    <b style="font-size:13px;color:#60a5fa">📅 行程分段</b>
+    <button id="segment-close" style="background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;padding:0;line-height:1">×</button>
+  </div>
+  <div id="segment-hint" style="color:#94a3b8;line-height:1.5;flex:0 0 auto;margin-bottom:8px">
+    在主轨迹上点击选择<b style="color:#fbbf24">起点</b>（D1 起点）。之后每次点击 = 增加一天。
+  </div>
+  <div id="segment-list" style="flex:1 1 auto;overflow-y:auto;margin:0 -4px;padding:0 4px"></div>
+  <div style="flex:0 0 auto;margin-top:10px;padding-top:10px;border-top:1px solid #2d3748;display:flex;gap:6px;flex-wrap:wrap">
+    <button id="segment-undo" class="btn-mini" style="flex:1;min-width:70px;background:#374151;color:#e2e8f0;font-size:11px;padding:5px 8px;border:none;border-radius:4px;cursor:pointer">↩ 撤销</button>
+    <button id="segment-clear" class="btn-mini" style="flex:1;min-width:70px;background:#374151;color:#e2e8f0;font-size:11px;padding:5px 8px;border:none;border-radius:4px;cursor:pointer">🔄 清空</button>
+    <button id="segment-apply" class="btn-mini" style="flex:1;min-width:80px;background:#2563eb;color:#fff;font-size:11px;padding:5px 8px;border:none;border-radius:4px;cursor:pointer;font-weight:600">✓ 应用到行程</button>
+    <button id="segment-exit" class="btn-mini" style="flex:0 0 60px;background:#1e2433;color:#94a3b8;font-size:11px;padding:5px 8px;border:1px solid #3a4154;border-radius:4px;cursor:pointer">✕ 退出</button>
   </div>
 </div>
 
@@ -1813,6 +1895,7 @@ const I18N = {
     'trail.show': '✓ 显示',
     'trail.hide': '○ 隐藏',
     'trail.setPrimary': '设为主轨迹',
+    'trail.isPrimary': '主轨迹',
     'trail.currentPrimary': '⭐ 当前主轨迹',
     'trail.original': '🔗 原始',
     'trail.delete': '🗑 删除',
@@ -1841,7 +1924,7 @@ const I18N = {
     'mini.km': 'km',
     'mini.ascent': 'm↑',
     'mini.peak': 'm',
-    // v1.12.6：primary-card 字段
+    // primary-card 字段
     'pc.eyebrow': '★ 主轨迹',
     'pc.distance': 'km · 距离',
     'pc.dayUnit': 'day · 天数',
@@ -1854,6 +1937,8 @@ const I18N = {
     'pc.source': '🔗 来源',
     'pc.editLink': '✎ 链接',
     'pc.empty': '尚未设置主轨迹，导入 KML 开始。',
+    'pc.emptyGroup': '未选中任何分组 · 点击顶部分组切换',
+    'trail.emptyNoGroup': '未选中任何分组，再次点击分组 tab 可切换或取消选中',
     // 海拔图标注（绘制在 canvas 上的中文字符）
     'elev.anno.peak': '最高',
     'elev.anno.valley': '最低',
@@ -1884,13 +1969,14 @@ const I18N = {
     'export.imgItinerary': '行程图片',
     'action.reset': '🎯 复位',
     'action.measure': '📏 测距',
+    'action.segment': '📅 分段',
     'action.help': '❓ 帮助',
     'action.reverse': '⇌ 反向',
     'help.title': '使用说明',
     'action.save': '保存',
     // 添加轨迹弹窗
     'add.title': '添加 KML 轨迹',
-    'add.dropHint': '拖入或点击选择 .kml 文件（可多选）',
+    'add.dropHint': '拖入或点击选择 .kml / .zip 文件（可多选，支持导入前导出的 KML 打包）',
     'add.parsing': '⏳ 解析',
     'add.waypoints': '标注点',
     'add.urlPlaceholder': '可选：粘贴轨迹来源链接',
@@ -1905,7 +1991,8 @@ const I18N = {
     'tag.warn': '警示',
     'tag.shelter': '庇护',
     'tag.village': '村庄',
-    'tag.view': '观景',
+    'tag.view': '其他',
+    'tag.other': '其他',
     'tag.bridge': '桥',
     'tag.river': '河流',
     'tag.peak': '山峰',
@@ -1949,6 +2036,7 @@ const I18N = {
     'trail.show': '✓ Show',
     'trail.hide': '○ Hide',
     'trail.setPrimary': 'Set as Main',
+    'trail.isPrimary': 'Main',
     'trail.currentPrimary': '⭐ Current Main',
     'trail.original': '🔗 Source',
     'trail.delete': '🗑 Delete',
@@ -1988,6 +2076,8 @@ const I18N = {
     'pc.source': '🔗 Source',
     'pc.editLink': '✎ Link',
     'pc.empty': 'No primary trail set. Import KML to start.',
+    'pc.emptyGroup': 'No group selected · Click a group tab above',
+    'trail.emptyNoGroup': 'No group selected. Click a group tab to select or click active tab again to deselect.',
     'elev.anno.peak': 'Peak',
     'elev.anno.valley': 'Low',
     'elev.anno.camp': 'Camp',
@@ -2013,12 +2103,13 @@ const I18N = {
     'export.imgItinerary': 'Itinerary Images',
     'action.reset': '🎯 Reset',
     'action.measure': '📏 Measure',
+    'action.segment': '📅 Segment',
     'action.help': '❓ Help',
     'action.reverse': '⇌ Reverse',
     'help.title': 'How to Use',
     'action.save': 'Save',
     'add.title': 'Add KML Trails',
-    'add.dropHint': 'Drop or click to select .kml file(s)',
+    'add.dropHint': 'Drop or click to select .kml or .zip file(s) (bundled KML export supported)',
     'add.parsing': '⏳ Parsing',
     'add.waypoints': 'waypoints',
     'add.urlPlaceholder': 'Optional: paste trail source URL',
@@ -2032,7 +2123,8 @@ const I18N = {
     'tag.warn': 'Warning',
     'tag.shelter': 'Shelter',
     'tag.village': 'Village',
-    'tag.view': 'View',
+    'tag.view': 'Other',
+    'tag.other': 'Other',
     'tag.bridge': 'Bridge',
     'tag.river': 'River',
     'tag.peak': 'Peak',
@@ -2072,7 +2164,7 @@ function setLang(lang) {
   try { localStorage.setItem('hiking_lang', lang); } catch(e) {}
   if(typeof rebuildAll === 'function') rebuildAll({fit: false});
   applyI18n();  // 必须在 rebuildAll 之后再次调用，因为重建后 DOM 是新的中文默认
-  // v1.12.5：海拔图、主轨迹小卡、模式标注点筛选标题用 JS 拼接，无 data-i18n，需手动刷新
+  // 海拔图、主轨迹小卡、模式标注点筛选标题用 JS 拼接，无 data-i18n，需手动刷新
   if(typeof refreshElevBar === 'function') refreshElevBar();
   if(typeof buildPrimaryMini === 'function') buildPrimaryMini();
   if(typeof buildPrimaryCard === 'function') buildPrimaryCard();
@@ -2092,8 +2184,340 @@ function applyI18n() {
 }
 
 /* ============ Changelog ============ */
-const APP_VERSION = 'v1.14.1';
+const APP_VERSION = 'v1.31.0';
 const CHANGELOG = [
+  {
+    version: 'v1.31.0',
+    date: '2026-07-02',
+    items: {
+      zh: [
+        '🐛 修复"选完 AB → 复位 → 再选 B 慢"：measureReset 现在同步刷新海拔图回全轨模式，避免下次 measureCompute 的 refreshElevBar 与残留状态竞态',
+        '⚡ 海拔图 predictStackDepth 用 for-loop 找 min/max/peakIdx/valleyIdx，替换 alts.map + Math.min(...spread) + indexOf，大轨迹上省几十 ms 且避免栈溢出',
+        '✨ 从浏览器缓存恢复数据后自动执行一次复位（resetView），保证视野贴到主轨迹上',
+        '🛠 sync_release.sh 默认以 template 为准（不再从 hiking_trail_assets/current 特化版拉，避免误覆盖新版本）',
+      ],
+      en: [
+        '🐛 Fix "select AB → reset → re-select B slow": measureReset now syncs elevation bar back to full-trail mode, avoiding race with next measureCompute\'s refreshElevBar',
+        '⚡ Elevation predictStackDepth uses for-loop for min/max/peakIdx/valleyIdx, replaces alts.map + Math.min(...spread) + indexOf; saves dozens of ms on long trails and avoids stack overflow',
+        '✨ After restoring data from browser cache, auto-perform resetView so viewport snaps to primary trail',
+        '🛠 sync_release.sh defaults to template (no longer pulls specialized HTML from hiking_trail_assets/current, avoids overwriting newer versions)',
+      ]
+    }
+  },
+  {
+    version: 'v1.30.0',
+    date: '2026-07-02',
+    items: {
+      zh: [
+        '🎯 定位到轨迹上点击慢的真正真凶：不是 JS handler，而是浏览器渲染层的 SVG path 命中测试 —— 长轨迹的 SVG path 有几千段，每一次 mousemove/mousedown 都要 O(n) 段命中检测',
+        '⚡ 测距/分段模式下给 map container 加 .measure-active 类，CSS 强制所有 SVG path 变为 pointer-events: none，浏览器完全跳过命中测试',
+        '✂ 取消测距完成后的自动 fitBounds 复位（用户不希望测距时视图跳转）',
+        '✂ 取消退出测距时的自动 resetView 复位',
+      ],
+      en: [
+        '🎯 Pinpointed the real cause of on-trail click slowness: not JS handlers, but browser-level SVG path hit-testing — long trails have thousands of SVG path segments, each mousemove/mousedown triggers O(n) hit tests',
+        '⚡ Measure/segment modes add .measure-active class to map container, CSS forces all SVG paths to pointer-events: none, browser completely skips hit-testing',
+        '✂ Removed auto-fitBounds after measure A+B computed (user doesn\'t want view to jump during measurement)',
+        '✂ Removed auto-resetView on measure exit',
+      ]
+    }
+  },
+  {
+    version: 'v1.29.0',
+    date: '2026-07-02',
+    items: {
+      zh: [
+        '⚡ 修复轨迹上点击/悬停卡顿真凶：polyline.on("mousemove") 每秒触发几十次，每次都做 O(n) nearestTrackIdx + showTooltip 渲染，长轨迹上会积压主线程数百 ms 到几秒',
+        '⚡ mousemove 用 requestAnimationFrame 节流，每帧最多处理一次；测距/分段模式下完全禁用轨迹 hover tooltip',
+        '📊 用户反馈：鼠标在轨迹上时慢、在轨迹旁快 —— 精准定位到这个瓶颈',
+      ],
+      en: [
+        '⚡ Fixed the real cause of trail hover/click lag: polyline.on("mousemove") fires dozens of times per second, each doing O(n) nearestTrackIdx + showTooltip render, backlogs main thread by hundreds of ms to seconds on long trails',
+        '⚡ Throttle mousemove via requestAnimationFrame (once per frame max); disable trail hover tooltip entirely in measure/segment modes',
+        '📊 User feedback: mouse on trail = slow, mouse near trail = fast — precisely pointed to this bottleneck',
+      ]
+    }
+  },
+  {
+    version: 'v1.28.0',
+    date: '2026-07-02',
+    items: {
+      zh: [
+        '⚡ 测距/分段：点击瞬间立刻画临时 marker（<16ms 视觉反馈），nearestTrackIdx 搜索+吸附延迟到下一帧，感知延迟由几百 ms 降为「点即出」',
+        '🔍 加入性能诊断日志：控制台运行 `window.PERF_DEBUG = true` 即可看到每步耗时（nearestTrackIdx、marker addTo、hint、measureCompute…）帮助定位剩余瓶颈',
+      ],
+      en: [
+        '⚡ Measure/segment: click immediately draws a temporary marker (<16ms visual feedback), nearestTrackIdx search + snap deferred to next frame; perceived latency drops from hundreds of ms to "click = marker"',
+        '🔍 Perf diagnostic logs: run `window.PERF_DEBUG = true` in console to see per-step timings (nearestTrackIdx, marker addTo, hint, measureCompute…) for pinpointing remaining bottlenecks',
+      ]
+    }
+  },
+  {
+    version: 'v1.27.0',
+    date: '2026-07-02',
+    items: {
+      zh: [
+        '⚡ 测距点击生成 A/B 大幅提速：measureMarker 从 circleMarker+permanent tooltip 改为轻量 divIcon marker，减少 DOM 层级和 layout 触发',
+        '⚡ 主轨迹 lat/lng 缓存为 Float64Array，加速 nearestTrackIdxOnPrimary 的 O(n) 搜索（对大轨迹提速 3-5 倍）',
+        '⚡ 放宽 fast-tap 阈值：位移 6→10 px、时间 400→800 ms，覆盖 trackpad 慢速点击',
+        '⚡ 关闭 Leaflet 的 L.Tap 处理（tap: false），消除触屏 tap 延迟',
+        '✨ 测距选中 A+B 后自动 fitBounds 到测距段（padding 60px），无需手动点复位',
+        '✨ 退出测距模式（✕ 退出按钮或再次点 📏）后自动复位到主轨迹全景',
+        '✨ 分段应用后同步刷新侧栏「行程」tab：不仅写入导出用的 day_meta 和 track dayId，行程 tab 立刻显示每天卡片',
+        '✨ 分段应用时自动给主轨迹 waypoints 打上 day 字段，行程 tab 精确按每天分组显示 waypoints',
+        '✨ 行程 tab 每日展开区固定显示关键类型（营地/垭口/水源/补给/桥/河/村庄/避难/警告/岔路/起终点），不受 filter 影响',
+        '🐛 修复 buildDaysTab 在 day_meta 为 undefined 时崩溃',
+      ],
+      en: [
+        '⚡ Measure click A/B generation greatly sped up: measureMarker from circleMarker+permanent tooltip to lightweight divIcon marker, reducing DOM layers and layout triggers',
+        '⚡ Primary trail lat/lng cached as Float64Array, accelerates nearestTrackIdxOnPrimary O(n) search (3-5x speedup for large trails)',
+        '⚡ Relaxed fast-tap thresholds: movement 6→10 px, time 400→800 ms, covers trackpad slow clicks',
+        '⚡ Disabled Leaflet\'s L.Tap handler (tap: false), removes touch tap delay',
+        '✨ After selecting A+B in measure mode, auto-fitBounds to the measured segment (60px padding), no manual reset needed',
+        '✨ Exiting measure mode (✕ Exit or re-clicking 📏) auto-resets view to full primary trail',
+        '✨ Applying segments syncs to sidebar Itinerary tab: not only writes day_meta and track dayId, but daily cards immediately show',
+        '✨ Segment apply automatically tags primary trail waypoints with day field, itinerary tab precisely groups waypoints by day',
+        '✨ Itinerary tab daily expansions fixed-show key types (camp/pass/water/supply/bridge/river/village/shelter/warn/fork/start/end), unaffected by filter',
+        '🐛 Fix buildDaysTab crash when day_meta is undefined',
+      ]
+    }
+  },
+  {
+    version: 'v1.26.0',
+    date: '2026-07-02',
+    items: {
+      zh: [
+        '⚡ 测距/分段选点极速响应：改用原生 pointerdown/pointerup（<400ms & <6px 位移视为 tap），绕过 Leaflet click 内部延迟；click 事件保留为兼容 fallback',
+        '✨ 分段应用后同步刷新侧栏「行程」tab：不仅写入导出用的 day_meta 和 track dayId，行程 tab 立刻显示每天卡片（D1/D2/…、里程、爬升、最高、营地）',
+        '✨ 分段生成 seg 描述字段（起点海拔 → 顶 → 终点海拔（km）），行程 tab 顶部一行即可看清一天全貌',
+        '🐛 修复 buildDaysTab 在 day_meta 为 undefined 时崩溃：改为显示"尚未设置每日行程"占位',
+        '🐛 修复 buildDaysTab 里 dm.seg 为空时显示 undefined：改为 fallback 到 km/asc/desc/max 组合',
+      ],
+      en: [
+        '⚡ Measure/segment click response near-instant: uses native pointerdown/pointerup (<400ms & <6px movement = tap), bypasses Leaflet click internal delay; click event kept as fallback',
+        '✨ Applying segments now also refreshes sidebar "Itinerary" tab: not only writes day_meta and track dayId for export, but the tab immediately shows daily cards (D1/D2/…, distance, ascent, max, camp)',
+        '✨ Segment generates seg description field (start elev → peak → end elev (km)), itinerary tab shows the day\'s summary at a glance',
+        '🐛 Fix buildDaysTab crash when day_meta is undefined: shows "no daily itinerary set" placeholder',
+        '🐛 Fix buildDaysTab showing "undefined" when dm.seg is empty: falls back to km/asc/desc/max combo',
+      ]
+    }
+  },
+  {
+    version: 'v1.25.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '⚡ 测距选点响应大幅提速：doubleClickZoom 关闭 → 消除 Leaflet 内部 ~200ms click 延迟',
+        '⚡ 测距计算异步化：点击立即绘制高亮段+marker，dist/asc/desc/max 挪到下一帧计算，海拔图再下一帧',
+        '⚡ 优化数组遍历：避免 slice + spread（大数组慢/爆栈），用 for 循环 + 预分配 typed array',
+        '🎨 测距结果面板移除"方向"字段（永远 A→B，无需显示）',
+        '🎨 测距结果面板移除「⇄ 交换 A/B」按钮（方向不重要，简化 UI）',
+        '🎨 「⛰ 段内最高」从跨列独占一行改为与其他 5 项等宽两列布局，更紧凑',
+      ],
+      en: [
+        '⚡ Measure click response greatly sped up: doubleClickZoom disabled → removes Leaflet\'s internal ~200ms click delay',
+        '⚡ Measure computation async: click immediately draws segment+markers, dist/asc/desc/max moved to next frame, elev chart to the frame after',
+        '⚡ Array traversal optimized: avoid slice + spread (slow/stack overflow on big arrays), use for-loops + pre-allocated arrays',
+        '🎨 Measure panel removed "Direction" field (always A→B, no need to show)',
+        '🎨 Measure panel removed "⇄ Swap A/B" button (direction irrelevant, simplify UI)',
+        '🎨 "⛰ Max in segment" no longer spans two columns, joins the two-column grid layout',
+      ]
+    }
+  },
+  {
+    version: 'v1.24.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 分段模式：分段点可以直接拖拽调整每天边界（吸附到主轨迹 + 保持天数顺序 + 相邻点冲突检测）',
+        '✨ 分段面板：营地名和营地海拔拆成两栏，各有独立标签，输入更清晰',
+        '✨ 测距模式：结果面板新增「⛰ 段内最高海拔」',
+        '✨ 测距模式下点击 🎯 复位 → 以选中段（A→B）为中心 fitBounds，方便快速对齐视野',
+      ],
+      en: [
+        '✨ Segment mode: drag segment markers directly to adjust day boundaries (snaps to primary trail + preserves order + neighbor conflict check)',
+        '✨ Segment panel: camp name and camp elevation split into two separate rows with labels for clarity',
+        '✨ Measure mode: result panel now shows "⛰ Max elevation in segment"',
+        '✨ In measure mode, clicking 🎯 Reset fits the map to the selected segment (A→B), for quick visual alignment',
+      ]
+    }
+  },
+  {
+    version: 'v1.23.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 新增 📅 分段模式：在主轨迹上依次点选每天的起止点，自动计算每天里程/爬升/下降/最高海拔，支持手填营地名和海拔',
+        '✨ 分段应用后自动写入 main.day_meta 和 track dayId，导出行程 MD 会用手工分段的数据',
+        '✨ 分段模式再次进入时自动从已有 day_meta 恢复分段点',
+        '🎨 标注点图标更新：补给 🛒 → 🏪（小卖部）、河流 ≋ → 🏞（山水），"观景"分类移除，未识别标签统一归入"其他 📍"',
+        '🐛 分段模式下点击主轨迹不再切换主轨迹',
+      ],
+      en: [
+        '✨ New 📅 Segment mode: sequentially click points on the primary trail to mark each day; auto-computes daily distance/ascent/descent/max elevation, with manual camp name + elevation input',
+        '✨ Applying segments writes to main.day_meta and track dayId, exported itinerary MD uses the manual segmentation',
+        '✨ Re-entering segment mode restores segment points from existing day_meta',
+        '🎨 Waypoint icon updates: Supply 🛒 → 🏪 (mini-mart), River ≋ → 🏞 (landscape); "View" category removed, unrecognized tags fall back to "Other 📍"',
+        '🐛 Clicking primary trail in segment mode no longer switches primary',
+      ]
+    }
+  },
+  {
+    version: 'v1.22.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 地图缩放粒度更细：zoomSnap=0.25（对齐到 0.25 级）+ zoomDelta=0.5（按钮/键盘每次 0.5 级）+ wheelPxPerZoomLevel=120（滚轮更平滑）',
+        '✨ 导入 KML/ZIP 完成后自动执行完整复位（fitBounds 到主轨迹），无需手动点复位按钮',
+        '✨ 切换分组时自动执行完整复位，视野立即对齐到新组主轨迹',
+        '♻️ 抽出 resetView() 函数供复位按钮 / 导入 / 切换分组共用，行为一致（含主轨迹兜底 + 全量重绘 + fitBounds）',
+      ],
+      en: [
+        '✨ Finer-grained map zoom: zoomSnap=0.25 (snap to 0.25 level) + zoomDelta=0.5 (button/keyboard step) + wheelPxPerZoomLevel=120 (smoother wheel)',
+        '✨ After importing KML/ZIP, auto-execute full reset (fitBounds to primary trail), no manual reset button click needed',
+        '✨ Auto-reset on group switch, view immediately aligns to the new group\'s primary trail',
+        '♻️ Extracted resetView() shared by reset button / import / group switch, consistent behavior (primary trail fallback + full redraw + fitBounds)',
+      ]
+    }
+  },
+  {
+    version: 'v1.21.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 主轨迹保留在轨迹列表中不再被剔除，用金色左边框和 ★ 徽章标识（之前主轨迹会"消失"到顶部卡片里，用户找不到）',
+        '✨ 主轨迹卡片"设为主轨迹"按钮替换为 "★ 主轨迹" 只读标识（避免让用户点自己设自己）',
+        '✨ 每个分组独立记忆主轨迹：state.primaryByGroup[groupName]。A 组切主轨迹不会污染 B 组，切回来还能记住',
+        '🔧 state.primaryTrailId 现在是 getter/setter，桥接到 primaryByGroup[activeGroup]。所有旧代码无感升级',
+        '🔧 场景全覆盖：分组切换 / 拖动分组 / 批量移动 / 删除轨迹 / IndexedDB 恢复都会正确清理其他组的记忆值',
+        '🔧 兼容旧数据：老 IndexedDB 里的单值 primaryTrailId 会自动迁移到 primaryByGroup 里',
+        '🧪 E2E 新增 E16 场景（13 项断言）验证跨分组独立主轨迹的完整生命周期；总 62/62 全过',
+      ],
+      en: [
+        '✨ Primary trail no longer removed from the trail list, marked with gold left border and ★ badge instead (previously the primary trail "disappeared" into the top card and users couldn\'t find it)',
+        '✨ "Set as Main" button on the primary card replaced with read-only "★ Main" label (prevents users from clicking to set themselves as primary)',
+        '✨ Each group independently remembers its primary trail: state.primaryByGroup[groupName]. Switching primary in group A no longer pollutes group B; switching back preserves memory',
+        '🔧 state.primaryTrailId is now a getter/setter bridging to primaryByGroup[activeGroup]. All legacy code upgraded transparently',
+        '🔧 Full scenario coverage: group switch / group dropdown / batch move / trail delete / IndexedDB restore all correctly clean up other groups\' memory values',
+        '🔧 Backward compatible: legacy single-value primaryTrailId in old IndexedDB auto-migrates into primaryByGroup',
+        '🧪 New E16 scenario (13 assertions) verifies full cross-group independent primary lifecycle; total 62/62 pass',
+      ]
+    }
+  },
+  {
+    version: 'v1.20.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 支持"无选中分组"状态：再次点击已激活的分组 tab 可取消选中，此时主轨迹、叠加轨迹、海拔剖面全部隐藏，只保留分组 tab bar 和轨迹卡片列表',
+        '✨ 分组切换回具体组时，primaryTrailId 自动挑选该组内第一条轨迹',
+        '✨ 空态文案精准区分"无轨迹"和"未选中分组"两种情况（i18n 新增 pc.emptyGroup / trail.emptyNoGroup 键）',
+        '🔧 activeGroup=null 状态持久化到 IndexedDB（用 in 运算符判定字段存在性，兼容旧数据）',
+        '🔧 rebuildAll 兜底优化：activeGroup=null 时保持 primaryTrailId=null；有 activeGroup 但主轨迹丢失时先在组内挑，找不到再跨组回退',
+        '🧪 大改动测试流程首次实战：E15 新场景（9 项断言）覆盖 activeGroup=null 全链路 UI + 持久化，与既有 39 项一起 49/49 全过',
+      ],
+      en: [
+        '✨ Support "no group selected" state: click the active group tab again to deselect. Primary trail, overlay tracks, elevation profile all hidden; only group tab bar and trail card list remain',
+        '✨ When switching back to a specific group, primaryTrailId auto-selects the first trail in that group',
+        '✨ Empty-state text precisely distinguishes "no trails" from "no group selected" (new i18n keys pc.emptyGroup / trail.emptyNoGroup)',
+        '🔧 activeGroup=null state persists to IndexedDB (uses `in` operator for field-existence check, backward compatible)',
+        '🔧 rebuildAll fallback improved: keep primaryTrailId=null when activeGroup=null; when activeGroup exists but primary is lost, first pick within group, then fall back cross-group',
+        '🧪 First-time real-world use of the big-change testing workflow: new E15 scenario (9 assertions) covering full activeGroup=null UI + persistence chain, 49/49 total pass with the existing 39',
+      ]
+    }
+  },
+  {
+    version: 'v1.19.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '📝 JSDoc 类型注解全覆盖：新增 10 个 @typedef（TrackPoint / TrackTuple / Waypoint / DayMeta / TrailStats / EscapeRoute / Trail / ElevLayout / ElevAnnotation / ImportedFile），15+ 顶层函数带 @param / @returns（haversine / accumulatorAscent / smoothElev / parseKml / enrichWaypoints / parseAndProcessKml / drawElevBar / handleFiles / applyChange / trailContentHash 等）',
+        '🧪 单元测试首次落地（tests/unit/）：抽出 trail_core.js 纯函数镜像 + test_math.js（30 断言）+ test_enrich.js（12 断言）+ verify_alignment.js（13 项 HTML↔trail_core 对齐校准）',
+        '🧪 端到端测试首次落地（tests/e2e/run_all.py）：14 大场景 39 项断言，覆盖启动、KML/ZIP 导入、去重、切主轨迹、批量分组、反转、删除、waypoint 过滤、分天切换、IndexedDB、i18n、导出、file:// 错误检测',
+        '🛠 一键测试流程 tests/run_full_check.sh：6 阶段流水线（语法→单元→静态→功能→e2e→sync），大改动必跑，失败即停',
+        '📚 文档三件套：docs/TESTING.md（测试指南）+ docs/CONTRIBUTING.md（贡献指引，含类型注解风格/命名/大改动流程）+ ARCHITECTURE.md 补齐 v1.17-1.19 拆分架构与 applyChange 约定，全部 zh + en 双语',
+        '🎯 无功能变化，纯工程化基建；6/6 阶段测试全过（Phase1 语法 · Phase2 单元 55/55 · Phase3 静态 54/54 · Phase4 功能 55/55 · Phase5 e2e 39/39 · Phase6 sync）',
+      ],
+      en: [
+        '📝 Full JSDoc type coverage: 10 new @typedefs (TrackPoint / TrackTuple / Waypoint / DayMeta / TrailStats / EscapeRoute / Trail / ElevLayout / ElevAnnotation / ImportedFile), 15+ top-level functions with @param / @returns (haversine / accumulatorAscent / smoothElev / parseKml / enrichWaypoints / parseAndProcessKml / drawElevBar / handleFiles / applyChange / trailContentHash etc.)',
+        '🧪 Unit tests first-time landing (tests/unit/): extracted trail_core.js pure-function mirror + test_math.js (30 assertions) + test_enrich.js (12) + verify_alignment.js (13 HTML↔trail_core alignment checks)',
+        '🧪 End-to-end tests first-time landing (tests/e2e/run_all.py): 14 scenarios × 39 assertions covering startup, KML/ZIP import, dedup, switch primary trail, batch grouping, reverse, delete, waypoint filter, day switch, IndexedDB, i18n, export, file:// error detection',
+        '🛠 One-command test flow tests/run_full_check.sh: 6-phase pipeline (syntax→unit→static→functional→e2e→sync), required for big changes, fail-fast',
+        '📚 Documentation triple: docs/TESTING.md (testing guide) + docs/CONTRIBUTING.md (contribution guide with type annotation style / naming / big-change workflow) + ARCHITECTURE.md updated with v1.17-1.19 split architecture and applyChange convention, all zh + en bilingual',
+        '🎯 No behavior change, pure engineering infrastructure; all 6 phases pass (Phase1 syntax · Phase2 unit 55/55 · Phase3 static 54/54 · Phase4 functional 55/55 · Phase5 e2e 39/39 · Phase6 sync)',
+      ]
+    }
+  },
+  {
+    version: 'v1.18.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '♻️ handleFiles 大瘦身：166 行 → 17 行，拆出 6 个辅助函数（expandZipFiles / importSingleKml / findDuplicateTrail / ensureUniqueTrailId / renderKmlImportRow / bindKmlImportRowEvents / postImportFinalize）',
+        '♻️ parseAndProcessKml 拆分：174 行 → 36 行，抽出 computeCumulativeDistance / buildDayMeta / computeTrailStats / generateNextTrailId 四个纯函数',
+        '♻️ drawElevBar 深度重构：363 行 → 24 行，Canvas 绘制逻辑拆成 9 个语义子函数（computeElevLayout / drawElevBackground / drawElevGridLines / drawElevFill / drawElevCurve / collectElevAnnotations / layoutElevLabels / renderElevLabels / drawElevAxes / updateElevBadges）；elevRatioColor 提升为独立顶层函数便于测试',
+        '🎯 v1.17.0-v1.18.0 累计：3 个 300+ 行大函数合计 703 行 → 77 行（编排层），共抽出 30 个语义清晰的辅助函数',
+        '🎯 无功能变化，纯代码质量重构；54 项静态验收 + 30 项功能测试全通过',
+      ],
+      en: [
+        '♻️ handleFiles slimmed down: 166 lines → 17 lines, extracted 6 helpers (expandZipFiles / importSingleKml / findDuplicateTrail / ensureUniqueTrailId / renderKmlImportRow / bindKmlImportRowEvents / postImportFinalize)',
+        '♻️ parseAndProcessKml split: 174 lines → 36 lines, extracted 4 pure functions (computeCumulativeDistance / buildDayMeta / computeTrailStats / generateNextTrailId)',
+        '♻️ drawElevBar deep refactor: 363 lines → 24 lines, Canvas rendering split into 9 semantic sub-functions (computeElevLayout / drawElevBackground / drawElevGridLines / drawElevFill / drawElevCurve / collectElevAnnotations / layoutElevLabels / renderElevLabels / drawElevAxes / updateElevBadges); elevRatioColor promoted to top-level for testability',
+        '🎯 v1.17.0-v1.18.0 combined: three 300+ line functions totaling 703 lines → 77 lines (orchestration layer), 30 semantically-named helpers extracted total',
+        '🎯 No behavior changes, pure code-quality refactor; 54 static checks + 30 functional tests all pass',
+      ]
+    }
+  },
+  {
+    version: 'v1.17.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '♻️ buildTrailList 大瘦身：从 372 行 → 25 行（编排层），逻辑拆分为 15 个语义清晰的辅助函数（renderGroupTabs / renderBatchToolbar / renderTrailCard / trailCardHeaderHtml / trailCardExpandedHtml / handleTrailCardClick / handleTrailDetailClick / handleTrailGroupChange / moveBatchToGroup / isDetailButtonTarget 等）',
+        '♻️ 引入 state 变更 helpers：toggleSetItem / applyChange / toggleTrailActive / toggleTrailExpanded / toggleTrailBatch，统一"读-改-刷新-持久化"流程，消除 20+ 处重复的 rebuildAll+saveToStorage 模式',
+        '📝 waypointModeTags 字段加详细注释：澄清它与 modeVisibleTags 的关系（两套独立 Set，各自服务不同场景），避免后续重构再次踩 v1.13.4 的 bug',
+        '🎯 无功能变化，纯代码质量重构；54 项静态验收 + 14 项功能测试全通过',
+      ],
+      en: [
+        '♻️ buildTrailList slimmed down: 372 lines → 25 lines (orchestration only), logic split into 15 semantically-named helpers (renderGroupTabs / renderBatchToolbar / renderTrailCard / trailCardHeaderHtml / trailCardExpandedHtml / handleTrailCardClick / handleTrailDetailClick / handleTrailGroupChange / moveBatchToGroup / isDetailButtonTarget etc.)',
+        '♻️ Introduced state mutation helpers: toggleSetItem / applyChange / toggleTrailActive / toggleTrailExpanded / toggleTrailBatch — unified the "read-mutate-refresh-persist" flow and eliminated 20+ occurrences of duplicated rebuildAll+saveToStorage patterns',
+        '📝 waypointModeTags now has a detailed comment explaining its relationship with modeVisibleTags (two independent Sets serving different scenarios), preventing future refactors from repeating the v1.13.4 regression',
+        '🎯 No behavior changes, pure code-quality refactor; 54 static checks + 14 functional tests all pass',
+      ]
+    }
+  },
+  {
+    version: 'v1.16.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 复选框合并：v1.15.0 的批量勾选框（trail-batch-check）合并回原有的 trail-checkbox（专职批量选中）；展开/收起改用独立的 ▸/▾ 箭头。三个动作三个入口，各司其职',
+        '♻️ 代码清理：清理 15 处历史版本注释（v1.10–v1.13 stamp），保留最近 3 版；批量工具栏与分组 tab 的内联样式抽离为 CSS 类（.batch-toolbar / .group-tab-bar），buildTrailList 少 7 行且噪音大幅减少',
+        '📝 README 重写：去除装饰性 emoji / shields 徽章 / 居中 block / 鸡汤结尾，改为 Leaflet / fflate 风格的正式项目 README（中英双语同步）',
+      ],
+      en: [
+        '✨ Checkbox unified: the v1.15.0 batch checkbox (trail-batch-check) is merged back into trail-checkbox (batch-select only); expand/collapse now uses a dedicated ▸/▾ arrow. Three actions, three entry points',
+        '♻️ Code cleanup: removed 15 stale version stamps (v1.10–v1.13), kept the last 3 versions; batch toolbar and group tab inline styles extracted to CSS classes (.batch-toolbar / .group-tab-bar), buildTrailList is 7 lines shorter with much less noise',
+        '📝 README rewrite: removed decorative emoji / shields badges / centered blocks / sentimental sign-off; adopted the plain, official style of Leaflet / fflate READMEs (both zh and en)',
+      ]
+    }
+  },
+  {
+    version: 'v1.15.0',
+    date: '2026-07-01',
+    items: {
+      zh: [
+        '✨ 分组交互重构：去掉「☐ 批量分组」入口/退出按钮；每张轨迹卡片左侧常驻小勾选框，勾选任意条目即自动出现「已选 X · 全选 · 反选 · 移到… · 清除」浮条，操作完自动隐藏',
+        '✨ KML.zip 导入：文件选择器与拖拽支持 .zip / .kml.zip 压缩包，自动展开包内所有 .kml 递归处理（跳过 __MACOSX 与隐藏文件），与「打包 KML ZIP」导出格式对应',
+        '🔧 移除 state.batchMode，改为由 batchSelected.size 单一驱动 UI 出现/隐藏，减少一处状态双源',
+      ],
+      en: [
+        '✨ Grouping UX rebuild: removed the "☐ Batch group" enter/exit toggle. Each trail card now has a persistent mini-checkbox on the left; selecting any trail auto-reveals the "N selected · Select all · Invert · Move to… · Clear" bar, which auto-hides when selection is cleared',
+        '✨ KML.zip import: file picker and drag-drop now accept .zip / .kml.zip archives, auto-extract all inner .kml files (skips __MACOSX and hidden files). Matches the "Pack KML ZIP" export format',
+        '🔧 Removed state.batchMode; UI visibility now driven solely by batchSelected.size, eliminating one dual-source state',
+      ]
+    }
+  },
   {
     version: 'v1.14.1',
     date: '2026-07-01',
@@ -2878,15 +3302,15 @@ async function showStorageInfo() {
 const state = {
   activeTrails: DATA.activeTrails ? new Set(DATA.activeTrails) : new Set(DATA.trails.map(t => t.id)),
   expandedTrails: new Set(),  // 用户勾选展开详情的轨迹（与是否叠加到地图无关）
-  // v1.12.3：默认关闭"行程/下撤路线"自动生成，由用户手动决定（接口仍保留：将此改为 true 即恢复自动）
+  // 默认关闭"行程/下撤路线"自动生成，由用户手动决定（接口仍保留：将此改为 true 即恢复自动）
   autoGenerateEscape: false,
-  primaryTrailId: DATA.trails[0] ? DATA.trails[0].id : null,
+  // v1.21.0：每个分组独立记忆主轨迹。primaryTrailId 通过 getter/setter 桥接到 primaryByGroup[activeGroup]
+  primaryByGroup: {},
   // v1.14.1：当前选中的轨迹分组（只有该组的轨迹参与显示/统计/叠加）
   activeGroup: DATA.trails[0] ? (DATA.trails[0].group || '默认') : '默认',
-  // v1.14.1：批量分组模式（批量选中一批轨迹后一次性移入某组）
-  batchMode: false,
+  // v1.15.0：批量选中的轨迹 id（size>0 时自动出现批量工具栏，无需入口按钮）
   batchSelected: new Set(),
-  // v1.12.4：每个显示模式独立的标注点类型可见集合
+  // 每个显示模式独立的标注点类型可见集合
   modeVisibleTags: {
     day: new Set(['start','end','camp','pass','water','supply','bridge','river','highpoint']),
     elev: new Set(['start','end','camp','pass']),
@@ -2894,7 +3318,9 @@ const state = {
     waypoint: new Set(['camp','pass','water','supply']),
   },
   // 兼容旧代码：现在 visibleTags 是 modeVisibleTags[mode] 的 getter（在下方定义）
-  // 标注点对比模式：选中显示的类别（独立于普通筛选）
+  // ⚠ 独立字段：仅在 waypoint 对比模式下的「显示哪些 tag」，与 modeVisibleTags 是两套完全独立的 Set
+  //    历史：v1.12.4 想统一到 modeVisibleTags[mode]，但 drawWaypoints 和 buildWaypointModeTagGrid
+  //    在 waypoint 模式下仍读这个字段，chip 点了没效果，垭口选不上。目前保留独立字段是正确设计
   waypointModeTags: new Set(['camp','water','supply']),
   showTrack: true,
   showLabel: true,
@@ -2904,18 +3330,101 @@ const state = {
   activeEscape: null,
 };
 
-// v1.12.4：state.visibleTags 改为反射当前模式的 Set（向后兼容旧代码）
+// state.visibleTags 改为反射当前模式的 Set（向后兼容旧代码）
 Object.defineProperty(state, 'visibleTags', {
   get() { return state.modeVisibleTags[state.mode] || state.modeVisibleTags.day; },
   configurable: true,
 });
 
+// v1.21.0：state.primaryTrailId 现在是 primaryByGroup[activeGroup] 的 getter/setter
+//   - activeGroup=null 时读为 null，写入被忽略（无组无主轨迹）
+//   - 所有旧代码 `state.primaryTrailId = xxx` / `state.primaryTrailId` 无感升级
+//   - 分组切换自动切换到该组的记忆值，不同组互不污染
+Object.defineProperty(state, 'primaryTrailId', {
+  get() {
+    if(state.activeGroup == null) return null;
+    return state.primaryByGroup[state.activeGroup] || null;
+  },
+  set(v) {
+    if(state.activeGroup == null) return;
+    if(v == null) delete state.primaryByGroup[state.activeGroup];
+    else state.primaryByGroup[state.activeGroup] = v;
+  },
+  configurable: true,
+});
+// 初始化默认组的主轨迹（保持 v1.20.0 之前的开机行为）
+if(DATA.trails[0]) {
+  const g0 = DATA.trails[0].group || '默认';
+  state.primaryByGroup[g0] = DATA.trails[0].id;
+}
+
+/* v1.17.0：state 变更 helpers ─────────────────────────────────
+   统一"读-改-写-刷新-持久化"的常见组合，消除各处重复的 if/set/delete +
+   rebuildAll + saveToStorage 模式。所有涉及 state 变更的 UI 事件都应
+   走这些 helper，减少漏调 saveToStorage 的隐蔽 bug。
+   ─────────────────────────────────────────────────────────────── */
+
+/**
+ * 切换 Set 中的元素（存在则删除，不存在则添加）
+ * @param {Set} set - 目标 Set
+ * @param {*} item - 元素
+ * @returns {boolean} 切换后该元素是否存在于 Set
+ */
+function toggleSetItem(set, item) {
+  if(set.has(item)) { set.delete(item); return false; }
+  set.add(item); return true;
+}
+
+/**
+ * 应用一次状态变更后的完整刷新流程
+ * @param {Object} opts - 传递给 rebuildAll 的选项，如 {fit: true}
+ * @param {boolean} [opts.save=true] - 是否持久化到 IndexedDB
+ * @param {boolean} [opts.fit=false] - 是否重置地图视野
+ * @param {boolean} [opts.tracks=true] - 是否只重画 tracks/waypoints（跳过 rebuildAll）
+ */
+function applyChange(opts = {}) {
+  const { save = true, fit = false, tracksOnly = false } = opts;
+  if(tracksOnly) {
+    if(typeof drawTracks === 'function') drawTracks();
+    if(typeof drawWaypoints === 'function') drawWaypoints();
+  } else {
+    if(typeof rebuildAll === 'function') rebuildAll({ fit });
+  }
+  if(save && typeof saveToStorage === 'function') saveToStorage();
+}
+
+/**
+ * 切换轨迹叠加态；如果主轨迹被隐藏，自动降级主轨迹到还叠加着的第一条
+ * @param {string} trailId
+ */
+function toggleTrailActive(trailId) {
+  toggleSetItem(state.activeTrails, trailId);
+  // v1.21.0：主轨迹兜底只在当前组内挑
+  if(state.activeGroup != null && !state.activeTrails.has(state.primaryTrailId)) {
+    const inGroupActive = [...state.activeTrails].filter(id => {
+      const tr = DATA.trails.find(t => t.id === id);
+      return tr && trailGroup(tr) === state.activeGroup;
+    });
+    state.primaryTrailId = inGroupActive[0] || null;
+  }
+}
+
+/** 切换详情展开态 */
+function toggleTrailExpanded(trailId) { toggleSetItem(state.expandedTrails, trailId); }
+
+/** 切换批量选中态 */
+function toggleTrailBatch(trailId) { toggleSetItem(state.batchSelected, trailId); }
+
+
 /* v1.14.1：分组支持 ─────────────────────────────────────────────
    trail.group（字符串）标识轨迹所属分组，未设置时默认'默认'。
    只有 state.activeGroup 组内的轨迹参与地图渲染/统计/行程等一切功能。
+   v1.20.0：允许 state.activeGroup = null（"无选中"状态），此时所有渲染归零。
    ─────────────────────────────────────────────────────────────── */
 function trailGroup(trail) { return trail.group || '默认'; }
 function isTrailActive(trail) {
+  // v1.20.0：无选中分组时，所有轨迹都不显示
+  if(state.activeGroup == null) return false;
   return trailGroup(trail) === state.activeGroup && state.activeTrails.has(trail.id);
 }
 function getGroups() {
@@ -2929,29 +3438,58 @@ function getGroups() {
   if(!groups.length) groups.push('默认');
   return groups;
 }
+/**
+ * 切换到指定分组。v1.20.0 起支持传 null 表示"取消选中所有分组"。
+ * v1.21.0：每个组的主轨迹独立记忆（state.primaryByGroup[groupName]）。
+ *         切到目标组时优先读记忆值；若记忆值失效（trail 已删或已移出），
+ *         自动挑组内第一条作为该组的新主轨迹。
+ * @param {string|null} groupName 分组名，或 null 进入无选中状态
+ */
 function switchGroup(groupName) {
   state.activeGroup = groupName;
-  const inGroup = DATA.trails.filter(t => trailGroup(t) === groupName);
-  if(!inGroup.find(t => t.id === state.primaryTrailId)) {
-    state.primaryTrailId = inGroup[0] ? inGroup[0].id : null;
+  if(groupName == null) {
+    // 无选中状态：不动 primaryByGroup 记忆值，只是 getter 返回 null
+    rebuildAll({ fit: false });
+  } else {
+    // 校验/回填该组的记忆值
+    const inGroup = DATA.trails.filter(t => trailGroup(t) === groupName);
+    const memorized = state.primaryByGroup[groupName];
+    if(!memorized || !inGroup.find(t => t.id === memorized)) {
+      // 记忆值失效或不存在 → 挑组内第一条
+      state.primaryByGroup[groupName] = inGroup[0] ? inGroup[0].id : null;
+      if(!inGroup[0]) delete state.primaryByGroup[groupName];
+    }
+    rebuildAll({ fit: false });
+    // v1.22.0：切组时自动执行完整复位（比原来只是 fitBounds 更彻底：会重新算 primary + 重绘）
+    if(inGroup.length > 0 && typeof resetView === 'function') resetView();
   }
-  rebuildAll({ fit: inGroup.length > 0 });
   saveToStorage();
 }
 
 
 
 /* ============ Map ============ */
-const map = L.map('map', { center:[29.74, 99.65], zoom:11, zoomControl:true, attributionControl:true, dragging:true, tap:true, touchZoom:true });
-// v1.12.5：把版本号塞进 Leaflet attribution prefix，与 Leaflet/Esri 同一行同一基线
-// v1.13.2：版本号独立浮层（独立背景框 + 与 Leaflet attribution 完全同款样式）
+const map = L.map('map', {
+  center: [29.74, 99.65], zoom: 11,
+  zoomControl: true, attributionControl: true,
+  dragging: true, tap: false, touchZoom: true,  // v1.27.0：关闭 L.Tap 消除触屏 tap 延迟
+  // v1.22.0：更细粒度的缩放控制
+  zoomSnap: 0.25,            // 缩放对齐到 0.25 级（默认 1）
+  zoomDelta: 0.5,            // +/- 按钮和键盘每次变化 0.5 级（默认 1）
+  wheelPxPerZoomLevel: 120,  // 滚轮每 120px 触发 1 级缩放，比默认 60 更平滑
+  wheelDebounceTime: 40,     // 滚轮防抖（默认 40，保留）
+  // v1.25.0：关闭双击缩放，消除 Leaflet 内部 200ms click 延迟
+  doubleClickZoom: false,
+});
+// 把版本号塞进 Leaflet attribution prefix，与 Leaflet/Esri 同一行同一基线
+// 版本号独立浮层（独立背景框 + 与 Leaflet attribution 完全同款样式）
 map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank">Leaflet</a>');
 (function(){
   const tag = document.createElement('div');
   // 关键：套上 leaflet-control-attribution 类，自动继承同款 background/font-size/padding/line-height
   tag.className = 'leaflet-control-attribution';
   tag.id = 'version-tag-float';
-  tag.innerHTML = '<a href="javascript:void(0)" id="version-tag-link" title="点击查看更新日志">v1.14.1</a>';
+  tag.innerHTML = '<a href="javascript:void(0)" id="version-tag-link" title="点击查看更新日志">v1.31.0</a>';
   // 仅覆盖定位相关；样式继承自 .leaflet-control-attribution
   tag.style.position = 'absolute';
   tag.style.zIndex = '600';
@@ -3082,6 +3620,7 @@ function drawTracks() {
       line.bindTooltip(trail.name, {sticky: true});
       line.on('click', () => {
         if(measureState.active) return;  // 测距模式下不切换主轨迹
+        if(typeof segmentState !== 'undefined' && segmentState.active) return; // 分段模式下不切换
         state.primaryTrailId = trail.id;
         rebuildAll({fit: false});
         saveToStorage();
@@ -3105,12 +3644,22 @@ function drawTracks() {
         color: trail.color, weight, opacity, smoothFactor: 1, lineCap:'round',
       });
       line.__trail = trail;
+      // v1.29.0：mousemove 用 rAF 节流；测距/分段模式下完全禁用（避免 pointer 事件阻塞）
+      let _rafId = null;
       line.on('mouseover mousemove', e => {
-        const ll = e.latlng;
-        const i = nearestTrackIdx(track, ll.lat, ll.lng);
-        showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
+        if(measureState.active || (typeof segmentState !== 'undefined' && segmentState.active)) return;
+        if(_rafId) return;
+        _rafId = requestAnimationFrame(() => {
+          _rafId = null;
+          const ll = e.latlng;
+          const i = nearestTrackIdx(track, ll.lat, ll.lng);
+          showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
+        });
       });
-      line.on('mouseout', hideTooltip);
+      line.on('mouseout', () => {
+        if(_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+        hideTooltip();
+      });
       trackLayer.addLayer(line);
       return;
     }
@@ -3141,12 +3690,22 @@ function drawTracks() {
         color: curColor, weight, opacity, smoothFactor: 1, lineCap:'round',
       });
       line.__trail = trail;
+      // v1.29.0：mousemove 用 rAF 节流；测距/分段模式下完全禁用（避免 pointer 事件阻塞）
+      let _rafId = null;
       line.on('mouseover mousemove', e => {
-        const ll = e.latlng;
-        const i = nearestTrackIdx(track, ll.lat, ll.lng);
-        showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
+        if(measureState.active || (typeof segmentState !== 'undefined' && segmentState.active)) return;
+        if(_rafId) return;
+        _rafId = requestAnimationFrame(() => {
+          _rafId = null;
+          const ll = e.latlng;
+          const i = nearestTrackIdx(track, ll.lat, ll.lng);
+          showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
+        });
       });
-      line.on('mouseout', hideTooltip);
+      line.on('mouseout', () => {
+        if(_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+        hideTooltip();
+      });
       trackLayer.addLayer(line);
     };
     for(let i=0; i<track.length; i++) {
@@ -3202,14 +3761,14 @@ const tagColors = {
   village:'#d97706',
   bridge:'#06b6d4',
   river:'#06b6d4',
-  view:'#94a3b8',
+  other:'#94a3b8',
 };
 const tagLabels = {
   start:'起终点', end:'起终点',
   fork:'分叉点', camp:'营地', pass:'垭口',
   water:'水源', supply:'补给', warn:'高强度',
   shelter:'庇护', village:'村落/牧民', bridge:'桥/河',
-  river:'小溪', view:'观景'
+  river:'小溪', other:'其他'
 };
 
 const wpMarkers = {};
@@ -3225,7 +3784,7 @@ function drawWaypoints() {
   const isWpMode = state.mode === 'waypoint';
 
   DATA.trails.forEach(trail => {
-    // v1.12.4：标注点模式忽略 activeTrails，所有轨迹的标注点都可见；其他模式只显示叠加中的
+    // 标注点模式忽略 activeTrails，所有轨迹的标注点都可见；其他模式只显示叠加中的
     if(!isWpMode && !isTrailActive(trail)) return;
     const isPrimary = trail.id === state.primaryTrailId;
 
@@ -3457,7 +4016,7 @@ function drawHighPoints() {
   const showInThisMode = state.visibleTags.has('highpoint');
 
   DATA.trails.forEach(trail => {
-    // v1.12.4：标注点模式忽略 activeTrails
+    // 标注点模式忽略 activeTrails
     if(!isWpMode && !isTrailActive(trail)) return;
     if(!showInThisMode) return;
     // waypoint 模式下，非主轨迹也显示，但要标识
@@ -3615,9 +4174,13 @@ function clearEscape() {
 function buildHeaderStats() {
   const card = document.getElementById('primary-card');
   if(!card) return;
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
   if(!main) {
-    card.innerHTML = `<div style="font-size:11px;color:var(--text-muted);font-style:italic;text-align:center;padding:20px 4px">${t('pc.empty')}</div>`;
+    // v1.20.0：区分"未选中分组"和"没有轨迹/主轨迹"两种空态
+    const emptyKey = (state.activeGroup == null && DATA.trails.length > 0)
+      ? 'pc.emptyGroup'
+      : 'pc.empty';
+    card.innerHTML = `<div style="font-size:11px;color:var(--text-muted);font-style:italic;text-align:center;padding:20px 4px">${t(emptyKey)}</div>`;
     return;
   }
   const sourceLink = main.source && main.source.startsWith('http')
@@ -3670,7 +4233,7 @@ function buildHeaderStats() {
 function buildPrimaryMini() {
   const mini = document.getElementById('primary-mini');
   if(!mini) return;
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
   if(!main) { mini.innerHTML = ''; return; }
   mini.title = t('mini.openSidebar');
   mini.innerHTML = `
@@ -3688,7 +4251,7 @@ function buildPrimaryMini() {
   }
 }
 
-// v1.12.5：更新当前模式 · 标注点 标题
+// 更新当前模式 · 标注点 标题
 function updateModeTagTitle() {
   const el = document.getElementById('mode-tag-title');
   if(!el) return;
@@ -3792,393 +4355,363 @@ function buildTrailThumbnail(tr) {
   `;
 }
 
+/* ═════════════════════════════════════════════════════════════════
+   Trail 列表渲染（v1.17.0 拆分：主函数 + 4 个辅助）
+   ─────────────────────────────────────────────────────────────────
+   主函数 buildTrailList() 只负责编排：
+     1. renderGroupTabs()        —— 顶部分组切换
+     2. renderBatchToolbar()     —— 批量操作工具栏（size>0 才显示）
+     3. renderTrailCard(tr)      —— 单张轨迹卡片
+     4. attachTrailCardHandlers() —— 卡片事件绑定
+   ═════════════════════════════════════════════════════════════════ */
+
+/** 顶部分组 Tab bar（仅在存在自定义分组时显示） */
+function renderGroupTabs() {
+  const groups = getGroups();
+  if(groups.length <= 1 && groups[0] === '默认') return null;
+  const bar = document.createElement('div');
+  bar.className = 'group-tab-bar';
+  groups.forEach(g => {
+    const btn = document.createElement('button');
+    const count = DATA.trails.filter(t => trailGroup(t) === g).length;
+    btn.className = 'group-tab' + (g === state.activeGroup ? ' active' : '');
+    btn.textContent = `${g}·${count}`;
+    btn.title = g === state.activeGroup
+      ? `再次点击取消选中「${g}」组`
+      : `切换到「${g}」组`;
+    btn.addEventListener('click', () => {
+      // v1.20.0：再次点击当前 tab → 取消选中（进入无分组显示状态）
+      if(g === state.activeGroup) switchGroup(null);
+      else switchGroup(g);
+    });
+    bar.appendChild(btn);
+  });
+  return bar;
+}
+
+/** 批量工具栏（仅在 batchSelected.size > 0 时显示） */
+function renderBatchToolbar(others) {
+  if(state.batchSelected.size === 0) return null;
+  const toolbar = document.createElement('div');
+  toolbar.className = 'batch-toolbar';
+
+  const info = document.createElement('span');
+  info.className = 'info';
+  info.textContent = `已选 ${state.batchSelected.size} / ${others.length}`;
+  toolbar.appendChild(info);
+
+  const btn = (text, muted, onClick) => {
+    const b = document.createElement('button');
+    if(muted) b.className = 'muted';
+    b.textContent = text;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  toolbar.appendChild(btn('全选', false, () => {
+    state.batchSelected = new Set(others.map(t => t.id));
+    buildTrailList();
+  }));
+  toolbar.appendChild(btn('反选', false, () => {
+    const cur = state.batchSelected;
+    state.batchSelected = new Set(others.map(t => t.id).filter(id => !cur.has(id)));
+    buildTrailList();
+  }));
+
+  const moveSel = document.createElement('select');
+  moveSel.innerHTML = '<option value="">移到…</option>'
+    + getGroups().filter(g => g !== state.activeGroup).map(g => `<option value="${g}">${g}</option>`).join('')
+    + '<option value="__new__">＋ 新建组…</option>';
+  moveSel.addEventListener('change', e => {
+    let target = e.target.value;
+    if(!target) return;
+    if(target === '__new__') {
+      const name = prompt('新分组名称：');
+      if(!name || !name.trim()) { e.target.value = ''; return; }
+      target = name.trim();
+    }
+    moveBatchToGroup(target);
+  });
+  toolbar.appendChild(moveSel);
+
+  toolbar.appendChild(btn('清除', true, () => {
+    state.batchSelected = new Set();
+    buildTrailList();
+  }));
+  return toolbar;
+}
+
+/** 执行批量移动（供 renderBatchToolbar 调用） */
+function moveBatchToGroup(target) {
+  const ids = [...state.batchSelected];
+  let moved = 0;
+  DATA.trails.forEach(t => {
+    if(!ids.includes(t.id)) return;
+    const oldGroup = trailGroup(t);
+    t.group = target;
+    // v1.21.0：如果被移动的 trail 是 activeGroup 的主轨迹，重新挑一条
+    if(t.id === state.primaryTrailId) {
+      const remaining = DATA.trails.filter(x => trailGroup(x) === state.activeGroup && x.id !== t.id);
+      state.primaryTrailId = remaining[0] ? remaining[0].id : null;
+    }
+    // v1.21.0：如果 trail 是它原来组的主轨迹，清掉原组的记忆（避免"幽灵主轨迹"）
+    if(oldGroup !== target && state.primaryByGroup[oldGroup] === t.id) {
+      const remaining = DATA.trails.filter(x => trailGroup(x) === oldGroup && x.id !== t.id);
+      if(remaining[0]) state.primaryByGroup[oldGroup] = remaining[0].id;
+      else delete state.primaryByGroup[oldGroup];
+    }
+    moved++;
+  });
+  state.batchSelected = new Set();
+  applyChange();
+  showToast(`✓ 已将 ${moved} 条轨迹移至「${target}」`);
+}
+
+/** 单张轨迹卡片的 HTML 头部（收起态和展开态共用） */
+/**
+ * 单张轨迹卡片的头部 HTML
+ * @param {Trail} tr
+ * @param {boolean} isActive       是否叠加到地图
+ * @param {boolean} isExpanded     是否展开详情
+ * @param {boolean} isBatchChecked 是否被批量选中
+ * @param {boolean} [isPrimary]    是否是当前分组的主轨迹（v1.21.0）
+ */
+function trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary) {
+  return `
+    <div class="trail-card-hdr">
+      <div class="trail-checkbox ${isBatchChecked ? 'checked' : ''}" data-action="batch-toggle" title="${isBatchChecked ? '已选（点击取消）' : '选中此轨迹'}">${isBatchChecked ? '☑' : '☐'}</div>
+      <div class="trail-expand-arrow ${isExpanded ? 'expanded' : ''}" data-action="toggle-expand" title="${isExpanded ? '收起详情' : '展开详情'}">${isExpanded ? '▾' : '▸'}</div>
+      <div class="trail-color-dot" style="background:${tr.color}"></div>
+      <div class="trail-name">${tr.name}</div>
+      <div class="trail-toggle" style="${isActive ? 'color:var(--accent);font-weight:600' : ''}">${isActive ? '叠加中 ●' : '点击叠加'}</div>
+    </div>
+  `;
+}
+
+/** 单张轨迹卡片的详情区 HTML（仅展开态） */
+function trailCardExpandedHtml(tr) {
+  const thumbSvg = buildTrailThumbnail(tr);
+  const linkArea = tr.source && tr.source.startsWith('http')
+    ? `<a href="${tr.source}" target="_blank" class="trail-link-btn" title="${tr.source}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${tr.name}</a><a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
+    : `<a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`;
+  const groupOpts = getGroups().map(g => `<option value="${g}" ${trailGroup(tr)===g?'selected':''}>${g}</option>`).join('');
+  // v1.21.0：主轨迹卡不显示"设为主轨迹"按钮，显示 "★ 主轨迹" 标识
+  const isPrimary = (tr.id === state.primaryTrailId);
+  const primaryLabel = isPrimary
+    ? `<span style="color:#C6912D;font-size:10px;font-weight:600;letter-spacing:0.02em">★ ${t('trail.isPrimary') || '主轨迹'}</span>`
+    : `<a href="#" class="set-primary-btn" data-tid="${tr.id}" style="color:var(--accent);font-size:10px;text-decoration:none;font-weight:600;letter-spacing:0.02em">${t('trail.setPrimary')}</a>`;
+  return `
+    <div class="trail-thumb">${thumbSvg}</div>
+    <div class="trail-info" style="align-items:center;gap:8px;flex-wrap:wrap">
+      <span><b>${tr.stats.distance_km}</b>${t('header.km')}</span>
+      <span>↑<b>${tr.stats.ascent_m}</b>m</span>
+      <span>↓<b>${tr.stats.descent_m || 0}</b>m</span>
+      <span><b>${tr.days}</b>${t('trail.days')}</span>
+      <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-family:monospace;font-size:10px;color:var(--text-muted);user-select:all">${t('trail.id')}: <span class="trail-id-text" data-tid="${tr.id}">${tr.id}</span><a href="#" class="trail-edit-id-btn" data-tid="${tr.id}" title="${t('trail.editId')}" style="color:var(--accent);font-size:10px;text-decoration:none">✎</a></span>
+    </div>
+    <div class="trail-info" style="margin-top:4px;align-items:center;gap:10px">
+      ${primaryLabel}
+      ${linkArea}
+      <a href="#" class="trail-dl-kml-btn" data-tid="${tr.id}" title="下载 KML" style="color:var(--accent);font-size:10px;text-decoration:none">⬇ KML</a>
+      <a href="#" class="trail-delete-btn" data-tid="${tr.id}" title="${t('trail.delete')}" style="margin-left:auto;color:var(--accent-2);font-size:10px;text-decoration:none">${t('trail.delete')}</a>
+    </div>
+    <div class="trail-info" style="margin-top:4px;align-items:center;gap:6px">
+      <span style="font-size:10px;color:var(--text-muted)">分组：</span>
+      <select class="trail-group-select" data-tid="${tr.id}" style="font-size:10px;padding:2px 6px;border:1px solid var(--line);border-radius:3px;background:var(--bg-0);color:var(--text);cursor:pointer;max-width:120px">
+        ${groupOpts}
+        <option value="__new__">＋ 新建组…</option>
+      </select>
+    </div>
+  `;
+}
+
+/** 判断 click 是否来自"要走详情按钮独立 handler"的元素 */
+function isDetailButtonTarget(el) {
+  return el.closest('.trail-link-btn')
+      || el.classList.contains('trail-edit-link-btn')
+      || el.classList.contains('trail-edit-id-btn')
+      || el.classList.contains('trail-dl-kml-btn')
+      || el.classList.contains('trail-reverse-btn')
+      || el.classList.contains('trail-delete-btn')
+      || el.classList.contains('set-primary-btn')
+      || el.classList.contains('trail-group-select');
+}
+
+/** 卡片主点击 handler（复选框 / 展开箭头 / 其他区域=切换叠加） */
+function handleTrailCardClick(tr, e) {
+  if(e.target.classList.contains('trail-checkbox')) {
+    e.preventDefault(); e.stopPropagation();
+    toggleTrailBatch(tr.id);
+    buildTrailList();
+    return true;
+  }
+  if(e.target.classList.contains('trail-expand-arrow')) {
+    e.preventDefault(); e.stopPropagation();
+    toggleTrailExpanded(tr.id);
+    buildTrailList();
+    return true;
+  }
+  if(isDetailButtonTarget(e.target)) return false; // 让详情按钮 handler 接管
+  // 其他区域：切换地图叠加
+  toggleTrailActive(tr.id);
+  state.activeEscape = null;
+  document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
+  applyChange();
+  return true;
+}
+
+/** 展开态特有的详情按钮 handler（编辑 ID / 编辑链接 / 删除 / 反向 / 设为主 等） */
+function handleTrailDetailClick(tr, e) {
+  if(e.target.classList.contains('trail-edit-link-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    const newUrl = prompt(t('trail.editLink') + ':', tr.source || '');
+    if(newUrl !== null) { tr.source = newUrl.trim(); applyChange(); }
+    return true;
+  }
+  if(e.target.classList.contains('trail-edit-id-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    const newId = prompt(t('trail.editId') + ':', tr.id);
+    if(!newId || !newId.trim() || newId === tr.id) return true;
+    const trimmed = newId.trim();
+    if(DATA.trails.some(other => other !== tr && other.id === trimmed)) {
+      alert('ID 已存在 / ID already exists');
+      return true;
+    }
+    const oldId = tr.id;
+    tr.id = trimmed;
+    if(state.activeTrails.has(oldId)) {
+      state.activeTrails.delete(oldId); state.activeTrails.add(trimmed);
+    }
+    if(state.primaryTrailId === oldId) state.primaryTrailId = trimmed;
+    applyChange();
+    return true;
+  }
+  if(e.target.classList.contains('trail-dl-kml-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    downloadTrailKML(tr.id); return true;
+  }
+  if(e.target.classList.contains('trail-reverse-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    reverseTrail(tr.id); return true;
+  }
+  if(e.target.classList.contains('trail-delete-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    if(confirm(`确定删除「${tr.name}」吗？`)) deleteTrail(tr.id);
+    return true;
+  }
+  if(e.target.classList.contains('set-primary-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    state.primaryTrailId = tr.id;
+    state.activeTrails.add(tr.id);
+    state.activeEscape = null;
+    document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
+    applyChange();
+    return true;
+  }
+  return false;
+}
+
+/** 分组下拉的 change handler（展开态） */
+function handleTrailGroupChange(tr, newGroup, selectEl) {
+  if(newGroup === '__new__') {
+    const name = prompt('新分组名称：');
+    if(!name || !name.trim()) { selectEl.value = trailGroup(tr); return; }
+    newGroup = name.trim();
+  }
+  const oldGroup = trailGroup(tr);
+  tr.group = newGroup;
+  // v1.21.0：如果被移出的 trail 是原组的主轨迹，清掉原组的记忆
+  if(oldGroup !== newGroup && state.primaryByGroup[oldGroup] === tr.id) {
+    const remaining = DATA.trails.filter(t => trailGroup(t) === oldGroup && t.id !== tr.id);
+    if(remaining[0]) state.primaryByGroup[oldGroup] = remaining[0].id;
+    else delete state.primaryByGroup[oldGroup];
+  }
+  applyChange();
+  showToast(`已移至「${newGroup}」组`);
+}
+
+/** 渲染单张 trail 卡片并绑定所有 handler */
+function renderTrailCard(tr) {
+  const card = document.createElement('div');
+  const isActive = state.activeTrails.has(tr.id);
+  const isExpanded = state.expandedTrails.has(tr.id);
+  const isBatchChecked = state.batchSelected.has(tr.id);
+  const isPrimary = (tr.id === state.primaryTrailId);
+
+  card.className = 'trail-card'
+    + (isActive ? ' active' : '')
+    + (isBatchChecked ? ' batch-checked' : '')
+    + (isPrimary ? ' is-primary' : '');
+  card.style.setProperty('--card-color', tr.color || '#3F5238');
+  if(isBatchChecked) {
+    card.style.outline = '2px solid var(--accent)';
+    card.style.outlineOffset = '-2px';
+  }
+
+  const headerHtml = trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary);
+
+  if(!isExpanded) {
+    card.innerHTML = headerHtml;
+    card.addEventListener('click', e => handleTrailCardClick(tr, e));
+    return card;
+  }
+
+  // 展开态：header + 详情
+  card.innerHTML = headerHtml + trailCardExpandedHtml(tr);
+
+  // 详情区里的 <a class="trail-link-btn"> 保留浏览器默认行为（打开新标签），阻止 click 冒泡即可
+  const linkBtn = card.querySelector('.trail-link-btn');
+  if(linkBtn) linkBtn.addEventListener('click', e => e.stopPropagation());
+
+  card.addEventListener('click', e => {
+    if(handleTrailDetailClick(tr, e)) return;
+    handleTrailCardClick(tr, e);
+  });
+
+  const groupSel = card.querySelector('.trail-group-select');
+  if(groupSel) {
+    groupSel.addEventListener('change', e => {
+      e.stopPropagation();
+      handleTrailGroupChange(tr, e.target.value, e.target);
+    });
+  }
+  return card;
+}
+
 function buildTrailList() {
   const list = document.getElementById('trail-list');
   list.innerHTML = '';
 
-  // v1.14.1：分组 Tab bar（当存在自定义分组时显示；只有默认组时隐藏，减少界面噪音）
-  const groups = getGroups();
-  if(groups.length > 1 || (groups.length === 1 && groups[0] !== '默认')) {
-    const groupBar = document.createElement('div');
-    groupBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;padding:6px 4px 8px;border-bottom:1px dashed var(--line);margin-bottom:8px';
-    groups.forEach(g => {
-      const btn = document.createElement('button');
-      const count = DATA.trails.filter(t => trailGroup(t) === g).length;
-      const isActive = g === state.activeGroup;
-      btn.className = 'group-tab' + (isActive ? ' active' : '');
-      btn.style.cssText = isActive
-        ? 'padding:3px 10px;font-size:11px;background:var(--accent);color:#000;font-weight:600;border:1px solid var(--accent);border-radius:3px;cursor:pointer;letter-spacing:0.02em'
-        : 'padding:3px 10px;font-size:11px;background:var(--bg-0);color:var(--text);border:1px solid var(--line);border-radius:3px;cursor:pointer;letter-spacing:0.02em';
-      btn.textContent = `${g}·${count}`;
-      btn.title = `切换到「${g}」组`;
-      btn.addEventListener('click', () => switchGroup(g));
-      groupBar.appendChild(btn);
-    });
-    list.appendChild(groupBar);
+  const tabs = renderGroupTabs();
+  if(tabs) list.appendChild(tabs);
+
+  // v1.20.0：无选中分组时给一个明确提示（而不是"当前组暂无备选轨迹"的误导）
+  if(state.activeGroup == null && DATA.trails.length > 0) {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:var(--text-muted);font-style:italic;padding:10px 4px;letter-spacing:0.04em;text-align:center';
+    hint.textContent = t('trail.emptyNoGroup');
+    list.appendChild(hint);
+    return;
   }
 
-  // v1.14.1：只显示当前组的轨迹（主轨迹已在顶部 primary card 显示）
-  const others = DATA.trails.filter(tr => tr.id !== state.primaryTrailId && trailGroup(tr) === state.activeGroup);
+  // v1.21.0：主轨迹不再被剔除，而是保留在列表里（用 is-primary class 视觉标记）
+  //          排序：主轨迹在最前，其他按原顺序
+  const inGroup = DATA.trails.filter(tr => trailGroup(tr) === state.activeGroup);
+  const primary = inGroup.find(tr => tr.id === state.primaryTrailId);
+  const others = primary
+    ? [primary, ...inGroup.filter(tr => tr.id !== state.primaryTrailId)]
+    : inGroup;
 
-  // v1.14.1：批量操作工具栏（进入/退出批量模式 + 批量移动）
-  const toolbar = document.createElement('div');
-  toolbar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 2px 8px;font-size:11px;flex-wrap:wrap';
-  if(!state.batchMode) {
-    // 非批量模式：只显示「批量分组」入口
-    const enterBtn = document.createElement('button');
-    enterBtn.style.cssText = 'padding:3px 8px;font-size:11px;background:var(--bg-0);color:var(--text-muted);border:1px dashed var(--line);border-radius:3px;cursor:pointer;letter-spacing:0.02em';
-    enterBtn.textContent = '☐ 批量分组';
-    enterBtn.title = '进入批量选择模式';
-    enterBtn.addEventListener('click', () => {
-      state.batchMode = true;
-      state.batchSelected = new Set();
-      buildTrailList();
-    });
-    toolbar.appendChild(enterBtn);
-  } else {
-    // 批量模式：显示 已选 X · 全选 · 反选 · 移到 [下拉] · 取消
-    const info = document.createElement('span');
-    info.style.cssText = 'color:var(--accent);font-weight:600';
-    info.textContent = `已选 ${state.batchSelected.size} / ${others.length}`;
-    toolbar.appendChild(info);
-
-    const selAll = document.createElement('button');
-    selAll.style.cssText = 'padding:2px 8px;font-size:10px;background:var(--bg-0);color:var(--text);border:1px solid var(--line);border-radius:3px;cursor:pointer';
-    selAll.textContent = '全选';
-    selAll.addEventListener('click', () => { state.batchSelected = new Set(others.map(t => t.id)); buildTrailList(); });
-    toolbar.appendChild(selAll);
-
-    const inv = document.createElement('button');
-    inv.style.cssText = 'padding:2px 8px;font-size:10px;background:var(--bg-0);color:var(--text);border:1px solid var(--line);border-radius:3px;cursor:pointer';
-    inv.textContent = '反选';
-    inv.addEventListener('click', () => {
-      const cur = state.batchSelected;
-      const inv = new Set(others.map(t => t.id).filter(id => !cur.has(id)));
-      state.batchSelected = inv;
-      buildTrailList();
-    });
-    toolbar.appendChild(inv);
-
-    const moveSel = document.createElement('select');
-    moveSel.style.cssText = 'font-size:10px;padding:2px 4px;border:1px solid var(--accent);border-radius:3px;background:var(--bg-0);color:var(--text);cursor:pointer;margin-left:auto';
-    moveSel.disabled = state.batchSelected.size === 0;
-    moveSel.innerHTML = '<option value="">移到…</option>'
-      + getGroups().filter(g => g !== state.activeGroup).map(g => `<option value="${g}">${g}</option>`).join('')
-      + '<option value="__new__">＋ 新建组…</option>';
-    moveSel.addEventListener('change', e => {
-      let target = e.target.value;
-      if(!target) return;
-      if(target === '__new__') {
-        const name = prompt('新分组名称：');
-        if(!name || !name.trim()) { e.target.value = ''; return; }
-        target = name.trim();
-      }
-      const ids = [...state.batchSelected];
-      let moved = 0;
-      DATA.trails.forEach(t => {
-        if(ids.includes(t.id)) {
-          t.group = target;
-          if(t.id === state.primaryTrailId) {
-            // 主轨迹被移走，重设主
-            const remaining = DATA.trails.filter(x => trailGroup(x) === state.activeGroup && x.id !== t.id);
-            state.primaryTrailId = remaining[0] ? remaining[0].id : null;
-          }
-          moved++;
-        }
-      });
-      state.batchMode = false;
-      state.batchSelected = new Set();
-      rebuildAll({fit: false});
-      saveToStorage();
-      showToast(`✓ 已将 ${moved} 条轨迹移至「${target}」`);
-    });
-    toolbar.appendChild(moveSel);
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.style.cssText = 'padding:2px 8px;font-size:10px;background:var(--bg-0);color:var(--text-muted);border:1px solid var(--line);border-radius:3px;cursor:pointer';
-    cancelBtn.textContent = '退出';
-    cancelBtn.addEventListener('click', () => { state.batchMode = false; state.batchSelected = new Set(); buildTrailList(); });
-    toolbar.appendChild(cancelBtn);
-  }
-  list.appendChild(toolbar);
+  const toolbar = renderBatchToolbar(others);
+  if(toolbar) list.appendChild(toolbar);
 
   if(others.length === 0) {
     const empty = document.createElement('div');
     empty.style.cssText = 'font-size:11px;color:var(--text-muted);font-style:italic;padding:10px 4px;letter-spacing:0.04em';
-    empty.textContent = '当前组暂无备选轨迹，点 ＋ 添加或从其他组移入。';
+    empty.textContent = '当前组暂无轨迹，点 ＋ 添加或从其他组移入。';
     list.appendChild(empty);
     return;
   }
-  others.forEach(tr => {
-    const card = document.createElement('div');
-    const isActive = state.activeTrails.has(tr.id);
-    const isExpanded = state.expandedTrails.has(tr.id);
-    const isBatchChecked = state.batchMode && state.batchSelected.has(tr.id);
-    card.className = 'trail-card' + (isActive ? ' active' : '') + (isBatchChecked ? ' batch-checked' : '');
-    card.style.setProperty('--card-color', tr.color || '#3F5238');
-    if(state.batchMode) {
-      // 批量模式：卡片顶部左侧显示大方框勾选态
-      card.style.outline = isBatchChecked ? '2px solid var(--accent)' : '2px dashed var(--line)';
-      card.style.outlineOffset = '-2px';
-      card.style.cursor = 'pointer';
-    }
-
-    // 基础 click handler：勾选框切展开/折叠；其他区域切叠加（详情按钮在 expanded 块内追加额外 handler）
-    const baseClickHandler = (e) => {
-      // v1.14.1：批量模式下点整张卡片都是切换 batch 选中
-      if(state.batchMode) {
-        e.preventDefault();
-        e.stopPropagation();
-        if(state.batchSelected.has(tr.id)) state.batchSelected.delete(tr.id);
-        else state.batchSelected.add(tr.id);
-        buildTrailList();
-        return true;
-      }
-      if(e.target.classList.contains('trail-checkbox')) {
-        e.preventDefault();
-        e.stopPropagation();
-        if(state.expandedTrails.has(tr.id)) state.expandedTrails.delete(tr.id);
-        else state.expandedTrails.add(tr.id);
-        buildTrailList();
-        return true;
-      }
-      // 详情按钮（仅展开后存在）— 让 expanded 分支的扩展 handler 接手
-      if(e.target.closest('.trail-link-btn')
-        || e.target.classList.contains('trail-edit-link-btn')
-        || e.target.classList.contains('trail-edit-id-btn')
-        || e.target.classList.contains('trail-dl-kml-btn')
-        || e.target.classList.contains('trail-reverse-btn')
-        || e.target.classList.contains('trail-delete-btn')
-        || e.target.classList.contains('set-primary-btn')) {
-        return false; // 让 expanded 分支处理
-      }
-      // 其他区域：切换地图叠加
-      if(state.activeTrails.has(tr.id)) state.activeTrails.delete(tr.id);
-      else state.activeTrails.add(tr.id);
-      if(!state.activeTrails.has(state.primaryTrailId)) {
-        const next = [...state.activeTrails][0];
-        if(next) state.primaryTrailId = next;
-        else state.primaryTrailId = null;
-      }
-      state.activeEscape = null;
-      document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-      buildTrailList();
-      buildHeaderStats();
-      buildDaysTab();
-      buildEscapeTab();
-      buildLegend();
-      drawTracks(); drawWaypoints();
-      if(typeof refreshElevBar === 'function') refreshElevBar();
-      saveToStorage();
-      return true;
-    };
-
-    // 卡片头：勾选框（控制详情展开） + 颜色点 + 名称 + 叠加状态徽标
-    const headerHtml = `
-      <div class="trail-card-hdr">
-        <div class="trail-checkbox ${state.batchMode ? (isBatchChecked ? 'checked' : '') : (isExpanded ? 'checked' : '')}" data-action="toggle-expand" title="${state.batchMode ? (isBatchChecked ? '已选中（点击取消）' : '未选中（点击选中）') : (isExpanded ? '收起详情' : '展开详情')}">${state.batchMode ? (isBatchChecked ? '☑' : '') : (isExpanded ? '✓' : '')}</div>
-        <div class="trail-color-dot" style="background:${tr.color}"></div>
-        <div class="trail-name">${tr.name}</div>
-        <div class="trail-toggle" style="${isActive ? 'color:var(--accent);font-weight:600' : ''}">${isActive ? '叠加中 ●' : '点击叠加'}</div>
-      </div>
-    `;
-
-    // 详情未展开：只显示头部 + 基础 click handler
-    if(!isExpanded) {
-      card.innerHTML = headerHtml;
-      card.addEventListener('click', baseClickHandler);
-      list.appendChild(card);
-      return;
-    }
-
-    // 详情展开：完整卡片
-    const thumbSvg = buildTrailThumbnail(tr);
-    card.innerHTML = headerHtml + `
-      <div class="trail-thumb">${thumbSvg}</div>
-      <div class="trail-info" style="align-items:center;gap:8px;flex-wrap:wrap">
-        <span><b>${tr.stats.distance_km}</b>${t('header.km')}</span>
-        <span>↑<b>${tr.stats.ascent_m}</b>m</span>
-        <span>↓<b>${tr.stats.descent_m || 0}</b>m</span>
-        <span><b>${tr.days}</b>${t('trail.days')}</span>
-        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-family:monospace;font-size:10px;color:var(--text-muted);user-select:all">${t('trail.id')}: <span class="trail-id-text" data-tid="${tr.id}">${tr.id}</span><a href="#" class="trail-edit-id-btn" data-tid="${tr.id}" title="${t('trail.editId')}" style="color:var(--accent);font-size:10px;text-decoration:none">✎</a></span>
-      </div>
-      <div class="trail-info" style="margin-top:4px;align-items:center;gap:10px">
-        <a href="#" class="set-primary-btn" data-tid="${tr.id}" style="color:var(--accent);font-size:10px;text-decoration:none;font-weight:600;letter-spacing:0.02em">${t('trail.setPrimary')}</a>
-        ${tr.source && tr.source.startsWith('http')
-          ? `<a href="${tr.source}" target="_blank" class="trail-link-btn" title="${tr.source}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${tr.name}</a><a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
-          : `<a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`}
-        <a href="#" class="trail-dl-kml-btn" data-tid="${tr.id}" title="下载 KML" style="color:var(--accent);font-size:10px;text-decoration:none">⬇ KML</a>
-        <a href="#" class="trail-delete-btn" data-tid="${tr.id}" title="${t('trail.delete')}" style="margin-left:auto;color:var(--accent-2);font-size:10px;text-decoration:none">${t('trail.delete')}</a>
-      </div>
-      <div class="trail-info" style="margin-top:4px;align-items:center;gap:6px">
-        <span style="font-size:10px;color:var(--text-muted)">分组：</span>
-        <select class="trail-group-select" data-tid="${tr.id}" style="font-size:10px;padding:2px 6px;border:1px solid var(--line);border-radius:3px;background:var(--bg-0);color:var(--text);cursor:pointer;max-width:120px">
-          ${getGroups().map(g => `<option value="${g}" ${trailGroup(tr)===g?'selected':''}>${g}</option>`).join('')}
-          <option value="__new__">＋ 新建组…</option>
-        </select>
-      </div>
-    `;
-    // 链接按钮独立绑定，避免被卡片的 click 拦截
-    const linkBtn = card.querySelector('.trail-link-btn');
-    if(linkBtn) {
-      linkBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        // 让浏览器默认行为继续执行（打开新标签）
-      });
-    }
-    card.addEventListener('click', (e) => {
-      // v1.14.1：批量模式下点整张卡片切换批量选中
-      if(state.batchMode) {
-        e.preventDefault();
-        e.stopPropagation();
-        if(state.batchSelected.has(tr.id)) state.batchSelected.delete(tr.id);
-        else state.batchSelected.add(tr.id);
-        buildTrailList();
-        return;
-      }
-      // 勾选框：切换展开/折叠详情
-      if(e.target.classList.contains('trail-checkbox')) {
-        e.preventDefault();
-        e.stopPropagation();
-        if(state.expandedTrails.has(tr.id)) state.expandedTrails.delete(tr.id);
-        else state.expandedTrails.add(tr.id);
-        buildTrailList();
-        return;
-      }
-      // 点链接按钮时不切换轨迹
-      if(e.target.closest('.trail-link-btn')) {
-        return;
-      }
-      // 点编辑链接按钮
-      if(e.target.classList.contains('trail-edit-link-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        const newUrl = prompt(t('trail.editLink') + ':', tr.source || '');
-        if(newUrl !== null) {
-          tr.source = newUrl.trim();
-          rebuildAll({fit: false});
-          saveToStorage();
-        }
-        return;
-      }
-      // 点编辑 ID 按钮
-      if(e.target.classList.contains('trail-edit-id-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        const newId = prompt(t('trail.editId') + ':', tr.id);
-        if(newId && newId.trim() && newId !== tr.id) {
-          const trimmed = newId.trim();
-          // 检查 ID 唯一性
-          if(DATA.trails.some(other => other !== tr && other.id === trimmed)) {
-            alert('ID 已存在 / ID already exists');
-            return;
-          }
-          const oldId = tr.id;
-          // 更新 ID 时同步更新 state 和 source
-          tr.id = trimmed;
-          if(state.activeTrails.has(oldId)) {
-            state.activeTrails.delete(oldId);
-            state.activeTrails.add(trimmed);
-          }
-          if(state.primaryTrailId === oldId) state.primaryTrailId = trimmed;
-          // 不自动更新 source（用户手动管理链接）
-          rebuildAll({fit: false});
-          saveToStorage();
-        }
-        return;
-      }
-      // 点下载 KML 按钮
-      if(e.target.classList.contains('trail-dl-kml-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        downloadTrailKML(tr.id);
-        return;
-      }
-      // 点反向按钮
-      if(e.target.classList.contains('trail-reverse-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        reverseTrail(tr.id);
-        return;
-      }
-      // 点删除按钮
-      if(e.target.classList.contains('trail-delete-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        if(confirm(`确定删除「${tr.name}」吗？`)) {
-          deleteTrail(tr.id);
-        }
-        return;
-      }
-      // v1.14.1：分组 select 点击不触发卡片切换叠加逻辑
-      if(e.target.classList.contains('trail-group-select')) {
-        e.stopPropagation();
-        return;
-      }
-      // 点 set-primary-btn 时设为主轨迹，不切换显示
-      if(e.target.classList.contains('set-primary-btn')) {
-        e.preventDefault();
-        e.stopPropagation();
-        state.primaryTrailId = tr.id;
-        state.activeTrails.add(tr.id);
-        // 切主轨迹也要清下撤高亮
-        state.activeEscape = null;
-        document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-        buildTrailList();
-        buildHeaderStats();
-        buildDaysTab();
-        buildEscapeTab();
-        buildLegend();
-        drawTracks(); drawWaypoints();
-        if(typeof refreshElevBar === 'function') refreshElevBar();
-        saveToStorage();
-        return;
-      }
-      if(state.activeTrails.has(tr.id)) state.activeTrails.delete(tr.id);
-      else state.activeTrails.add(tr.id);
-      // 如果隐藏的是主轨迹，自动改主到下一条active
-      if(!state.activeTrails.has(state.primaryTrailId)) {
-        const next = [...state.activeTrails][0];
-        if(next) state.primaryTrailId = next;
-        else state.primaryTrailId = null;
-      }
-      // 切换显示后清下撤高亮（避免淡化残留）
-      state.activeEscape = null;
-      document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-      buildTrailList();
-      buildHeaderStats();
-      buildDaysTab();
-      buildEscapeTab();
-      buildLegend();
-      drawTracks(); drawWaypoints();
-      saveToStorage();
-    });
-    // v1.14.1：分组 select change 事件
-    const groupSel = card.querySelector('.trail-group-select');
-    if(groupSel) {
-      groupSel.addEventListener('change', e => {
-        e.stopPropagation();
-        let newGroup = e.target.value;
-        if(newGroup === '__new__') {
-          const name = prompt('新分组名称：');
-          if(!name || !name.trim()) { e.target.value = trailGroup(tr); return; }
-          newGroup = name.trim();
-        }
-        tr.group = newGroup;
-        // 如果移出了当前组，且是 primary，重设 primary；从 activeTrails 里移除
-        if(newGroup !== state.activeGroup) {
-          if(tr.id === state.primaryTrailId) {
-            const remaining = DATA.trails.filter(t => trailGroup(t) === state.activeGroup && t.id !== tr.id);
-            state.primaryTrailId = remaining[0] ? remaining[0].id : null;
-          }
-        }
-        rebuildAll({fit: false});
-        saveToStorage();
-        showToast(`已移至「${newGroup}」组`);
-      });
-    }
-    list.appendChild(card);
-  });
+  others.forEach(tr => list.appendChild(renderTrailCard(tr)));
 }
 
 function buildFilterGrid() {
@@ -4191,8 +4724,8 @@ function buildFilterGrid() {
     t.waypoints.forEach(w => counts[w.tag] = (counts[w.tag]||0) + 1);
   });
 
-  const tagOrder = ['camp','pass','supply','water','fork','warn','shelter','village','bridge','river','view','start','end'];
-  const iconMap = {camp:'🏕',pass:'🏔',supply:'🛒',water:'💧',fork:'⑫',warn:'⚠',shelter:'🏠',village:'🏘',bridge:'🌉',river:'≋',view:'⛰',start:'🚩',end:'🏁'};
+  const tagOrder = ['camp','pass','supply','water','fork','warn','shelter','village','bridge','river','other','start','end'];
+  const iconMap = {camp:'🏕',pass:'🏔',supply:'🏪',water:'💧',fork:'⑫',warn:'⚠',shelter:'🏠',village:'🏘',bridge:'🌉',river:'🏞',other:'📍',view:'📍',start:'🚩',end:'🏁'};
 
   tagOrder.forEach(tag => {
     if(!counts[tag]) return;
@@ -4220,9 +4753,19 @@ function buildDaysTab() {
   trailHdr.innerHTML = `<h3 style="color:${trail.color}">★ ${trail.name}（主轨迹）</h3>`;
   tab.appendChild(trailHdr);
 
+  // v1.26.0：若无 day_meta，显示占位提示
+  if(!trail.day_meta || trail.day_meta.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:12px;color:var(--text-muted);font-size:11px;line-height:1.6';
+    empty.innerHTML = '尚未设置每日行程。<br>点工具栏 <b>📅 分段</b> 在主轨迹上选点标记每天。';
+    tab.appendChild(empty);
+    return;
+  }
+
   trail.day_meta.forEach((dm, dIdx) => {
       const dayWps = trail.waypoints.filter(w => {
-        // 用 day_meta cumulative km 划分
+        // v1.27.0：优先用 wp.day 字段；否则用 day_meta cumulative km 划分
+        if(w.day != null) return w.day === dm.d;
         let prevKm = 0;
         for(let i=0;i<dIdx;i++) prevKm += trail.day_meta[i].km;
         const endKm = prevKm + dm.km;
@@ -4238,7 +4781,7 @@ function buildDaysTab() {
           <span class="day-meta">▾</span>
         </div>
         <div class="day-body open">
-          <div class="day-seg">📍 ${dm.seg}</div>
+          <div class="day-seg">📍 ${dm.seg || ((dm.km||'-')+'km · ↑'+(dm.asc||'-')+' · ↓'+(dm.desc||'-')+' · ⛰'+(dm.max||'-'))}</div>
           <div class="day-stats">
             <span class="lab">距离</span><span class="val">${dm.km} km</span>
             <span class="lab">爬升</span><span class="val">${dm.asc} m</span>
@@ -4252,15 +4795,17 @@ function buildDaysTab() {
       `;
       tab.appendChild(block);
       const list = block.querySelector('.wp-list');
+      // v1.27.0：行程 tab 固定显示这几类关键信息（不受 filter 影响）
+      const DAYTAB_TAGS = new Set(['camp','pass','water','supply','bridge','river','village','shelter','warn','fork','start','end','highpoint']);
       dayWps.forEach(wp => {
-        if(!state.visibleTags.has(wp.tag)) return;
+        if(!DAYTAB_TAGS.has(wp.tag)) return;
         const item = document.createElement('div');
         item.className = 'wp-item';
         item.innerHTML = `
           <div class="wp-icon">${wp.icon}</div>
           <div style="flex:1">
             <div class="wp-name" style="color:${tagColors[wp.tag]}">${wp.label}</div>
-            <div class="wp-meta">km ${wp.km} · ${wp.elev}m · #${wp.id}</div>
+            <div class="wp-meta">km ${wp.km} · ${wp.elev}m · ${t('tag.'+wp.tag) || wp.tag}</div>
           </div>
         `;
         item.addEventListener('click', () => {
@@ -4403,7 +4948,7 @@ document.querySelectorAll('[data-mode]').forEach(b => {
         try { buildWaypointModeTagGrid(); } catch(e) {}
       }
     }
-    // v1.12.5：切换模式后更新模式·标注点 标题 + 重建 filter-grid（visibleTags 现在是该模式独立 Set）
+    // 切换模式后更新模式·标注点 标题 + 重建 filter-grid（visibleTags 现在是该模式独立 Set）
     if(typeof updateModeTagTitle === 'function') updateModeTagTitle();
     if(typeof buildFilterGrid === 'function') buildFilterGrid();
     drawTracks(); drawWaypoints(); buildLegend();
@@ -4462,7 +5007,7 @@ if(_showHighPointEl) _showHighPointEl.addEventListener('change', e => {
 
 // filter all/none
 document.getElementById('filterAll').addEventListener('click', () => {
-  ['start','end','camp','pass','water','supply','fork','warn','shelter','village','bridge','river','view']
+  ['start','end','camp','pass','water','supply','fork','warn','shelter','village','bridge','river','other']
     .forEach(t => state.visibleTags.add(t));
   buildFilterGrid(); drawWaypoints();
 });
@@ -4527,120 +5072,224 @@ function trailContentHash(trail) {
   return sample.map(p => `${Math.round(p[0]*1000)},${Math.round(p[1]*1000)}`).join('|');
 }
 
+/* ═════════════════════════════════════════════════════════════════
+   File Import Pipeline（v1.18.0 拆分：主函数 + 6 个辅助）
+   ─────────────────────────────────────────────────────────────────
+   handleFiles(files)
+     │
+     ├── expandZipFiles(files)          —— .zip → 逐条虚拟 File-like
+     ├── for each file:
+     │     ├── importSingleKml(f)        —— 解析 + 去重 + 加入 DATA
+     │     └── renderKmlImportRow(f, trail, displayLabel)  —— UI 反馈行
+     └── postImportFinalize(addedCount)  —— 全部完成后统一 fit+save
+   ═════════════════════════════════════════════════════════════════ */
+
+/**
+ * 将 zip 文件展开为一批虚拟 File-like 对象。非 zip 文件原样返回。
+ * @param {FileList|Array<File>} files
+ * @returns {Promise<Array<File | {name:string, text:()=>Promise<string>, _fromZip:string}>>}
+ */
+async function expandZipFiles(files) {
+  const expanded = [];
+  for(const f of files) {
+    const lower = f.name.toLowerCase();
+    if(!(lower.endsWith('.zip') || lower.endsWith('.kml.zip'))) {
+      expanded.push(f); continue;
+    }
+    try {
+      const buf = new Uint8Array(await f.arrayBuffer());
+      if(typeof fflate === 'undefined' || typeof fflate.unzipSync !== 'function') {
+        throw new Error('fflate 未加载，无法解压 zip');
+      }
+      const entries = fflate.unzipSync(buf);
+      let picked = 0;
+      for(const [path, bytes] of Object.entries(entries)) {
+        if(!path.toLowerCase().endsWith('.kml')) continue;
+        // 跳过 __MACOSX 和隐藏文件（macOS 打包容易带进去）
+        if(path.startsWith('__MACOSX/') || path.split('/').some(seg => seg.startsWith('.'))) continue;
+        const text = new TextDecoder('utf-8').decode(bytes);
+        expanded.push({
+          name: path.split('/').pop() || path,
+          _fromZip: f.name,
+          text: async () => text,
+        });
+        picked++;
+      }
+      if(picked === 0) {
+        kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：压缩包内未找到 .kml 文件</div>`;
+      } else {
+        kmlList.innerHTML += `<div style="color:#5cb85c;font-size:11px">📦 ${f.name} → 提取 ${picked} 个 KML</div>`;
+      }
+    } catch(err) {
+      console.error('[expandZipFiles] 解压 zip 失败:', f.name, err);
+      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：解压失败（${err.message}）</div>`;
+    }
+  }
+  return expanded;
+}
+
+/**
+ * 保证 trail.id 在 DATA.trails 中唯一（时间戳+随机极端撞车时补序号）
+ */
+function ensureUniqueTrailId(trail) {
+  let safeId = trail.id;
+  let suffix = 0;
+  while(DATA.trails.some(t => t.id === safeId)) {
+    suffix++;
+    safeId = trail.id + '-' + suffix;
+  }
+  trail.id = safeId;
+}
+
+/**
+ * 检查 trail 是否与已有轨迹重复（基于 trailContentHash）
+ * @returns {Trail|null} 重复的现有轨迹；null 表示不重复
+ */
+function findDuplicateTrail(trail) {
+  const newHash = trailContentHash(trail);
+  const dup = DATA.trails.find(t => {
+    if(!t._contentHash) t._contentHash = trailContentHash(t);
+    return t._contentHash === newHash;
+  });
+  if(dup) return dup;
+  trail._contentHash = newHash;
+  return null;
+}
+
+/**
+ * 渲染一条 KML 导入的 UI 行（含 ID / source 可编辑输入框）
+ */
+function renderKmlImportRow(displayLabel, trail) {
+  const row = document.createElement('div');
+  row.style.cssText = 'border:1px solid var(--line);border-radius:5px;padding:8px;margin-top:6px;background:var(--bg-0)';
+  row.innerHTML = `
+    <div style="color:#5cb85c;font-size:11px;margin-bottom:6px">✓ ${displayLabel} → <b>${trail.name}</b> (${trail.stats.distance_km}km, ↑${trail.stats.ascent_m}m, ${trail.waypoints.length} ${t('add.waypoints') || '标注点'})</div>
+    <div style="display:flex;gap:6px;align-items:center;font-size:11px">
+      <span style="color:var(--text-muted);min-width:30px">${t('trail.id')}:</span>
+      <input type="text" class="kml-row-id" data-tid="${trail.id}" value="${trail.id}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px;font-family:monospace">
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;font-size:11px;margin-top:4px">
+      <span style="color:var(--text-muted);min-width:30px">🔗:</span>
+      <input type="text" class="kml-row-source" data-tid="${trail.id}" value="${trail.source || ''}" placeholder="${t('add.urlPlaceholder') || 'None'}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px">
+    </div>
+  `;
+  kmlList.appendChild(row);
+  bindKmlImportRowEvents(row, trail);
+}
+
+/**
+ * 绑定导入行的 ID / source 输入框事件（v1.18.0 从 handleFiles 拆出）
+ */
+function bindKmlImportRowEvents(row, trail) {
+  const idInput = row.querySelector('.kml-row-id');
+  const srcInput = row.querySelector('.kml-row-source');
+  let cachedTid = trail.id;
+
+  idInput.addEventListener('change', () => {
+    const newId = idInput.value.trim();
+    const tr = DATA.trails.find(x => x.id === cachedTid);
+    if(!tr || newId === cachedTid) return;
+    if(!newId) { idInput.value = cachedTid; return; }
+    if(DATA.trails.some(other => other !== tr && other.id === newId)) {
+      alert('ID 已存在 / ID exists');
+      idInput.value = cachedTid;
+      return;
+    }
+    const oldId = cachedTid;
+    tr.id = newId;
+    if(state.activeTrails.has(oldId)) { state.activeTrails.delete(oldId); state.activeTrails.add(newId); }
+    if(state.primaryTrailId === oldId) state.primaryTrailId = newId;
+    cachedTid = newId;
+    srcInput.dataset.tid = newId;
+    idInput.dataset.tid = newId;
+    applyChange();
+  });
+
+  srcInput.addEventListener('change', () => {
+    const tr = DATA.trails.find(x => x.id === cachedTid);
+    if(!tr) return;
+    tr.source = srcInput.value.trim();
+    applyChange();
+  });
+}
+
+/**
+ * 导入单个 KML 文件（含解析、去重、入库、UI 反馈）
+ * @returns {'added' | 'skipped' | 'failed'}
+ */
+async function importSingleKml(f) {
+  if(!f.name.toLowerCase().endsWith('.kml')) {
+    kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：不是 KML/ZIP 文件</div>`;
+    return 'failed';
+  }
+  const displayLabel = f._fromZip ? `${f._fromZip} → ${f.name}` : f.name;
+  addStatus.textContent = `⏳ 解析 ${displayLabel}...`;
+  addStatus.style.color = 'var(--text-dim)';
+
+  try {
+    const text = await f.text();
+    const trail = parseAndProcessKml(text, f.name);
+    if(!trail) {
+      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${displayLabel}：未找到轨迹点</div>`;
+      return 'failed';
+    }
+
+    const dup = findDuplicateTrail(trail);
+    if(dup) {
+      kmlList.innerHTML += `<div style="color:#f59e0b">⚠ ${displayLabel}：与「${dup.name}」重复，已跳过</div>`;
+      return 'skipped';
+    }
+
+    ensureUniqueTrailId(trail);
+    trail.color = PALETTE_LOCAL[DATA.trails.length % PALETTE_LOCAL.length];
+    // v1.20.0：当前无选中分组时，新轨迹归入「默认」组（否则会成为"孤儿"）
+    if(!trail.group) trail.group = state.activeGroup || '默认';
+    DATA.trails.push(trail);
+    state.activeTrails.add(trail.id);
+
+    renderKmlImportRow(displayLabel, trail);
+    addStatus.textContent = '';
+    return 'added';
+  } catch(err) {
+    console.error('[importSingleKml] 处理失败:', displayLabel, err);
+    kmlList.innerHTML += `<div style="color:#ff8888">❌ ${displayLabel}：${err.message}</div>`;
+    return 'failed';
+  }
+}
+
+/**
+ * 完成导入后的收尾：清下撤高亮、重算 escape_routes（可选）、fit 视野、持久化
+ */
+function postImportFinalize(addedCount) {
+  if(addedCount === 0) return;
+  state.activeEscape = null;
+  if(state.autoGenerateEscape) {
+    for(const tr of DATA.trails) {
+      if(!tr.waypoints || !tr.track || !tr.track.length) continue;
+      const fakePts = tr.track.map(p => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
+      const others = DATA.trails.filter(t => t.id !== tr.id);
+      tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
+    }
+  }
+  applyChange({ fit: false });
+  // v1.22.0：导入完成后自动执行完整复位
+  if(typeof resetView === 'function') resetView();
+}
+
 async function handleFiles(files) {
   if(!files || files.length === 0) return;
-  let added = 0, skipped = 0;
-  // 串行处理，每条之间让出主线程，避免同 tick id 冲突
-  for(const f of files) {
-    if(!f.name.toLowerCase().endsWith('.kml')) {
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：不是 KML 文件</div>`;
-      continue;
-    }
-    addStatus.textContent = `⏳ 解析 ${f.name}...`;
-    addStatus.style.color = 'var(--text-dim)';
-    try {
-      const text = await f.text();
-      const trail = parseAndProcessKml(text, f.name);
-      if(!trail) {
-        kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：未找到轨迹点</div>`;
-        continue;
-      }
-      // ── 自动去重：计算轨迹内容哈希，与已有轨迹对比 ──
-      const newHash = trailContentHash(trail);
-      const dupTrail = DATA.trails.find(t => {
-        if(!t._contentHash) t._contentHash = trailContentHash(t);
-        return t._contentHash === newHash;
-      });
-      if(dupTrail) {
-        skipped++;
-        kmlList.innerHTML += `<div style="color:#f59e0b">⚠ ${f.name}：与「${dupTrail.name}」重复，已跳过</div>`;
-        continue;
-      }
-      trail._contentHash = newHash;
-      // 防御：如果 id 已存在（极端情况下时间戳+随机仍冲突），补一个序号
-      let safeId = trail.id;
-      let suffix = 0;
-      while(DATA.trails.some(t => t.id === safeId)) {
-        suffix++;
-        safeId = trail.id + '-' + suffix;
-      }
-      trail.id = safeId;
-      trail.color = PALETTE_LOCAL[DATA.trails.length % PALETTE_LOCAL.length];
-      // v1.14.1：新轨迹默认归入当前选中组
-      if(!trail.group) trail.group = state.activeGroup;
-      DATA.trails.push(trail);
-      state.activeTrails.add(trail.id);
-      added++;
-      // 给每个新加的 trail 加一个可编辑行：ID 和 链接
-      const row = document.createElement('div');
-      row.style.cssText = 'border:1px solid var(--line);border-radius:5px;padding:8px;margin-top:6px;background:var(--bg-0)';
-      row.innerHTML = `
-        <div style="color:#5cb85c;font-size:11px;margin-bottom:6px">✓ ${f.name} → <b>${trail.name}</b> (${trail.stats.distance_km}km, ↑${trail.stats.ascent_m}m, ${trail.waypoints.length} ${t('add.waypoints') || '标注点'})</div>
-        <div style="display:flex;gap:6px;align-items:center;font-size:11px">
-          <span style="color:var(--text-muted);min-width:30px">${t('trail.id')}:</span>
-          <input type="text" class="kml-row-id" data-tid="${trail.id}" value="${trail.id}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px;font-family:monospace">
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;font-size:11px;margin-top:4px">
-          <span style="color:var(--text-muted);min-width:30px">🔗:</span>
-          <input type="text" class="kml-row-source" data-tid="${trail.id}" value="${trail.source || ''}" placeholder="${t('add.urlPlaceholder') || 'None'}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px">
-        </div>
-      `;
-      kmlList.appendChild(row);
-      // 绑定输入框 change 事件，实时更新 trail
-      const idInput = row.querySelector('.kml-row-id');
-      const srcInput = row.querySelector('.kml-row-source');
-      let cachedTid = trail.id;
-      idInput.addEventListener('change', () => {
-        const newId = idInput.value.trim();
-        const tr = DATA.trails.find(x => x.id === cachedTid);
-        if(!tr || newId === cachedTid) return;
-        if(!newId) { idInput.value = cachedTid; return; }
-        if(DATA.trails.some(other => other !== tr && other.id === newId)) {
-          alert('ID 已存在 / ID exists');
-          idInput.value = cachedTid;
-          return;
-        }
-        const oldId = cachedTid;
-        tr.id = newId;
-        if(state.activeTrails.has(oldId)) { state.activeTrails.delete(oldId); state.activeTrails.add(newId); }
-        if(state.primaryTrailId === oldId) state.primaryTrailId = newId;
-        cachedTid = newId;
-        srcInput.dataset.tid = newId;
-        idInput.dataset.tid = newId;
-        rebuildAll({fit: false});
-        saveToStorage();
-      });
-      srcInput.addEventListener('change', () => {
-        const tr = DATA.trails.find(x => x.id === cachedTid);
-        if(!tr) return;
-        tr.source = srcInput.value.trim();
-        rebuildAll({fit: false});
-        saveToStorage();
-      });
-      addStatus.textContent = '';
-      // 让出主线程一帧，避免后续文件同 tick 解析
-      await new Promise(r => setTimeout(r, 0));
-    } catch(err) {
-      console.error('[handleFiles] 处理失败:', f.name, err);
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：${err.message}</div>`;
-    }
+
+  const expanded = await expandZipFiles(files);
+  let added = 0;
+
+  // 串行处理，让出主线程避免同 tick id 冲突
+  for(const f of expanded) {
+    const result = await importSingleKml(f);
+    if(result === 'added') added++;
+    // 每条之间让出主线程一帧
+    await new Promise(r => setTimeout(r, 0));
   }
-  if(added > 0) {
-    // 清除下撤高亮（防止状态污染）
-    state.activeEscape = null;
-    // 新轨迹加入后，对所有轨迹重建 escape_routes（可利用彼此轨迹作跨轨迹下撤参考）
-    // 注：v1.12.3 起默认关闭自动生成，仅当 state.autoGenerateEscape=true 时才推算（保留接口）
-    if(state.autoGenerateEscape) {
-      for(const tr of DATA.trails) {
-        if(!tr.waypoints || !tr.track || !tr.track.length) continue;
-        const fakePts = tr.track.map(p => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
-        const others = DATA.trails.filter(t => t.id !== tr.id);
-        tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
-      }
-    }
-    rebuildAll({fit: true});
-    saveToStorage();
-  }
+  postImportFinalize(added);
 }
 
 
@@ -4790,13 +5439,24 @@ const measureState = {
 function nearestTrackIdxOnPrimary(lat, lng) {
   const main = DATA.trails.find(t => t.id === state.primaryTrailId);
   if(!main || !main.track || !main.track.length) return null;
-  // O(n) 平面距离粗筛（cos(lat) 修正经度），再对最近候选做 haversine 精度判断
+  const tk = main.track;
+  // v1.27.0：缓存主轨迹的 typed array（lat/lng），加速 O(n) 距离搜索
+  if(!main._latCache || main._latCache.length !== tk.length) {
+    main._latCache = new Float64Array(tk.length);
+    main._lngCache = new Float64Array(tk.length);
+    for(let i=0; i<tk.length; i++) {
+      main._latCache[i] = tk[i][0];
+      main._lngCache[i] = tk[i][1];
+    }
+  }
+  const lats = main._latCache;
+  const lngs = main._lngCache;
   const cosL = Math.cos(lat * Math.PI / 180);
   let bestI = 0, bestPlanar = Infinity;
-  const tk = main.track;
-  for(let i=0; i<tk.length; i++) {
-    const dy = tk[i][0] - lat;
-    const dx = (tk[i][1] - lng) * cosL;
+  const N = lats.length;
+  for(let i=0; i<N; i++) {
+    const dy = lats[i] - lat;
+    const dx = (lngs[i] - lng) * cosL;
     const d2 = dx*dx + dy*dy;
     if(d2 < bestPlanar) { bestPlanar = d2; bestI = i; }
   }
@@ -4814,6 +5474,12 @@ function measureEnter() {
     return;
   }
   measureState.active = true;
+  // v1.28.0：诊断日志（默认关闭，PERF_DEBUG=true 打开）
+  if(window.PERF_DEBUG === true) {
+    console.log('[measure-perf] 主轨迹点数:', main.track.length,
+      '· 主轨迹 waypoint 数:', (main.waypoints || []).length,
+      '· DATA.trails 数:', DATA.trails.length);
+  }
   measureState.ptA = null;
   measureState.ptB = null;
   if(!measureState.layer) measureState.layer = L.layerGroup().addTo(map);
@@ -4823,6 +5489,8 @@ function measureEnter() {
   document.getElementById('measure-hint').innerHTML = '在主轨迹上点击 <b style="color:#fbbf24">起点</b>，再点击 <b style="color:#fbbf24">终点</b>。';
   // 改鼠标样式
   map.getContainer().style.cursor = 'crosshair';
+  // v1.30.0：加 measure-active 类，让 CSS 关闭所有 SVG path 的命中测试（消除 O(n) 命中检测的浏览器层瓶颈）
+  map.getContainer().classList.add('measure-active');
 }
 
 function measureExit() {
@@ -4832,8 +5500,11 @@ function measureExit() {
   if(measureState.layer) measureState.layer.clearLayers();
   document.getElementById('measure-panel').style.display = 'none';
   map.getContainer().style.cursor = '';
+  // v1.30.0：移除 measure-active 类，恢复 SVG path 的命中检测
+  map.getContainer().classList.remove('measure-active');
   // 恢复完整主轨迹海拔图
   if(typeof refreshElevBar === 'function') refreshElevBar();
+  // v1.30.0：取消自动复位到主轨迹（用户不希望测距退出后视图跳走）
 }
 
 function measureReset() {
@@ -4842,12 +5513,21 @@ function measureReset() {
   if(measureState.layer) measureState.layer.clearLayers();
   document.getElementById('measure-result').style.display = 'none';
   document.getElementById('measure-hint').innerHTML = '在主轨迹上点击 <b style="color:#fbbf24">起点</b>，再点击 <b style="color:#fbbf24">终点</b>。';
+  // v1.31.0：复位时把海拔图刷回全轨模式，否则下次 measureCompute 的 refreshElevBar 会与残留状态竞态，出现"选 B 慢"
+  if(typeof refreshElevBar === 'function') {
+    requestAnimationFrame(() => refreshElevBar());
+  }
 }
 
 function measureMarker(lat, lng, label, color) {
-  return L.circleMarker([lat, lng], {
-    radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1
-  }).bindTooltip(label, {permanent: true, direction: 'top', offset: [0, -8], className: 'measure-tip'});
+  // v1.27.0：用 divIcon 替代 circleMarker+tooltip，减少 DOM 层级和 layout 触发
+  const icon = L.divIcon({
+    className: 'measure-marker-icon',
+    html: '<div style="width:20px;height:20px;background:'+color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;font-family:sans-serif">'+label+'</div>',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+  return L.marker([lat, lng], { icon, interactive: false, keyboard: false });
 }
 
 /* ============ 手动添加下撤路线 ============ */
@@ -5058,40 +5738,63 @@ function measureCompute() {
   const i1 = Math.min(a.idx, b.idx), i2 = Math.max(a.idx, b.idx);
   const reversed = a.idx > b.idx;
 
-  // 沿主轨迹从 i1 到 i2 累加里程
-  let dist_m = 0;
-  for(let i=i1+1; i<=i2; i++) {
-    dist_m += haversine(track[i-1][0], track[i-1][1], track[i][0], track[i][1]);
-  }
-  // 按 A → B 实际方向取海拔序列；reversed 为 true 时 a.idx 在后，需要反转
-  const elevsRaw = [];
-  for(let i=i1; i<=i2; i++) elevsRaw.push(track[i][2] || 0);
-  const elevs = reversed ? elevsRaw.slice().reverse() : elevsRaw;
-  const ascArr = accumulatorAscent(elevs, 10);
-  const descArr = accumulatorDescent(elevs, 10);
-  const asc = Math.round(ascArr[ascArr.length-1] || 0);
-  const desc = Math.round(descArr[descArr.length-1] || 0);
-
-  // 渲染高亮线段
+  // ── 视觉反馈立即执行：先画 marker + 高亮线段 ──
   measureState.layer.clearLayers();
-  const segLatLngs = track.slice(i1, i2+1).map(p => [p[0], p[1]]);
+  const segLatLngs = new Array(i2 - i1 + 1);
+  for(let i=i1, j=0; i<=i2; i++, j++) segLatLngs[j] = [track[i][0], track[i][1]];
   L.polyline(segLatLngs, { color: '#fbbf24', weight: 6, opacity: 0.9 }).addTo(measureState.layer);
   measureMarker(a.lat, a.lng, 'A', '#22c55e').addTo(measureState.layer);
   measureMarker(b.lat, b.lng, 'B', '#ef4444').addTo(measureState.layer);
 
-  // 显示结果
-  document.getElementById('m-dist').textContent = (dist_m/1000).toFixed(2) + ' km';
-  document.getElementById('m-asc').textContent = asc + ' m';
-  document.getElementById('m-desc').textContent = desc + ' m';
-  document.getElementById('m-eA').textContent = Math.round(a.elev) + ' m';
-  document.getElementById('m-eB').textContent = Math.round(b.elev) + ' m';
-  document.getElementById('m-dir').textContent = reversed ? '逆向（B→A 沿迹方向）' : '正向（A→B 沿迹方向）';
+  // 立即先显示"计算中"状态
+  const dist_el = document.getElementById('m-dist');
+  const asc_el = document.getElementById('m-asc');
+  const desc_el = document.getElementById('m-desc');
+  const eA_el = document.getElementById('m-eA');
+  const eB_el = document.getElementById('m-eB');
+  const max_el = document.getElementById('m-max');
+  eA_el.textContent = Math.round(a.elev) + ' m';
+  eB_el.textContent = Math.round(b.elev) + ' m';
+  dist_el.textContent = '⋯'; asc_el.textContent = '⋯'; desc_el.textContent = '⋯'; max_el.textContent = '⋯';
   document.getElementById('measure-hint').textContent = '✓ 已测量。点「重新选点」继续。';
   document.getElementById('measure-result').style.display = 'block';
-  // 海拔图重绘下放到下一帧，让点击响应（高亮线段 + 数据面板）立即显示
-  if(typeof refreshElevBar === 'function') {
-    requestAnimationFrame(() => refreshElevBar());
-  }
+
+  // ── 计算重活放到下一帧，不阻塞点击 ──
+  requestAnimationFrame(() => {
+    // 沿主轨迹从 i1 到 i2 累加里程（避免 slice 复制）
+    let dist_m = 0;
+    for(let i=i1+1; i<=i2; i++) {
+      dist_m += haversine(track[i-1][0], track[i-1][1], track[i][0], track[i][1]);
+    }
+    // 按 A → B 实际方向取海拔序列
+    const N = i2 - i1 + 1;
+    const elevs = new Array(N);
+    if(reversed) {
+      for(let i=0; i<N; i++) elevs[i] = track[i2-i][2] || 0;
+    } else {
+      for(let i=0; i<N; i++) elevs[i] = track[i1+i][2] || 0;
+    }
+    const ascArr = accumulatorAscent(elevs, 10);
+    const descArr = accumulatorDescent(elevs, 10);
+    const asc = Math.round(ascArr[ascArr.length-1] || 0);
+    const desc = Math.round(descArr[descArr.length-1] || 0);
+    // for-loop 找最大值（避免 Math.max(...spread) 大数组栈溢出/慢）
+    let maxE = elevs[0];
+    for(let i=1; i<N; i++) if(elevs[i] > maxE) maxE = elevs[i];
+    maxE = Math.round(maxE);
+
+    dist_el.textContent = (dist_m/1000).toFixed(2) + ' km';
+    asc_el.textContent = asc + ' m';
+    desc_el.textContent = desc + ' m';
+    max_el.textContent = maxE + ' m';
+
+    // v1.30.0：取消 AB 计算完成后的自动 fitBounds（用户不希望测距时视图跳转）
+
+    // 海拔图重绘放到再下一帧，让上面的数字先渲染
+    if(typeof refreshElevBar === 'function') {
+      requestAnimationFrame(() => refreshElevBar());
+    }
+  });
 }
 
 // 测距按钮
@@ -5100,28 +5803,532 @@ if(measureBtn) measureBtn.addEventListener('click', () => {
   if(measureState.active) measureExit();
   else measureEnter();
 });
-// v1.12.5：反向按钮（反转主轨迹）
+// 反向按钮（反转主轨迹）
 const reverseBtn = document.getElementById('reverse-btn');
 if(reverseBtn) reverseBtn.addEventListener('click', () => {
   if(!state.primaryTrailId) { alert(t('reverse.noPrimary') || '无主轨迹'); return; }
   if(typeof reverseTrail === 'function') reverseTrail(state.primaryTrailId);
 });
+
+/* ============ 分段功能（在主轨迹上依次选点，标记每天行程） ============ */
+const segmentState = {
+  active: false,
+  points: [],  // Array<{idx, lat, lng, elev, km}>  points[0] = D1起点, points[i] = Di 终点
+  campEdits: {}, // { dayNo: {name: '', elev: null} } 用户手动填写的营地信息
+  layer: null,
+  _justDragged: false,
+};
+
+function segmentEnter() {
+  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  if(!main || !main.track || !main.track.length) {
+    showToast('请先设置主轨迹', 'error');
+    return;
+  }
+  // 与测距互斥
+  if(measureState.active) measureExit();
+  if(typeof addEscapeState !== 'undefined' && addEscapeState.active && typeof addEscapeExit === 'function') addEscapeExit();
+
+  segmentState.active = true;
+  segmentState.points = [];
+  segmentState.campEdits = {};
+  if(!segmentState.layer) segmentState.layer = L.layerGroup().addTo(map);
+  segmentState.layer.clearLayers();
+
+  // 预填充：如果 main.day_meta 已有数据，尝试从 track dayId 恢复分段点
+  if(main.day_meta && main.day_meta.length && main.track[0].length >= 6) {
+    const dayIds = main.track.map(p => p[5] || 1);
+    let curDay = dayIds[0];
+    // D1 起点 = track[0]
+    const p0 = main.track[0];
+    segmentState.points.push({ idx:0, lat:p0[0], lng:p0[1], elev:p0[2]||0, km:p0[3]||0 });
+    for(let i=1; i<dayIds.length; i++) {
+      if(dayIds[i] !== curDay) {
+        // 上一天在 i-1 结束
+        const p = main.track[i-1];
+        segmentState.points.push({ idx:i-1, lat:p[0], lng:p[1], elev:p[2]||0, km:p[3]||0 });
+        curDay = dayIds[i];
+      }
+    }
+    // 最后一天的终点
+    const pn = main.track[main.track.length-1];
+    segmentState.points.push({ idx: main.track.length-1, lat:pn[0], lng:pn[1], elev:pn[2]||0, km:pn[3]||0 });
+    // 恢复营地信息
+    main.day_meta.forEach(dm => {
+      if(dm.camp && dm.camp !== '-') {
+        segmentState.campEdits[dm.d] = { name: dm.camp, elev: dm.camp_elev || null };
+      }
+    });
+  }
+
+  document.getElementById('segment-panel').style.display = 'flex';
+  map.getContainer().style.cursor = 'crosshair';
+  // v1.30.0：分段模式也开启 SVG path 命中测试跳过
+  map.getContainer().classList.add('measure-active');
+  updateSegmentUI();
+}
+
+function segmentExit() {
+  segmentState.active = false;
+  if(segmentState.layer) segmentState.layer.clearLayers();
+  document.getElementById('segment-panel').style.display = 'none';
+  map.getContainer().style.cursor = '';
+  // v1.30.0：恢复 SVG 命中检测
+  map.getContainer().classList.remove('measure-active');
+}
+
+function segmentUndo() {
+  if(segmentState.points.length === 0) return;
+  const removedIdx = segmentState.points.length - 1;
+  segmentState.points.pop();
+  // 清掉对应营地编辑（营地属于第 removedIdx 天）
+  if(removedIdx > 0) delete segmentState.campEdits[removedIdx];
+  updateSegmentUI();
+}
+
+function segmentClear() {
+  segmentState.points = [];
+  segmentState.campEdits = {};
+  updateSegmentUI();
+}
+
+// 计算某段的 里程/爬升/下降
+function segmentStats(startIdx, endIdx) {
+  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  const tk = main.track;
+  const i1 = Math.min(startIdx, endIdx), i2 = Math.max(startIdx, endIdx);
+  let dist_m = 0;
+  for(let i=i1+1; i<=i2; i++) {
+    dist_m += haversine(tk[i-1][0], tk[i-1][1], tk[i][0], tk[i][1]);
+  }
+  const reversed = startIdx > endIdx;
+  const elevsRaw = [];
+  for(let i=i1; i<=i2; i++) elevsRaw.push(tk[i][2] || 0);
+  const elevs = reversed ? elevsRaw.slice().reverse() : elevsRaw;
+  const asc = Math.round(accumulatorAscent(elevs, 10).slice(-1)[0] || 0);
+  const desc = Math.round(accumulatorDescent(elevs, 10).slice(-1)[0] || 0);
+  const maxE = Math.round(Math.max(...elevs));
+  return { km: (dist_m/1000).toFixed(2), asc, desc, maxE };
+}
+
+function updateSegmentUI() {
+  const pts = segmentState.points;
+  const hint = document.getElementById('segment-hint');
+  if(pts.length === 0) {
+    hint.innerHTML = '在主轨迹上点击选择<b style="color:#fbbf24">起点</b>（D1 起点）。之后每次点击 = 增加一天。';
+  } else if(pts.length === 1) {
+    hint.innerHTML = '✓ 起点已选（<span style="color:#22c55e">▲</span> D1 起点）。再点击选择 <b style="color:#fbbf24">D1 终点</b>（也是 D2 起点）。';
+  } else {
+    hint.innerHTML = '✓ 已分 <b style="color:#60a5fa">' + (pts.length - 1) + '</b> 天。继续点击增加下一天，或<b style="color:#fbbf24">拖动分段点</b>调整每天边界。';
+  }
+  renderSegmentList();
+  redrawSegmentLayer();
+}
+
+function renderSegmentList() {
+  const list = document.getElementById('segment-list');
+  const pts = segmentState.points;
+  if(pts.length < 2) {
+    list.innerHTML = '<div style="color:#64748b;text-align:center;padding:16px 0;font-size:11px">尚未选中任何一天…</div>';
+    return;
+  }
+  const DAY_COLORS = ['#E8531A','#1A7BC4','#3A9B47','#B86FCC','#C49B1A','#1AABA3','#C42D2D','#6B7CC4'];
+  let html = '';
+  for(let d=1; d<pts.length; d++) {
+    const stats = segmentStats(pts[d-1].idx, pts[d].idx);
+    const color = DAY_COLORS[(d-1) % DAY_COLORS.length];
+    const campData = segmentState.campEdits[d] || {};
+    const campName = campData.name || '';
+    const campElev = campData.elev != null ? campData.elev : Math.round(pts[d].elev);
+    html += '<div style="background:#0f1420;border-left:3px solid '+color+';padding:8px 10px;margin-bottom:6px;border-radius:4px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<b style="color:'+color+';font-size:12px">D'+d+'</b>' +
+        '<span style="color:#94a3b8;font-size:10px">'+stats.km+'km · ↑'+stats.asc+' · ↓'+stats.desc+' · ⛰'+stats.maxE+'</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;margin-bottom:4px">' +
+        '<label style="width:56px;flex:0 0 56px">营地名</label>' +
+        '<input class="seg-camp-name" data-day="'+d+'" placeholder="选填，如「仲达牧场」" value="'+campName.replace(/"/g,'&quot;')+'" style="flex:1;background:#1e2433;border:1px solid #3a4154;color:#e2e8f0;padding:4px 6px;border-radius:3px;font-size:11px;min-width:0">' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8">' +
+        '<label style="width:56px;flex:0 0 56px">营地海拔</label>' +
+        '<input class="seg-camp-elev" data-day="'+d+'" type="number" placeholder="米" value="'+campElev+'" style="flex:1;background:#1e2433;border:1px solid #3a4154;color:#e2e8f0;padding:4px 6px;border-radius:3px;font-size:11px;min-width:0">' +
+        '<span style="color:#64748b;font-size:10px">m</span>' +
+      '</div>' +
+    '</div>';
+  }
+  list.innerHTML = html;
+  // 绑定输入事件
+  list.querySelectorAll('.seg-camp-name').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const d = +e.target.dataset.day;
+      if(!segmentState.campEdits[d]) segmentState.campEdits[d] = {};
+      segmentState.campEdits[d].name = e.target.value;
+    });
+  });
+  list.querySelectorAll('.seg-camp-elev').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const d = +e.target.dataset.day;
+      if(!segmentState.campEdits[d]) segmentState.campEdits[d] = {};
+      const v = parseFloat(e.target.value);
+      segmentState.campEdits[d].elev = isNaN(v) ? null : v;
+    });
+  });
+}
+
+function redrawSegmentLayer() {
+  if(!segmentState.layer) return;
+  segmentState.layer.clearLayers();
+  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  if(!main) return;
+  const tk = main.track;
+  const pts = segmentState.points;
+  const DAY_COLORS = ['#E8531A','#1A7BC4','#3A9B47','#B86FCC','#C49B1A','#1AABA3','#C42D2D','#6B7CC4'];
+  // 为每天绘制不同颜色高亮线段
+  for(let d=1; d<pts.length; d++) {
+    const a = pts[d-1].idx, b = pts[d].idx;
+    const i1 = Math.min(a,b), i2 = Math.max(a,b);
+    const segLL = [];
+    for(let i=i1; i<=i2; i++) segLL.push([tk[i][0], tk[i][1]]);
+    const color = DAY_COLORS[(d-1) % DAY_COLORS.length];
+    L.polyline(segLL, {color, weight: 7, opacity: 0.85 }).addTo(segmentState.layer);
+  }
+  // 绘制分段点标记（可拖拽的 divIcon Marker）
+  pts.forEach((p, i) => {
+    const label = i === 0 ? '起' : ('D'+i);
+    const color = i === 0 ? '#22c55e' : (i === pts.length-1 ? '#ef4444' : '#fbbf24');
+    const icon = L.divIcon({
+      className: 'segment-marker',
+      html: '<div style="width:22px;height:22px;background:'+color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a1a1a;font-size:10px;font-family:sans-serif;cursor:move">'+label+'</div>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    });
+    const marker = L.marker([p.lat, p.lng], { icon, draggable: true, autoPan: true }).addTo(segmentState.layer);
+    marker._segIdx = i;
+    // 拖动过程中：吸附到主轨迹上（同时约束在相邻分段点之间）
+    marker.on('drag', ev => {
+      const ll = ev.target.getLatLng();
+      const hit = nearestTrackIdxOnPrimary(ll.lat, ll.lng);
+      if(hit) {
+        // 视觉吸附：把 marker 位置贴到最近的轨迹点
+        ev.target.setLatLng([hit.point[0], hit.point[1]]);
+      }
+    });
+    // 拖动结束：确定 idx，检查冲突，重排（保持递增顺序）后重绘
+    marker.on('dragend', ev => {
+      const ll = ev.target.getLatLng();
+      const hit = nearestTrackIdxOnPrimary(ll.lat, ll.lng);
+      if(!hit) {
+        showToast('必须拖到主轨迹附近（200m 内）', 'error');
+        redrawSegmentLayer();
+        return;
+      }
+      const newIdx = hit.idx;
+      const k = marker._segIdx;
+      // 约束：不能与其他分段点重合
+      if(pts.some((pp, j) => j !== k && pp.idx === newIdx)) {
+        showToast('该位置已被占用，请选另一处', 'error');
+        redrawSegmentLayer();
+        return;
+      }
+      // 约束：必须保持在相邻分段点之间（不改变天数顺序）
+      // 检查 points 数组的 idx 单调性：以 points[0].idx 为起点看方向
+      const isAscending = pts.length < 2 || pts[0].idx <= pts[pts.length-1].idx;
+      const prev = k > 0 ? pts[k-1].idx : null;
+      const next = k < pts.length-1 ? pts[k+1].idx : null;
+      if(isAscending) {
+        if(prev != null && newIdx <= prev) { showToast('D'+(k+1)+' 起点必须在 D'+k+' 起点之后', 'error'); redrawSegmentLayer(); return; }
+        if(next != null && newIdx >= next) { showToast('必须在下一分段点之前', 'error'); redrawSegmentLayer(); return; }
+      } else {
+        if(prev != null && newIdx >= prev) { showToast('位置越界（反向轨迹）', 'error'); redrawSegmentLayer(); return; }
+        if(next != null && newIdx <= next) { showToast('位置越界（反向轨迹）', 'error'); redrawSegmentLayer(); return; }
+      }
+      pts[k] = { idx: newIdx, lat: hit.point[0], lng: hit.point[1], elev: hit.point[2] || 0, km: hit.point[3] || 0 };
+      // 防止 dragend 后紧跟 map click 触发新增分段点
+      segmentState._justDragged = true;
+      setTimeout(() => { segmentState._justDragged = false; }, 200);
+      updateSegmentUI();
+    });
+  });
+}
+
+function segmentApply() {
+  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  if(!main) return;
+  const pts = segmentState.points;
+  if(pts.length < 2) {
+    showToast('至少需要 2 个分段点（1 天）', 'error');
+    return;
+  }
+  const tk = main.track;
+  // 写 track[i][5] = dayId
+  // 分段点之间的所有点归属该天；两点方向可能反转，用 min/max
+  // 先全部重置为 1，再按段覆盖
+  const dayIds = new Array(tk.length).fill(1);
+  for(let d=1; d<pts.length; d++) {
+    const i1 = Math.min(pts[d-1].idx, pts[d].idx);
+    const i2 = Math.max(pts[d-1].idx, pts[d].idx);
+    for(let i=i1; i<=i2; i++) dayIds[i] = d;
+  }
+  // 覆盖到 track（每个点第 6 个位置存 dayId，若原本没有则扩展）
+  for(let i=0; i<tk.length; i++) {
+    if(tk[i].length < 6) {
+      while(tk[i].length < 6) tk[i].push(null);
+    }
+    tk[i][5] = dayIds[i];
+  }
+  // 生成 day_meta
+  const day_meta = [];
+  for(let d=1; d<pts.length; d++) {
+    const stats = segmentStats(pts[d-1].idx, pts[d].idx);
+    const campData = segmentState.campEdits[d] || {};
+    const startElev = Math.round(pts[d-1].elev);
+    const endElev = Math.round(pts[d].elev);
+    // seg 描述：起点海拔 → 最高海拔 → 终点海拔（km）
+    const seg = `起 ${startElev}m → 顶 ${stats.maxE}m → 终 ${endElev}m（${stats.km}km）`;
+    day_meta.push({
+      d: d,
+      km: parseFloat(stats.km),
+      asc: stats.asc,
+      desc: stats.desc,
+      max: stats.maxE,
+      seg: seg,
+      camp: campData.name && campData.name.trim() ? campData.name.trim() : '-',
+      camp_elev: campData.elev != null ? Math.round(campData.elev) : Math.round(pts[d].elev),
+    });
+  }
+  main.day_meta = day_meta;
+  // v1.27.0：给主轨迹的 waypoints 也打上 day 字段（按最近 track idx 匹配所在段）
+  if(main.waypoints && main.waypoints.length && main.track && main.track.length) {
+    main.waypoints.forEach(wp => {
+      // 找 waypoint 对应的 track idx（优先用 wp.trackIdx，否则做一次 nearest 搜索）
+      let idx = wp.trackIdx;
+      if(idx == null || idx < 0 || idx >= main.track.length) {
+        // 用 haversine 找最近点（简易 O(n)）
+        let bestI = 0, bestD = Infinity;
+        const cosL = Math.cos(wp.lat * Math.PI / 180);
+        for(let i=0; i<main.track.length; i++) {
+          const dy = main.track[i][0] - wp.lat;
+          const dx = (main.track[i][1] - wp.lng) * cosL;
+          const d2 = dx*dx + dy*dy;
+          if(d2 < bestD) { bestD = d2; bestI = i; }
+        }
+        idx = bestI;
+      }
+      const dayId = main.track[idx][5];
+      if(dayId != null) wp.day = dayId;
+    });
+  }
+  showToast('✓ 已应用 ' + (pts.length-1) + ' 天分段');
+  // 保存 + 重绘（不用整个 rebuildAll，避免视野飘走）
+  saveToStorage();
+  drawTracks();
+  drawWaypoints();
+  buildDaysTab();  // v1.26.0：刷新侧栏行程 tab
+  if(typeof refreshElevBar === 'function') refreshElevBar();
+  segmentExit();
+}
+
+const segmentBtn = document.getElementById('segment-btn');
+if(segmentBtn) segmentBtn.addEventListener('click', () => {
+  if(segmentState.active) segmentExit();
+  else segmentEnter();
+});
+const segmentCloseBtn = document.getElementById('segment-close');
+if(segmentCloseBtn) segmentCloseBtn.addEventListener('click', segmentExit);
+const segmentExitBtn = document.getElementById('segment-exit');
+if(segmentExitBtn) segmentExitBtn.addEventListener('click', segmentExit);
+const segmentUndoBtn = document.getElementById('segment-undo');
+if(segmentUndoBtn) segmentUndoBtn.addEventListener('click', segmentUndo);
+const segmentClearBtn = document.getElementById('segment-clear');
+if(segmentClearBtn) segmentClearBtn.addEventListener('click', segmentClear);
+const segmentApplyBtn = document.getElementById('segment-apply');
+if(segmentApplyBtn) segmentApplyBtn.addEventListener('click', segmentApply);
+
 const measureCloseBtn = document.getElementById('measure-close');
 if(measureCloseBtn) measureCloseBtn.addEventListener('click', measureExit);
 const measureExitBtn = document.getElementById('measure-exit');
 if(measureExitBtn) measureExitBtn.addEventListener('click', measureExit);
-const measureSwapBtn = document.getElementById('measure-swap');
-if(measureSwapBtn) measureSwapBtn.addEventListener('click', () => {
-  if(!measureState.ptA || !measureState.ptB) return;
-  [measureState.ptA, measureState.ptB] = [measureState.ptB, measureState.ptA];
-  measureCompute();
-});
 const measureResetBtn = document.getElementById('measure-reset');
 if(measureResetBtn) measureResetBtn.addEventListener('click', measureReset);
 
-// 监听地图点击：测距模式下选点
+// v1.26.0：测距/分段模式改用原生 pointerdown/pointerup 快速触发（绕过 Leaflet click 内部延迟）
+// 判断"不是拖拽" = down 到 up 位置差 < 6px 且时间 < 400ms
+(function() {
+  const container = map.getContainer();
+  let pd = null; // {x, y, t}
+  function isFastTap(x, y, t) {
+    if(!pd) return false;
+    const dx = x - pd.x, dy = y - pd.y;
+    // v1.27.0：放宽阈值（10px 位移 + 800ms 时间），覆盖 trackpad 慢速点击
+    return (dx*dx + dy*dy) < 100 && (t - pd.t) < 800;
+  }
+  function onDown(x, y, target) {
+    // 只有测距/分段模式激活时才捕获
+    if(!(measureState.active || segmentState.active)) { pd = null; return; }
+    // 别拦截控件/UI 上的点击
+    if(target && (target.closest('.leaflet-marker-icon') || target.closest('.leaflet-control') ||
+                   target.closest('#segment-panel') || target.closest('#measure-panel') ||
+                   target.closest('#map-toolbar') || target.closest('#sidebar'))) {
+      pd = null; return;
+    }
+    pd = { x, y, t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
+  }
+  function onUp(x, y, target) {
+    if(!pd) return;
+    const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if(!isFastTap(x, y, t)) { pd = null; return; }
+    // 别拦截控件/marker 上的点击
+    if(target && (target.closest('.leaflet-marker-icon') || target.closest('.leaflet-control'))) {
+      pd = null; return;
+    }
+    // 转换 x,y → latlng（相对 container 的位置）
+    const rect = container.getBoundingClientRect();
+    const latlng = map.containerPointToLatLng([x - rect.left, y - rect.top]);
+    // 派发到 measure/segment 处理逻辑，先阻止 Leaflet 的默认 click（避免重复）
+    handleFastTap(latlng);
+    // 抑制紧跟着的 map.click 事件（避免同一次点击被处理两次）
+    measureState._justFastTap = true;
+    segmentState._justFastTap = true;
+    setTimeout(() => { measureState._justFastTap = false; segmentState._justFastTap = false; }, 350);
+    pd = null;
+  }
+  function handleFastTap(latlng) {
+    // v1.28.0：性能诊断日志（默认关闭，控制台运行 window.PERF_DEBUG = true 打开）
+    const _perfEnabled = window.PERF_DEBUG === true;
+    const _t0 = _perfEnabled ? performance.now() : 0;
+    const _mark = (label) => {
+      if(_perfEnabled) console.log('[measure-perf]', label, (performance.now() - _t0).toFixed(1) + 'ms');
+    };
+    // 分段模式
+    if(segmentState.active) {
+      if(segmentState._justDragged) return;
+      // v1.28.0：立即在点击位置画个临时 marker，nearest 搜索在下一帧异步做
+      const tempMarker = L.circleMarker([latlng.lat, latlng.lng], {
+        radius: 6, color: '#fff', weight: 2, fillColor: '#fbbf24', fillOpacity: 0.7
+      }).addTo(segmentState.layer || (segmentState.layer = L.layerGroup().addTo(map)));
+      _mark('分段 临时 marker');
+      requestAnimationFrame(() => {
+        const hit = nearestTrackIdxOnPrimary(latlng.lat, latlng.lng);
+        _mark('分段 nearestTrackIdx');
+        tempMarker.remove();
+        if(!hit) { showToast('请点击主轨迹附近（200m 内）', 'error'); return; }
+        const p = hit.point;
+        const pt = { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
+        const last = segmentState.points[segmentState.points.length - 1];
+        if(last && last.idx === pt.idx) { showToast('该点已选中，请选另一个位置', 'error'); return; }
+        segmentState.points.push(pt);
+        updateSegmentUI();
+        _mark('分段 updateSegmentUI');
+      });
+      return;
+    }
+    // 测距模式
+    if(!measureState.active) return;
+    // v1.28.0：立即在点击位置画个临时占位 marker，nearest 搜索/renderMarker 挪到下一帧
+    // 这样用户点下的瞬间就有视觉反馈，感知延迟从 nearest 计算 + marker 渲染合计的百 ms 变成 <16ms
+    const isA = !measureState.ptA;
+    const isB = measureState.ptA && !measureState.ptB;
+    if(isA) {
+      measureState.layer.clearLayers();
+      _mark('A clearLayers');
+    }
+    const tempColor = isA ? '#22c55e' : (isB ? '#ef4444' : '#fbbf24');
+    const tempLabel = isA ? 'A' : (isB ? 'B' : '?');
+    const tempMarker = measureMarker(latlng.lat, latlng.lng, tempLabel, tempColor);
+    tempMarker.addTo(measureState.layer);
+    _mark('临时 marker addTo (立即视觉反馈)');
+    // 真实的 nearest 搜索 + 计算延迟到下一帧
+    requestAnimationFrame(() => {
+      const hit = nearestTrackIdxOnPrimary(latlng.lat, latlng.lng);
+      _mark('nearestTrackIdx');
+      if(!hit) {
+        tempMarker.remove();
+        showToast('请点击主轨迹附近（200m 内）', 'error');
+        return;
+      }
+      const p = hit.point;
+      const pt = { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
+      // 把临时 marker 位置吸附到最近的轨迹点
+      if(tempMarker.setLatLng) tempMarker.setLatLng([p[0], p[1]]);
+      _mark('marker 吸附');
+      if(!measureState.ptA) {
+        measureState.ptA = pt;
+        document.getElementById('measure-hint').innerHTML = '✓ 起点已选（A）。再点击 <b style="color:#fbbf24">终点</b>。';
+        _mark('A hint');
+      } else if(!measureState.ptB) {
+        if(pt.idx === measureState.ptA.idx) {
+          tempMarker.remove();
+          showToast('起点和终点不能是同一点', 'error');
+          return;
+        }
+        measureState.ptB = pt;
+        measureCompute();
+        _mark('B measureCompute');
+      } else {
+        const dA = Math.abs(pt.idx - measureState.ptA.idx);
+        const dB = Math.abs(pt.idx - measureState.ptB.idx);
+        if(dA <= dB) {
+          measureState.ptA = pt;
+          document.getElementById('measure-hint').innerHTML = '↻ 起点已更新（A）。';
+        } else {
+          measureState.ptB = pt;
+          document.getElementById('measure-hint').innerHTML = '↻ 终点已更新（B）。';
+        }
+        if(measureState.ptA.idx === measureState.ptB.idx) {
+          showToast('起点和终点不能是同一点', 'error');
+          return;
+        }
+        measureCompute();  // 会重画整个 layer，tempMarker 也会被清掉
+        _mark('第三次点击 measureCompute');
+      }
+    });
+  }
+  // 优先使用 pointer 事件（覆盖鼠标 + 触屏 + 触控笔）
+  if(window.PointerEvent) {
+    container.addEventListener('pointerdown', e => {
+      if(e.pointerType !== 'mouse' && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+      onDown(e.clientX, e.clientY, e.target);
+    }, {capture: true, passive: true});
+    container.addEventListener('pointerup', e => {
+      onUp(e.clientX, e.clientY, e.target);
+    }, {capture: true, passive: true});
+    container.addEventListener('pointercancel', () => { pd = null; }, {capture: true, passive: true});
+  } else {
+    container.addEventListener('mousedown', e => onDown(e.clientX, e.clientY, e.target), {capture: true});
+    container.addEventListener('mouseup', e => onUp(e.clientX, e.clientY, e.target), {capture: true});
+    container.addEventListener('touchstart', e => {
+      if(e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY, e.target);
+    }, {capture: true, passive: true});
+    container.addEventListener('touchend', e => {
+      if(e.changedTouches.length === 1) onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY, e.target);
+    }, {capture: true, passive: true});
+  }
+})();
+
+// 监听地图点击：测距模式下选点（fallback：如果 fast-tap 没触发，click 兜底）
 map.on('click', e => {
+  // 分段模式优先处理（互斥）
+  if(segmentState.active) {
+    if(segmentState._justDragged || segmentState._justFastTap) return; // 忽略拖拽后紧跟的 click
+    const hit = nearestTrackIdxOnPrimary(e.latlng.lat, e.latlng.lng);
+    if(!hit) {
+      showToast('请点击主轨迹附近（200m 内）', 'error');
+      return;
+    }
+    const p = hit.point;
+    const pt = { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
+    // 去重：若和上一个分段点相同 idx，忽略
+    const last = segmentState.points[segmentState.points.length - 1];
+    if(last && last.idx === pt.idx) {
+      showToast('该点已选中，请选另一个位置', 'error');
+      return;
+    }
+    segmentState.points.push(pt);
+    updateSegmentUI();
+    return;
+  }
   if(!measureState.active) return;
+  if(measureState._justFastTap) return; // 已被 fast-tap 处理
   const hit = nearestTrackIdxOnPrimary(e.latlng.lat, e.latlng.lng);
   if(!hit) {
     showToast('请点击主轨迹附近（200m 内）', 'error');
@@ -5174,23 +6381,40 @@ const elevLabel = document.getElementById('elev-label');
 // 当前绘制数据缓存
 let _elevBarData = null;  // {pts, minE, maxE, color}
 
-function drawElevBar(pts, color, label, opts) {
-  if(!elevCanvas || !elevCtx || !pts || pts.length < 2) return;
-  opts = opts || {};
+/* ═════════════════════════════════════════════════════════════════
+   Elevation Chart Rendering（v1.18.0 拆分：主函数 + 8 个辅助）
+   ─────────────────────────────────────────────────────────────────
+   drawElevBar(pts, color, label, opts)
+     │
+     ├── computeElevLayout(pts, opts)         —— 尺寸/坐标系/dpr
+     ├── drawElevBackground(layout)           —— 米色卡纸底 + 噪点
+     ├── drawElevGridLines(layout)            —— 25%/50%/75% 虚线
+     ├── drawElevFill(pts, layout)            —— 分段海拔色填充
+     ├── drawElevCurve(pts, layout)           —— 曲线主线 + 底线
+     ├── collectElevAnnotations(pts, layout, opts) —— 峰/谷/营地
+     ├── layoutElevLabels(annos, layout, pts) —— 智能避让+引线布局
+     ├── renderElevLabels(annos, layout)      —— 绘制文字+黑点+引线
+     └── drawElevAxes(layout)                 —— Y 轴 max/min + X 轴刻度
+   ═════════════════════════════════════════════════════════════════ */
+
+/**
+ * 计算 Elev Bar 的布局参数（Canvas 尺寸 + padding + km 数组 + 高程范围 + 坐标映射函数）
+ */
+function computeElevLayout(pts, opts) {
   const W = elevCanvas.offsetWidth || 340;
   const H = elevCanvas.offsetHeight || 140;
   const dpr = window.devicePixelRatio || 1;
   elevCanvas.width = W * dpr;
   elevCanvas.height = H * dpr;
-  // 重置 transform 后再 scale，避免累积
   elevCtx.setTransform(1, 0, 0, 1, 0, 0);
   elevCtx.scale(dpr, dpr);
 
   const alts = pts.map(p => p[2]);
-  const minE = Math.min(...alts), maxE = Math.max(...alts);
+  const minE = Math.min(...alts);
+  const maxE = Math.max(...alts);
   const eRng = maxE - minE || 1;
 
-  // ── 横轴里程：opts.kmFromZero=true 时强制从 0 开始（测距模式） ──
+  // 横轴里程：opts.kmFromZero=true 时强制从 0 开始（测距模式）
   const km = [];
   if(opts.kmFromZero) {
     let acc = 0;
@@ -5204,62 +6428,56 @@ function drawElevBar(pts, color, label, opts) {
       km.push(typeof pts[i][3] === 'number' ? pts[i][3] : i / pts.length);
     }
   }
-  const kmStart = km[0], kmEnd = km[km.length-1];
+  const kmStart = km[0];
+  const kmEnd = km[km.length-1];
   const kmRange = kmEnd - kmStart || 1;
 
-  _elevBarData = { pts, minE, maxE, color: color || '#3F5238', km };
-  if(elevLabel) elevLabel.textContent = label || t('elev.title');
-
-  // 爬升/下降统计
-  const ascArr = accumulatorAscent(alts, 10);
-  const descArr = accumulatorDescent(alts, 10);
-  const totalAsc = Math.round(ascArr[ascArr.length-1] || 0);
-  const totalDesc = Math.round(descArr[descArr.length-1] || 0);
-  const ascEl = document.getElementById('elev-stat-asc');
-  const descEl = document.getElementById('elev-stat-desc');
-  if(ascEl) ascEl.textContent = '↑' + totalAsc + 'm';
-  if(descEl) descEl.textContent = '↓' + totalDesc + 'm';
-
   const PL = 44, PR = 16, PT = 22, PB = 34;
-  const pw = W - PL - PR, ph = H - PT - PB;
+  const pw = W - PL - PR;
+  const ph = H - PT - PB;
   const pX = i => PL + ((km[i] - kmStart) / kmRange) * pw;
   const pY = a => PT + ph * (1 - (a - minE) / eRng);
 
-  elevCtx.clearRect(0, 0, W, H);
+  return { W, H, PL, PR, PT, PB, pw, ph, pX, pY, alts, minE, maxE, eRng, km, kmStart, kmEnd, kmRange };
+}
 
-  // ── 米色卡纸背景纹理（图2 杂志风：纸张感 + 边缘暗角） ──
+/** 海拔比例 → 分段绿色 RGB（浅薄荷 → 深森林绿） */
+function elevRatioColor(ratio) {
+  const stops = [
+    [0,    [220, 226, 200]],
+    [0.35, [156, 184, 134]],
+    [0.65, [ 99, 134,  92]],
+    [1.0,  [ 53,  78,  60]],
+  ];
+  let lo = stops[0], hi = stops[stops.length-1];
+  for(let i=0; i<stops.length-1; i++) {
+    if(ratio >= stops[i][0] && ratio <= stops[i+1][0]) { lo = stops[i]; hi = stops[i+1]; break; }
+  }
+  const t = lo[0] === hi[0] ? 0 : (ratio - lo[0]) / (hi[0] - lo[0]);
+  return [
+    Math.round(lo[1][0] + t*(hi[1][0]-lo[1][0])),
+    Math.round(lo[1][1] + t*(hi[1][1]-lo[1][1])),
+    Math.round(lo[1][2] + t*(hi[1][2]-lo[1][2])),
+  ];
+}
+
+/** 绘制米色卡纸背景 + 微噪点纹理 */
+function drawElevBackground(layout) {
+  const { W, H } = layout;
   const bgGrad = elevCtx.createLinearGradient(0, 0, 0, H);
   bgGrad.addColorStop(0, '#F2EBD3');
   bgGrad.addColorStop(1, '#E8DEC0');
   elevCtx.fillStyle = bgGrad;
   elevCtx.fillRect(0, 0, W, H);
-  // 微噪点：极淡棕点
   for(let i = 0; i < 110; i++) {
     elevCtx.fillStyle = `rgba(110,90,55,${(Math.random()*0.07).toFixed(3)})`;
     elevCtx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
   }
+}
 
-  // ── 海拔→颜色（图2 风格：从浅薄荷绿到深森林绿） ──
-  function elevColor(ratio) {
-    const stops = [
-      [0,    [220, 226, 200]],  // 低海拔：浅薄荷
-      [0.35, [156, 184, 134]],  // 中海拔：草绿
-      [0.65, [ 99, 134,  92]],  // 中高：苔绿
-      [1.0,  [ 53,  78,  60]],  // 高海拔：深森林绿
-    ];
-    let lo = stops[0], hi = stops[stops.length-1];
-    for(let i=0; i<stops.length-1; i++) {
-      if(ratio >= stops[i][0] && ratio <= stops[i+1][0]) { lo = stops[i]; hi = stops[i+1]; break; }
-    }
-    const t = lo[0] === hi[0] ? 0 : (ratio - lo[0]) / (hi[0] - lo[0]);
-    return [
-      Math.round(lo[1][0] + t*(hi[1][0]-lo[1][0])),
-      Math.round(lo[1][1] + t*(hi[1][1]-lo[1][1])),
-      Math.round(lo[1][2] + t*(hi[1][2]-lo[1][2])),
-    ];
-  }
-
-  // 横向参考线（25%、50%、75%）
+/** 绘制 25% / 50% / 75% 横向参考虚线 */
+function drawElevGridLines(layout) {
+  const { PL, PT, pw, ph } = layout;
   [0.25, 0.5, 0.75].forEach(f => {
     const y = PT + ph * (1 - f);
     elevCtx.beginPath();
@@ -5271,16 +6489,18 @@ function drawElevBar(pts, color, label, opts) {
     elevCtx.stroke();
     elevCtx.setLineDash([]);
   });
+}
 
-  // ── 填充：分段海拔绿色 + 顶到底的纵向衰减（杂志地形剖面感） ──
+/** 绘制分段海拔色填充（曲线下方，纵向渐变 0.62 → 0.18） */
+function drawElevFill(pts, layout) {
+  const { pX, pY, PT, ph, minE, eRng } = layout;
   const SEGS = Math.min(pts.length - 1, 140);
   for(let s = 0; s < SEGS; s++) {
     const i0 = Math.floor(s / SEGS * (pts.length-1));
     const i1 = Math.floor((s+1) / SEGS * (pts.length-1));
     const midElev = (pts[i0][2] + pts[i1][2]) / 2;
     const ratio = eRng > 0 ? (midElev - minE) / eRng : 0;
-    const [r,g,b] = elevColor(ratio);
-    // 纵向渐变：曲线处不透明 0.55 → 底线接近 0.18
+    const [r,g,b] = elevRatioColor(ratio);
     const yTop = Math.min(pY(pts[i0][2]), pY(pts[i1][2]));
     const yBot = PT + ph;
     const grad = elevCtx.createLinearGradient(0, yTop, 0, yBot);
@@ -5295,8 +6515,11 @@ function drawElevBar(pts, color, label, opts) {
     elevCtx.fillStyle = grad;
     elevCtx.fill();
   }
+}
 
-  // ── 海拔曲线：去掉 Bloom 外发光（杂志风更克制），只画一条深森林绿主线 ──
+/** 绘制海拔曲线（深森林绿主线 + 底线） */
+function drawElevCurve(pts, layout) {
+  const { pX, pY, PL, PT, pw, ph } = layout;
   elevCtx.beginPath();
   pts.forEach((p, i) => i === 0 ? elevCtx.moveTo(pX(i), pY(p[2])) : elevCtx.lineTo(pX(i), pY(p[2])));
   elevCtx.strokeStyle = '#2F4332';
@@ -5304,7 +6527,6 @@ function drawElevBar(pts, color, label, opts) {
   elevCtx.lineJoin = 'round';
   elevCtx.lineCap = 'round';
   elevCtx.stroke();
-
   // 底线
   elevCtx.beginPath();
   elevCtx.moveTo(PL, PT + ph);
@@ -5312,122 +6534,96 @@ function drawElevBar(pts, color, label, opts) {
   elevCtx.strokeStyle = 'rgba(122,110,84,0.65)';
   elevCtx.lineWidth = 1;
   elevCtx.stroke();
+}
 
-  // ── 标注收集：最高点、最低点 + 营地（来自 opts.waypoints） ──
-  const annotations = [];
-  // 最高点
+/** 收集要标注的关键点：最高点、最低点（若与最高点足够远）、营地 */
+function collectElevAnnotations(pts, layout, opts) {
+  const { alts, minE, maxE, km, kmRange } = layout;
+  const annos = [];
+
   const peakIdx = alts.indexOf(maxE);
-  annotations.push({
+  annos.push({
     idx: peakIdx, kmVal: km[peakIdx], elev: maxE,
     text: Math.round(maxE) + 'm',
     color: '#A8543C', priority: 100, side: 'top', kind: 'peak',
   });
-  // 最低点（与最高点相隔 > 总距离 8% 才显示）
+
   const valleyIdx = alts.indexOf(minE);
   if(Math.abs(km[valleyIdx] - km[peakIdx]) > kmRange * 0.08) {
-    annotations.push({
+    annos.push({
       idx: valleyIdx, kmVal: km[valleyIdx], elev: minE,
       text: Math.round(minE) + 'm',
       color: '#5C7A8C', priority: 50, side: 'bottom', kind: 'low',
     });
   }
-  // 营地点
+
   if(opts.waypoints && opts.waypoints.length) {
     const segIdxStart = opts.segIdxStart || 0;
-    const segIdxEnd = opts.segIdxEnd != null ? opts.segIdxEnd : (opts.segIdxStart + pts.length - 1);
+    const segIdxEnd = opts.segIdxEnd != null ? opts.segIdxEnd : (segIdxStart + pts.length - 1);
     const reversed = !!opts.reversed;
     opts.waypoints.forEach(wp => {
-      if(wp.tag !== 'camp') return;
-      if(wp.gps_idx == null) return;
+      if(wp.tag !== 'camp' || wp.gps_idx == null) return;
       if(wp.gps_idx < segIdxStart || wp.gps_idx > segIdxEnd) return;
       let localIdx = wp.gps_idx - segIdxStart;
       if(reversed) localIdx = (pts.length - 1) - localIdx;
       if(localIdx < 0 || localIdx >= pts.length) return;
       const elv = pts[localIdx][2] || 0;
       const nm = (wp.label || wp.name || t('elev.anno.camp')).toString().trim();
-      annotations.push({
+      annos.push({
         idx: localIdx, kmVal: km[localIdx], elev: elv,
         text: nm + ' ' + Math.round(elv) + 'm',
         color: '#3F5238', priority: 80, side: 'top', kind: 'camp',
       });
     });
   }
-  annotations.sort((a, b) => a.kmVal - b.kmVal);
+  annos.sort((a, b) => a.kmVal - b.kmVal);
+  return annos;
+}
 
-  // ── 字号自适应 ──
-  const fontSize = annotations.length <= 5 ? 9.5
-                 : annotations.length <= 9 ? 8.5
-                 : 7.5;
+/**
+ * 智能布局标签（避让 + 引线，尝试右上→左上→右下→左下→逐层外推）
+ * 副作用：修改 annos 每项的 labelLeft/labelTop；返回顶部溢出量给外层调整 H
+ */
+function layoutElevLabels(annos, layout, pts) {
+  const { pX, pY, PL, PT, pw, ph, km, kmStart, kmRange } = layout;
+  const fontSize = annos.length <= 5 ? 9.5 : annos.length <= 9 ? 8.5 : 7.5;
   const annoFont = `${fontSize}px 'Source Serif 4', 'PingFang SC', sans-serif`;
-  const measureText = (txt, font) => {
-    elevCtx.font = font;
-    return elevCtx.measureText(txt).width;
-  };
-  annotations.forEach(a => {
+  const measure = txt => { elevCtx.font = annoFont; return elevCtx.measureText(txt).width; };
+
+  annos.forEach(a => {
     a.x = pX(a.idx);
-    a.tw = measureText(a.text, annoFont);
+    a.tw = measure(a.text);
     a.lw = a.tw + 2;
     a.lh = fontSize + 3;
   });
 
-  // ── 把整条海拔曲线 polyline 离散成像素采样数组（用于检测标签是否压在线上） ──
-  // 用按 x 升序的紧凑数组 + 二分查找，避免 O(N*M)
-  const linePixY = []; // 与 sampleEvery 等距的 y 数组
-  const sampleEvery = 2;
-  const xCount = Math.floor(pw / sampleEvery) + 1;
-  for(let k = 0; k < xCount; k++) {
-    const xi = PL + k * sampleEvery;
-    const f = (xi - PL) / pw;
-    const targetKm = kmStart + kmRange * f;
-    let lo = 0, hi = km.length - 1;
-    while(lo < hi - 1) {
-      const mid = (lo + hi) >> 1;
-      if(km[mid] < targetKm) lo = mid; else hi = mid;
-    }
-    const t01 = (km[hi] === km[lo]) ? 0 : (targetKm - km[lo]) / (km[hi] - km[lo]);
-    const elv = pts[lo][2] + (pts[hi][2] - pts[lo][2]) * t01;
-    linePixY.push(pY(elv));
-  }
-  const rectHitsLine = (lx, ly, lw, lh) => {
-    let kStart = Math.floor((lx - 1 - PL) / sampleEvery);
-    let kEnd = Math.ceil((lx + lw + 1 - PL) / sampleEvery);
-    if(kStart < 0) kStart = 0;
-    if(kEnd >= linePixY.length) kEnd = linePixY.length - 1;
-    const yTop = ly - 1, yBot = ly + lh + 1;
-    for(let k = kStart; k <= kEnd; k++) {
-      const y = linePixY[k];
-      if(y >= yTop && y <= yBot) return true;
-    }
-    return false;
-  };
-
-  // ── v1.13.3：标签紧贴对应点：右上→左上→右下→左下→外推；用引线连接对应黑点，避免视觉错位 ──
   const placed = [];
-  annotations.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  annos.sort((a, b) => (b.priority || 0) - (a.priority || 0));
   let overflow = 0;
-  annotations.forEach(a => {
+
+  annos.forEach(a => {
     const gap = 4;
     const aY = pY(a.elev);
     const cands = [];
-    // 第 0 层：紧挨四角，最优先右上
-    cands.push({left: a.x + gap, top: aY - a.lh - 2, side: 'TR'});  // 右上
-    cands.push({left: a.x - gap - a.lw, top: aY - a.lh - 2, side: 'TL'}); // 左上
-    cands.push({left: a.x + gap, top: aY + 4, side: 'BR'});          // 右下
-    cands.push({left: a.x - gap - a.lw, top: aY + 4, side: 'BL'});   // 左下
-    // 第 1+ 层：再向上推（顶部为主，更符合阅读习惯）
+    // 优先四角紧贴
+    cands.push({ left: a.x + gap, top: aY - a.lh - 2 });
+    cands.push({ left: a.x - gap - a.lw, top: aY - a.lh - 2 });
+    cands.push({ left: a.x + gap, top: aY + 4 });
+    cands.push({ left: a.x - gap - a.lw, top: aY + 4 });
+    // 向上逐层外推
     for(let k = 1; k <= 6; k++) {
       const dyk = k * (a.lh + 2);
-      cands.push({left: a.x + gap, top: aY - a.lh - 2 - dyk});
-      cands.push({left: a.x - gap - a.lw, top: aY - a.lh - 2 - dyk});
+      cands.push({ left: a.x + gap, top: aY - a.lh - 2 - dyk });
+      cands.push({ left: a.x - gap - a.lw, top: aY - a.lh - 2 - dyk });
     }
-    // 兜底：再向下
+    // 兜底向下
     for(let k = 1; k <= 4; k++) {
       const dyk = k * (a.lh + 2);
-      cands.push({left: a.x + gap, top: aY + 4 + dyk});
-      cands.push({left: a.x - gap - a.lw, top: aY + 4 + dyk});
+      cands.push({ left: a.x + gap, top: aY + 4 + dyk });
+      cands.push({ left: a.x - gap - a.lw, top: aY + 4 + dyk });
     }
 
-    function isOk(c) {
+    const isOk = c => {
       if(c.left + a.lw > PL + pw - 1) return false;
       if(c.left < PL + 1) return false;
       if(c.top < PT + 1) return false;
@@ -5438,109 +6634,132 @@ function drawElevBar(pts, color, label, opts) {
         if(ox && oy) return false;
       }
       return true;
-    }
+    };
 
     let chosen = cands.find(isOk);
     if(!chosen) {
       chosen = cands[0];
       if(chosen.top < PT + 1) overflow = Math.max(overflow, (PT + 1) - chosen.top);
     }
-    a.labelLeft = chosen.left;
-    a.labelTop = chosen.top;
-    if(a.labelLeft + a.lw > PL + pw - 1) a.labelLeft = PL + pw - 1 - a.lw;
-    if(a.labelLeft < PL + 1) a.labelLeft = PL + 1;
-    placed.push({left: a.labelLeft, top: a.labelTop, lw: a.lw, lh: a.lh});
+    a.labelLeft = Math.max(PL + 1, Math.min(chosen.left, PL + pw - 1 - a.lw));
+    a.labelTop = Math.max(PT + 1, chosen.top);
+    placed.push({ left: a.labelLeft, top: a.labelTop, lw: a.lw, lh: a.lh });
   });
-  annotations.sort((a, b) => a.kmVal - b.kmVal);
+  annos.sort((a, b) => a.kmVal - b.kmVal);
+  // 把 label 字体信息挂到 annos 上，供 renderElevLabels 读取
+  annos._font = annoFont;
+  return overflow;
+}
 
-  // ── 顶部溢出 → 记录到 _overflowRequest ──
-  drawElevBar._overflowRequest = overflow;
-  annotations.forEach(a => {
-    if(a.labelTop < PT + 1) a.labelTop = PT + 1;
-  });
-
-  // ── 绘制每个 annotation：统一黑色小点 + 文字 ──
-  annotations.forEach(a => {
+/** 绘制每个 annotation：黑点 + 引线 + 文字 */
+function renderElevLabels(annos, layout) {
+  const { pY } = layout;
+  annos.forEach(a => {
+    // 黑点
     elevCtx.beginPath();
     elevCtx.arc(a.x, pY(a.elev), 2.5, 0, Math.PI*2);
     elevCtx.fillStyle = '#1F2A1C';
     elevCtx.fill();
-    // 白色描边让点在绿色填充上更醒目
     elevCtx.strokeStyle = 'rgba(245,241,225,0.9)';
     elevCtx.lineWidth = 0.8;
     elevCtx.stroke();
-    // v1.13.3：从 label 边到黑点画一条细引线，让对应关系清晰
+    // 引线：label 靠点侧的中点 → 黑点
     const aY = pY(a.elev);
-    const labelCx = a.labelLeft + a.lw / 2;
-    const labelCy = a.labelTop + a.lh / 2;
-    // 引线起点：label 靠近点的那条边的中点
-    let lx, ly;
-    if(a.labelLeft >= a.x) {
-      // label 在右侧
-      lx = a.labelLeft;
-    } else {
-      lx = a.labelLeft + a.lw;
-    }
-    if(a.labelTop + a.lh < aY) {
-      ly = a.labelTop + a.lh; // label 在上方
-    } else if(a.labelTop > aY) {
-      ly = a.labelTop;        // label 在下方
-    } else {
-      ly = labelCy;           // 同行
-    }
+    const lx = a.labelLeft >= a.x ? a.labelLeft : a.labelLeft + a.lw;
+    let ly;
+    if(a.labelTop + a.lh < aY) ly = a.labelTop + a.lh;
+    else if(a.labelTop > aY) ly = a.labelTop;
+    else ly = a.labelTop + a.lh / 2;
     elevCtx.beginPath();
     elevCtx.moveTo(lx, ly);
     elevCtx.lineTo(a.x, aY);
     elevCtx.strokeStyle = 'rgba(31,42,28,0.45)';
     elevCtx.lineWidth = 0.6;
     elevCtx.stroke();
-    elevCtx.font = annoFont;
+    // 文字
+    elevCtx.font = annos._font;
     elevCtx.fillStyle = a.color;
     elevCtx.textAlign = 'left';
     elevCtx.textBaseline = 'top';
     elevCtx.fillText(a.text, a.labelLeft, a.labelTop);
     elevCtx.textBaseline = 'alphabetic';
   });
+}
 
-  // Y 轴两端标签（从 X 轴抬高 8px 避免与刻度文字打架）
+/** 绘制 Y 轴两端海拔标签 + X 轴里程刻度 */
+function drawElevAxes(layout) {
+  const { PL, PT, pw, ph, H, minE, maxE, kmStart, kmRange } = layout;
+  // Y 轴
   elevCtx.textAlign = 'right';
   elevCtx.fillStyle = '#7A6E54';
   elevCtx.font = `italic 9px 'Source Serif 4', serif`;
   elevCtx.fillText(Math.round(maxE), PL - 5, PT + 8);
   elevCtx.fillText(Math.round(minE), PL - 5, PT + ph - 2);
 
-  // ── X 轴：多个里程刻度（每 ~80px 一个） ──
+  // X 轴刻度
   const tickCount = Math.max(2, Math.min(7, Math.floor(pw / 80) + 1));
   elevCtx.fillStyle = '#5C5240';
   elevCtx.font = `italic 9.5px 'Source Serif 4', serif`;
-  for(let t = 0; t < tickCount; t++) {
-    const f = t / (tickCount - 1);
+  for(let ti = 0; ti < tickCount; ti++) {
+    const f = ti / (tickCount - 1);
     const xv = PL + pw * f;
     const kmVal = kmStart + kmRange * f;
-    // 刻度
     elevCtx.beginPath();
     elevCtx.moveTo(xv, PT + ph);
     elevCtx.lineTo(xv, PT + ph + 3);
     elevCtx.strokeStyle = 'rgba(122,110,84,0.7)';
     elevCtx.lineWidth = 1;
     elevCtx.stroke();
-    // 文本
-    if(t === 0) elevCtx.textAlign = 'left';
-    else if(t === tickCount - 1) elevCtx.textAlign = 'right';
+    if(ti === 0) elevCtx.textAlign = 'left';
+    else if(ti === tickCount - 1) elevCtx.textAlign = 'right';
     else elevCtx.textAlign = 'center';
     elevCtx.fillText(kmVal.toFixed(kmRange < 5 ? 1 : 0) + ' km', xv, PT + ph + 14);
   }
-
-  // X 轴标题（小斜体）
+  // X 轴标题
   elevCtx.textAlign = 'center';
   elevCtx.fillStyle = '#A89878';
   elevCtx.font = `9px 'Source Serif 4', 'PingFang SC', serif`;
   elevCtx.fillText(t('elev.km'), PL + pw / 2, H - 4);
 }
 
+/** 更新顶部爬升/下降 badge */
+function updateElevBadges(alts) {
+  const totalAsc = Math.round(accumulatorAscent(alts, 10).slice(-1)[0] || 0);
+  const totalDesc = Math.round(accumulatorDescent(alts, 10).slice(-1)[0] || 0);
+  const ascEl = document.getElementById('elev-stat-asc');
+  const descEl = document.getElementById('elev-stat-desc');
+  if(ascEl) ascEl.textContent = '↑' + totalAsc + 'm';
+  if(descEl) descEl.textContent = '↓' + totalDesc + 'm';
+}
+
+function drawElevBar(pts, color, label, opts) {
+  if(!elevCanvas || !elevCtx || !pts || pts.length < 2) return;
+  opts = opts || {};
+
+  const layout = computeElevLayout(pts, opts);
+
+  // 供 hit test / tooltip 使用
+  _elevBarData = { pts, minE: layout.minE, maxE: layout.maxE, color: color || '#3F5238', km: layout.km };
+  if(elevLabel) elevLabel.textContent = label || t('elev.title');
+  updateElevBadges(layout.alts);
+
+  elevCtx.clearRect(0, 0, layout.W, layout.H);
+  drawElevBackground(layout);
+  drawElevGridLines(layout);
+  drawElevFill(pts, layout);
+  drawElevCurve(pts, layout);
+
+  const annos = collectElevAnnotations(pts, layout, opts);
+  const overflow = layoutElevLabels(annos, layout, pts);
+  drawElevBar._overflowRequest = overflow;
+  renderElevLabels(annos, layout);
+  drawElevAxes(layout);
+}
+
 function refreshElevBar() {
   if(!elevCanvas) return;
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  // v1.20.0：无选中分组时不绘制
+  const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
   if(!main || !main.track || !main.track.length) {
     if(elevCtx) elevCtx.clearRect(0, 0, elevCanvas.width, elevCanvas.height);
     _elevBarData = null;
@@ -5569,7 +6788,7 @@ function refreshElevBar() {
     }
   }
 
-  // v1.13.0：基于扫描线的堆叠深度预测（与画布高度解耦）
+  // 基于扫描线的堆叠深度预测（与画布高度解耦）
   // 标签宽度只依赖 fontSize、字符内容、画布宽度，与 H 无关；
   // 因此 stackDepth = 当前 X 区间内最多有几个标签互相 X 重叠（最大同时活跃数）
   function predictStackDepth() {
@@ -5588,8 +6807,14 @@ function refreshElevBar() {
     }
     if(segPts.length < 2) return 1;
 
-    const alts = segPts.map(p => p[2]);
-    const minE = Math.min(...alts), maxE = Math.max(...alts);
+    // v1.31.0：for-loop 找 min/max/peakIdx/valleyIdx，替换 alts.map + Math.min(...spread) + indexOf
+    // 大轨迹上省几十 ms 且避免 spread 栈溢出风险
+    let minE = segPts[0][2] || 0, maxE = minE, peakIdx = 0, valleyIdx = 0;
+    for(let i=1; i<segPts.length; i++) {
+      const e = segPts[i][2] || 0;
+      if(e > maxE) { maxE = e; peakIdx = i; }
+      if(e < minE) { minE = e; valleyIdx = i; }
+    }
     const km = [];
     if(segKmFromZero) {
       let acc = 0;
@@ -5608,9 +6833,7 @@ function refreshElevBar() {
 
     // 收集 annotations
     const annos = [];
-    const peakIdx = alts.indexOf(maxE);
     annos.push({idx: peakIdx, kmVal: km[peakIdx], text: Math.round(maxE) + 'm'});
-    const valleyIdx = alts.indexOf(minE);
     if(Math.abs(km[valleyIdx] - km[peakIdx]) > kmRange * 0.08) {
       annos.push({idx: valleyIdx, kmVal: km[valleyIdx], text: Math.round(minE) + 'm'});
     }
@@ -5710,7 +6933,7 @@ if(elevCanvas) {
     if(!_elevBarData) return null;
     const rect = elevCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
-    // v1.13.3：与 drawElevBar 内部一致
+    // 与 drawElevBar 内部一致
     const PL = 44, PR = 16;
     const pw = rect.width - PL - PR;
     if(mx < PL || mx > PL + pw) return null;
@@ -5826,7 +7049,8 @@ async function _doSave() {
     const db = await openDB();
     const minimal = {
       trails: DATA.trails,
-      primaryTrailId: state.primaryTrailId,
+      primaryTrailId: state.primaryTrailId,     // v1.14.0 兼容：老版本会读这个字段
+      primaryByGroup: state.primaryByGroup,     // v1.21.0：每组独立记忆
       activeTrails: [...state.activeTrails],
       activeGroup: state.activeGroup,   // v1.14.1：分组持久化
     };
@@ -5881,9 +7105,22 @@ async function loadFromStorage() {
         tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
       }
     });
-    state.primaryTrailId = data.primaryTrailId || (DATA.trails[0] && DATA.trails[0].id);
     state.activeTrails = new Set(data.activeTrails || DATA.trails.map(t => t.id));
-    if(data.activeGroup) state.activeGroup = data.activeGroup;   // v1.14.1
+    // v1.20.0：区分 undefined（老数据）和 null（"无选中"状态，需保留）
+    if('activeGroup' in data) state.activeGroup = data.activeGroup;   // v1.14.1
+    // v1.21.0：分组主轨迹恢复。先用 primaryByGroup（新格式），无则回退到 primaryTrailId 单值（老格式）
+    if(data.primaryByGroup && typeof data.primaryByGroup === 'object') {
+      state.primaryByGroup = Object.assign({}, data.primaryByGroup);
+    } else if(data.primaryTrailId) {
+      // 老数据只有单值 primaryTrailId，塞进当前组作为迁移
+      const g = state.activeGroup || (DATA.trails[0] && (DATA.trails[0].group || '默认')) || '默认';
+      state.primaryByGroup = { [g]: data.primaryTrailId };
+    }
+    // 兜底：为当前组补一个主轨迹（若可用）
+    if(state.activeGroup != null && !state.primaryTrailId) {
+      const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
+      if(inGroup[0]) state.primaryByGroup[state.activeGroup] = inGroup[0].id;
+    }
     return true;
   } catch(e) {
     console.warn('load failed:', e);
@@ -5959,9 +7196,15 @@ function downloadTrailKML(id) {
 function deleteTrail(id) {
   DATA.trails = DATA.trails.filter(t => t.id !== id);
   state.activeTrails.delete(id);
-  if(state.primaryTrailId === id) {
-    state.primaryTrailId = DATA.trails[0] ? DATA.trails[0].id : null;
+  // v1.21.0：清理所有分组中对这个 id 的引用
+  for(const g of Object.keys(state.primaryByGroup)) {
+    if(state.primaryByGroup[g] === id) {
+      const remaining = DATA.trails.filter(t => trailGroup(t) === g);
+      if(remaining[0]) state.primaryByGroup[g] = remaining[0].id;
+      else delete state.primaryByGroup[g];
+    }
   }
+  // 如果当前组没有主轨迹了，也不强制兜底（rebuildAll 会处理）
   saveToStorage();
   rebuildAll();
 }
@@ -6104,7 +7347,9 @@ function showExportMenu() {
     {
       icon: '📦',
       label: '打包 KML ZIP',
-      desc: `当前组「${state.activeGroup}」叠加中 ${activeCount} 条 · 可跨设备一键导入`,
+      desc: state.activeGroup
+        ? `当前组「${state.activeGroup}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
+        : `未选中任何分组 · 请先切换到一个分组`,
       disabled: activeCount === 0,
       handler: () => { popup.remove(); exportGroupKML(); },
     },
@@ -6244,7 +7489,7 @@ function exportGroupKML() {
     showToast('当前组没有叠加中的轨迹', 'error');
     return;
   }
-  const groupName = state.activeGroup;
+  const groupName = state.activeGroup || '未选中';
   const timestamp = new Date().toISOString().slice(0,10);
   const safeGroup = groupName.replace(/[\\/:*?"<>|]/g, '_');
 
@@ -6449,9 +7694,10 @@ async function exportItineraryMD() {
 
 
 function rebuildAll(opts={}) {
-  // 主轨迹兜底
-  if(!state.primaryTrailId && DATA.trails.length) {
-    state.primaryTrailId = DATA.trails[0].id;
+  // 主轨迹兜底（v1.20.0：无选中分组时不做兜底，保留 null；否则先在当前分组挑，找不到再跨分组）
+  if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
+    const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
+    state.primaryTrailId = (inGroup[0] || DATA.trails[0]).id;
   }
   // 刷新所有面板
   buildTrailList();
@@ -6550,21 +7796,20 @@ const TAG_RULES_JS = [
   ['camp',  ['营地','扎营','宿营','过夜'], '🏕', '#22c55e'],
   ['pass',  ['垭口','口子'], '🏔', '#ef4444'],
   ['warn',  ['Z字','陡','危险','注意','小心','高反','滚石','滑'], '⚠', '#dc2626'],
-  ['supply',['商店','补给','便宜','柠檬茶','咖啡','卖','夯达'], '🛒', '#facc15'],
+  ['supply',['商店','补给','便宜','柠檬茶','咖啡','卖','夯达','小卖部','杂货'], '🏪', '#facc15'],
   ['water', ['水源','打水','取水'], '💧', '#3b82f6'],
   ['shelter',['避雨','避风','小木屋','木屋'], '🏠', '#a855f7'],
   ['bridge',['过桥','过河','涉水'], '🌉', '#06b6d4'],
-  ['river', ['小溪','大河'], '≋', '#0ea5e9'],
+  ['river', ['小溪','大河'], '🏞', '#0ea5e9'],
   ['village',['村','寨','牧民','藏民','居民点'], '🏘', '#d97706'],
-  ['view',  ['神山','雪山','海子','花海','观景','风景','景点','寺','玛尼'], '⛰', '#94a3b8'],
   ['highpoint', [], '⛰', '#fbbf24'],
 ];
 function classifyTag(name) {
-  if(!name) return ['view', '📍', '#aaa'];
+  if(!name) return ['other', '📍', '#aaa'];
   for(const [tag, kws, icon, color] of TAG_RULES_JS) {
     for(const kw of kws) if(name.includes(kw)) return [tag, icon, color];
   }
-  return ['view', '📍', '#aaa'];
+  return ['other', '📍', '#aaa'];
 }
 function shortLabel(name) {
   if(!name) return '';
@@ -6875,34 +8120,41 @@ function buildEscapeRoutes(wps, pts, otherTrails) {
   return routes;
 }
 
-function parseAndProcessKml(xmlText, filename) {
-  const parsed = parseKml(xmlText);
-  const {title, trackPoints, waypoints} = parsed;
-  if(trackPoints.length === 0) return null;
+/* ═════════════════════════════════════════════════════════════════
+   KML Parsing Pipeline（v1.18.0 拆分：主函数 + 4 个辅助）
+   ─────────────────────────────────────────────────────────────────
+   parseAndProcessKml(xmlText, filename)
+     │
+     ├── computeCumulativeDistance(trackPoints)  —— 累计距离数组
+     ├── buildDayMeta(trackPoints, track, waypoints, cumD) —— 分天元信息
+     ├── computeTrailStats(elevs, cumD, smoothE)  —— 全局统计
+     └── generateNextTrailId()                    —— 生成唯一自增 ID
+   ═════════════════════════════════════════════════════════════════ */
 
-  const track = processTrack(trackPoints);
-  const enrichedWps = enrichWaypoints(waypoints, trackPoints).filter(w => w.name);
-  // 传入已有其他轨迹，用于跨轨迹下撤分析（v1.12.3：默认关闭自动生成）
-  const otherTrailsForEscape = DATA.trails;
-  const escapeRoutes = state.autoGenerateEscape
-    ? buildEscapeRoutes(enrichedWps, trackPoints, otherTrailsForEscape)
-    : [];
+/** 计算 GPS 点序列的累计距离数组（米） */
+function computeCumulativeDistance(trackPoints) {
+  const cumD = [0];
+  for(let i=1; i<trackPoints.length; i++) {
+    cumD.push(cumD[i-1] + haversine(
+      trackPoints[i-1].lat, trackPoints[i-1].lng,
+      trackPoints[i].lat, trackPoints[i].lng
+    ));
+  }
+  return cumD;
+}
 
-  // 分天数据
+/** 按天数把 GPS 点分组，生成每日元信息（距离/爬升/最高海拔/营地/关键标注点） */
+function buildDayMeta(trackPoints, track, enrichedWps, cumD) {
   const days = {};
   for(let i=0; i<trackPoints.length; i++) {
     const d = track[i][5];
-    if(!days[d]) days[d] = {indexes: []};
+    if(!days[d]) days[d] = { indexes: [] };
     days[d].indexes.push(i);
   }
-  const cumD = [0];
-  for(let i=1; i<trackPoints.length; i++) {
-    cumD.push(cumD[i-1] + haversine(trackPoints[i-1].lat, trackPoints[i-1].lng, trackPoints[i].lat, trackPoints[i].lng));
-  }
-  const dayMeta = Object.keys(days).map(Number).sort((a,b)=>a-b).map(d => {
+  return Object.keys(days).map(Number).sort((a,b)=>a-b).map(d => {
     const idxs = days[d].indexes;
     const i_s = idxs[0], i_e = idxs[idxs.length-1];
-    const km = (cumD[i_e] - cumD[i_s])/1000;
+    const km = (cumD[i_e] - cumD[i_s]) / 1000;
     const segElevs = trackPoints.slice(i_s, i_e+1).map(p => p.elev);
     const asc = accumulatorAscent(segElevs, 10).slice(-1)[0];
     const maxE = Math.max(...segElevs);
@@ -6921,35 +8173,56 @@ function parseAndProcessKml(xmlText, filename) {
       i_start: i_s, i_end: i_e,
     };
   });
+}
 
-  const elevs = trackPoints.map(p => p.elev);
-  const smoothE = smoothElev(elevs, 7);
+/** 计算全轨迹的统计数据（距离/爬升/下降/最高/最低海拔） */
+function computeTrailStats(elevs, cumD, smoothE) {
+  const validSmoothE = smoothE.filter(e => isFinite(e) && e > 0);
+  return {
+    distance_km: +(cumD[cumD.length-1] / 1000).toFixed(1),
+    ascent_m:  Math.round(accumulatorAscent(elevs, 10).slice(-1)[0] || 0),
+    descent_m: Math.round(accumulatorDescent(elevs, 10).slice(-1)[0] || 0),
+    max_elev:  Math.round(validSmoothE.reduce((a,b) => Math.max(a,b), 0) || 0),
+    min_elev:  Math.round(validSmoothE.reduce((a,b) => Math.min(a,b), Infinity) || 0),
+  };
+}
 
-  // ID 默认为添加顺序（1, 2, 3...），用户可手动编辑
+/** 生成下一个可用的自增 ID（1, 2, 3...）。用户可后续手动改成任意字符串 */
+function generateNextTrailId() {
   let nextSeq = 1;
   for(const ex of DATA.trails) {
     const n = parseInt(ex.id, 10);
     if(!isNaN(n) && String(n) === String(ex.id) && n >= nextSeq) nextSeq = n + 1;
   }
   while(DATA.trails.some(ex => ex.id === String(nextSeq))) nextSeq++;
-  let trailId = String(nextSeq);
+  return String(nextSeq);
+}
+
+function parseAndProcessKml(xmlText, filename) {
+  const { title, trackPoints, waypoints } = parseKml(xmlText);
+  if(trackPoints.length === 0) return null;
+
+  const track = processTrack(trackPoints);
+  const enrichedWps = enrichWaypoints(waypoints, trackPoints).filter(w => w.name);
+  const escapeRoutes = state.autoGenerateEscape
+    ? buildEscapeRoutes(enrichedWps, trackPoints, DATA.trails)
+    : [];
+
+  const cumD = computeCumulativeDistance(trackPoints);
+  const dayMeta = buildDayMeta(trackPoints, track, enrichedWps, cumD);
+  const elevs = trackPoints.map(p => p.elev);
+  const smoothE = smoothElev(elevs, 7);
 
   return {
-    id: trailId,
+    id: generateNextTrailId(),
     name: title,
-    source: '',  // 默认 None，用户可手动编辑（点 🔗✎）
+    source: '',
     color: '#f97316',
     days: dayMeta.length,
-    stats: {
-      distance_km: +(cumD[cumD.length-1]/1000).toFixed(1),
-      ascent_m: Math.round(accumulatorAscent(elevs, 10).slice(-1)[0] || 0),
-      descent_m: Math.round(accumulatorDescent(elevs, 10).slice(-1)[0] || 0),
-      max_elev: Math.round(smoothE.filter(e => isFinite(e) && e > 0).reduce((a,b) => Math.max(a,b), 0) || 0),
-      min_elev: Math.round(smoothE.filter(e => isFinite(e) && e > 0).reduce((a,b) => Math.min(a,b), Infinity) || 0),
-    },
+    stats: computeTrailStats(elevs, cumD, smoothE),
     day_meta: dayMeta,
     track,
-    _descCum: accumulatorDescent(elevs, 10),  // 累计下降数组（与 track 等长），用于 tooltip
+    _descCum: accumulatorDescent(elevs, 10),
     waypoints: enrichedWps,
     escape_routes: escapeRoutes,
     calc_method: {
@@ -6979,14 +8252,21 @@ async function _boot() {
     state.activeTrails = new Set(DATA.trails.map(t => t.id));
   }
   // 兜底主轨迹
-  if(!state.primaryTrailId && DATA.trails.length) {
-    state.primaryTrailId = DATA.trails[0].id;
+  // v1.21.0：兜底选当前组内的第一条（而不是 DATA.trails[0]，可能不在当前组）
+  if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
+    const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
+    state.primaryTrailId = (inGroup[0] || DATA.trails[0]).id;
   }
   // 无论是否从 storage 恢复，都做一次 rebuildAll 以保证 UI/绘制/视野一致
   rebuildAll({fit: true});
   // 若处于标注点模式，确保面板显示
   const _wpPanel = document.getElementById('waypoint-mode-tags');
   if(_wpPanel) _wpPanel.style.display = state.mode === 'waypoint' ? 'block' : 'none';
+  // v1.31.0：从 IndexedDB 恢复的场景，rebuildAll 里的 fit 可能被后续绑定/UI 覆盖，
+  //         这里显式再做一次 resetView，保证视野贴到主轨迹上
+  if(restored && typeof resetView === 'function') {
+    requestAnimationFrame(() => resetView());
+  }
 }
 _boot();
 applyI18n();
@@ -7009,37 +8289,61 @@ if(langBtn) {
 const storageBtn = document.getElementById('storage-btn');
 if(storageBtn) storageBtn.addEventListener('click', showStorageInfo);
 
-// 复位按钮：以主轨迹为中心 fitBounds
-const resetBtn = document.getElementById('reset-btn');
-if(resetBtn) resetBtn.addEventListener('click', () => {
-  // 保险：如果 activeTrails 空了，把所有轨迹重新设为可见
-  if(!state.activeTrails || state.activeTrails.size === 0) {
+/**
+ * "复位"：把地图视野归一到当前组的主轨迹（或所有 active 轨迹的 bounds）。
+ * v1.22.0 抽出，供复位按钮 / 导入 / 切换分组共用。
+ * @param {Object} [opts]
+ * @param {boolean} [opts.restoreActive=false] 是否把 activeTrails 补齐为所有 trail（复位按钮用）
+ */
+function resetView(opts = {}) {
+  if(opts.restoreActive && (!state.activeTrails || state.activeTrails.size === 0)) {
     state.activeTrails = new Set(DATA.trails.map(t => t.id));
   }
-  // 兜底主轨迹
-  if(!state.primaryTrailId && DATA.trails.length) {
-    state.primaryTrailId = DATA.trails[0].id;
+  // 兜底主轨迹（当前组内）
+  if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
+    const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
+    state.primaryTrailId = (inGroup[0] || DATA.trails[0]).id;
   }
-  // 重新绘制（修复"复位后必须再点轨迹按钮才显示"的问题）
+  // 重绘（保证 UI/绘图与 state 一致）
   buildTrailList();
   drawTracks();
   drawWaypoints();
   buildLegend();
 
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
-  if(!main || !main.track || !main.track.length) {
-    // 没主轨迹则回到全部活动轨迹
+  // v1.24.0：测距模式下，若已选中段（A+B），复位到该段
+  if(typeof measureState !== 'undefined' && measureState.active && measureState.ptA && measureState.ptB) {
+    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    if(main && main.track) {
+      const i1 = Math.min(measureState.ptA.idx, measureState.ptB.idx);
+      const i2 = Math.max(measureState.ptA.idx, measureState.ptB.idx);
+      const segLL = [];
+      for(let i=i1; i<=i2; i++) segLL.push([main.track[i][0], main.track[i][1]]);
+      if(segLL.length >= 2) {
+        map.fitBounds(L.latLngBounds(segLL), {padding:[60,60]});
+        saveToStorage();
+        return;
+      }
+    }
+  }
+
+  // 计算 fit 目标：优先主轨迹，其次当前组所有 active 轨迹
+  const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
+  if(main && main.track && main.track.length) {
+    const latlngs = main.track.map(p => [p[0], p[1]]);
+    map.fitBounds(L.latLngBounds(latlngs), {padding:[40,40]});
+  } else {
     const allLatLngs = [];
     DATA.trails.forEach(t => {
       if(isTrailActive(t)) t.track.forEach(p => allLatLngs.push([p[0], p[1]]));
     });
     if(allLatLngs.length) map.fitBounds(L.latLngBounds(allLatLngs), {padding:[40,40]});
-    return;
   }
-  const latlngs = main.track.map(p => [p[0], p[1]]);
-  map.fitBounds(L.latLngBounds(latlngs), {padding:[40,40]});
   saveToStorage();
-});
+}
+
+// 复位按钮：以主轨迹为中心 fitBounds
+const resetBtn = document.getElementById('reset-btn');
+if(resetBtn) resetBtn.addEventListener('click', () => resetView({restoreActive: true}));
 
 // 帮助按钮
 const helpBtn = document.getElementById('help-btn');

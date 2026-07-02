@@ -147,24 +147,64 @@ Single-file HTML opened via double-click uses `file://` protocol. Many modern br
 - Each state has **one source of truth** (no getter-reflected multiple Sets)
 - `state.activeTrails` = `Set<trailId>` (overlay checkboxes)
 - `state.expandedTrails` = `Set<trailId>` (expanded detail cards)
-- `state.batchMode` = boolean
-- `state.batchSelected` = `Set<trailId>` (batch mode selection)
+- `state.batchSelected` = `Set<trailId>` (batch-selected; v1.15.0+ replaces the batchMode boolean — size>0 implies batch mode active)
 - `state.activeGroup` = string
 - `state.primaryTrailId` = string
-- After state change, call `rebuildAll()` / `buildTrailList()` / `saveToStorage()`
+- `state.visibleTags` = `Set<string>` (currently visible waypoint tag types)
+- `state.mode` = `'day' | 'waypoint'`
+- After state change, **must** call `applyChange()` (v1.17.0+), no longer scattered `rebuildAll + saveToStorage`
+
+## v1.17.0+ function split architecture
+
+Three large functions (703 lines total) refactored into orchestration + 22 semantic helpers (v1.17.0-v1.18.0):
+
+- `buildTrailList` (v1.17.0): 372 → 25 lines
+- `handleFiles` (v1.18.0): 166 → 17 lines
+- `parseAndProcessKml` (v1.18.0): 174 → 36 lines
+- `drawElevBar` (v1.18.0): 363 → 24 lines
+
+See Chinese version for full call graphs.
+
+## v1.19.0 engineering infrastructure
+
+**JSDoc type annotations**: All key functions have `@param` + `@returns`. `@typedef` block centralized at top of file (TrackPoint / TrackTuple / Waypoint / DayMeta / TrailStats / EscapeRoute / Trail / ElevLayout / ElevAnnotation / ImportedFile).
+
+**Complete tests/ directory**:
+
+```
+tests/
+├── run_full_check.sh    # One-command 6 phases
+├── unit/
+│   ├── trail_core.js    # Pure function mirror (Node reuse)
+│   ├── test_math.js     # 30 math assertions
+│   ├── test_enrich.js   # 12 snap/hash assertions
+│   └── verify_alignment.js  # 13 HTML↔trail_core alignment
+└── e2e/
+    └── run_all.py       # 14 scenarios / 39 assertions (headless Chrome)
+```
+
+## Unified state mutation entry: applyChange
+
+```javascript
+applyChange({ save: true, fit: false, tracksOnly: false })
+```
+
+- `save`: Trigger IndexedDB save (default true)
+- `fit`: fitBounds to primary trail
+- `tracksOnly`: Only redraw tracks (skip UI panel rebuild)
+
+Call after all state changes, replacing pre-v1.16.0 scattered `rebuildAll + saveToStorage` pattern.
 
 ## Release checklist (each template change)
 
-Must run:
+Since v1.19.0 use `./tests/run_full_check.sh` for one-command 6-phase testing:
 
 1. Update HTML top comment `APP_VERSION` + `BUILD_DATE`
 2. Update `<title>` version
 3. Update `version-tag` DOM
 4. Update JS `const APP_VERSION`
 5. Append CHANGELOG entry (both zh + en)
-6. Node syntax check via `./scripts/sync_release.sh` (extracts inline JS)
-7. Chrome headless dump-dom smoke test: `google-chrome --headless=new --dump-dom` to verify DOM
-8. Manual Safari `file://` QA (checkbox / expand / switch group / batch / export)
+6. `./tests/run_full_check.sh` → 6/6 green
 
 ## Common performance traps
 
