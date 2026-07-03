@@ -15,9 +15,8 @@
 # ══════════════════════════════════════════════════════════════════
 set -e
 
-cd "$(dirname "$0")/.."   # → github-release/hiking-trail-mapper
+cd "$(dirname "$0")/.."   # → hiking-trail-mapper
 ROOT="$(pwd)"
-WORKSPACE_ROOT="$(cd "$ROOT/../.." && pwd)"   # → workspace
 
 ok()  { echo -e "\033[32m✓\033[0m $*"; }
 skip(){ echo -e "\033[33m▸\033[0m $*"; }
@@ -47,8 +46,8 @@ ok "  单元 + 对齐测试全过"
 
 # ── Phase 3: 静态验收 ─────────────────────────────────────
 skip "Phase 3 · 静态验收（54 项）"
-cd "$WORKSPACE_ROOT"
-python3 scripts/test_skill.py > /tmp/test_skill.log 2>&1 || {
+cd "$ROOT"
+python3 "$ROOT/scripts/test_skill.py" > /tmp/test_skill.log 2>&1 || {
   cat /tmp/test_skill.log; fail "静态验收失败";
 }
 grep -q "54/54 passed" /tmp/test_skill.log || {
@@ -58,7 +57,7 @@ ok "  54/54 通过"
 
 # ── Phase 4: 功能测试（浏览器 + WebSocket） ─────────────────
 skip "Phase 4 · 功能测试"
-LATEST_FUNC=$(ls scripts/test_v1_*.py 2>/dev/null | sort -V | tail -1)
+LATEST_FUNC=$(ls "$ROOT"/scripts/test_v1_*.py 2>/dev/null | sort -V | tail -1)
 if [ -n "$LATEST_FUNC" ]; then
   uv run --with websocket-client python3 "$LATEST_FUNC" > /tmp/test_func.log 2>&1 || {
     cat /tmp/test_func.log; fail "功能测试失败";
@@ -81,8 +80,8 @@ ok "  $E2E_LINE"
 
 # ── Phase 6: sync 检查（github-release 与 skill 模板一致） ────
 skip "Phase 6 · sync 一致性检查"
-cd "$WORKSPACE_ROOT"
-./scripts/sync_release.sh > /tmp/sync.log 2>&1 || {
+cd "$ROOT"
+"$ROOT/scripts/sync_release.sh" > /tmp/sync.log 2>&1 || {
   cat /tmp/sync.log; fail "sync 失败";
 }
 grep -q "54/54 passed" /tmp/sync.log || fail "sync 内静态验收未全过"

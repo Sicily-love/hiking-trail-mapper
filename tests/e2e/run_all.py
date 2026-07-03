@@ -13,7 +13,7 @@
 
 失败即停：任一断言失败会退出非零，配合 CI/pre-push hook 使用。
 """
-import json, subprocess, socket, time, urllib.request, zipfile, io, sys, os, base64
+import json, subprocess, socket, time, urllib.request, zipfile, io, sys, os, base64, shutil
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════
@@ -25,6 +25,19 @@ SAMPLE_KML = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
 
 assert HTML.exists(), f"未找到 HTML: {HTML}"
 assert SAMPLE_KML.exists(), f"未找到样本 KML: {SAMPLE_KML}"
+
+def chrome_bin():
+    candidates = [
+        os.environ.get("CHROME_BIN"),
+        shutil.which("google-chrome"),
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ]
+    for c in candidates:
+        if c and Path(c).exists():
+            return c
+    raise FileNotFoundError("找不到 Chrome/Chromium，可设置 CHROME_BIN")
 
 kml_bytes = SAMPLE_KML.read_bytes()
 kml_b64 = base64.b64encode(kml_bytes).decode()
@@ -49,7 +62,7 @@ udir = f"/tmp/chrome-e2e-{os.getpid()}"
 
 print(f"▸ 启动 Chrome (port={port}, HTML={HTML.name})")
 chrome = subprocess.Popen([
-    "google-chrome", "--headless=new", "--disable-gpu", "--no-sandbox",
+    chrome_bin(), "--headless=new", "--disable-gpu", "--no-sandbox",
     "--remote-allow-origins=*",
     f"--remote-debugging-port={port}", f"--user-data-dir={udir}",
     f"file://{HTML}"
