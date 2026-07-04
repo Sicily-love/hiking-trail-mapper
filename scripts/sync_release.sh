@@ -117,8 +117,8 @@ pattern = re.compile(
 )
 entries = []
 for ver, date, zh_block, en_block in pattern.findall(raw):
-    zh = re.findall(r"'([^']*(?:\\'[^']*)*)'", zh_block)
-    en = re.findall(r"'([^']*(?:\\'[^']*)*)'", en_block)
+    zh = re.findall(r"'((?:\\.|[^'\\])*)'", zh_block)
+    en = re.findall(r"'((?:\\.|[^'\\])*)'", en_block)
     unesc = lambda s: s.replace("\\'", "'").replace("\\|", "|")
     entries.append((ver, date, [unesc(s) for s in zh], [unesc(s) for s in en]))
 

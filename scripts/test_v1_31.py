@@ -92,8 +92,8 @@ try:
         results.append((ok, name, detail))
         print(f"  {icon} {name}" + (f"  ({detail})" if detail else ""))
 
-    print("\n▸ 需求 4/1（v1.31.0）：分组交互 + 复选框合并")
-    check("APP_VERSION = v1.31.0", evalj("APP_VERSION") == "v1.31.0")
+    print("\n▸ 需求 4/1（v1.31.5）：分组交互 + 复选框合并")
+    check("APP_VERSION = v1.31.5", evalj("APP_VERSION") == "v1.31.5")
     check("state.batchMode 已移除",
           evalj("!('batchMode' in state)"),
           str(evalj("'batchMode' in state")))
@@ -160,7 +160,7 @@ try:
             })()
           """))
 
-    print("\n▸ v1.31.0：重构后的辅助函数存在性")
+    print("\n▸ v1.31.5：重构后的辅助函数存在性")
     for fn in ['renderGroupTabs', 'renderBatchToolbar', 'renderTrailCard',
                'trailCardHeaderHtml', 'trailCardExpandedHtml',
                'handleTrailCardClick', 'handleTrailDetailClick', 'handleTrailGroupChange',
@@ -173,7 +173,7 @@ try:
           evalj("buildTrailList.toString().split('\\n').length < 40"),
           str(evalj("buildTrailList.toString().split('\\n').length")))
 
-    print("\n▸ v1.31.0：3 个大函数深度拆分后新增的 helper")
+    print("\n▸ v1.31.5：3 个大函数深度拆分后新增的 helper")
     for fn in ['expandZipFiles', 'importSingleKml', 'findDuplicateTrail',
                'ensureUniqueTrailId', 'renderKmlImportRow', 'bindKmlImportRowEvents',
                'postImportFinalize',
@@ -182,7 +182,16 @@ try:
                'computeElevLayout', 'elevRatioColor', 'drawElevBackground',
                'drawElevGridLines', 'drawElevFill', 'drawElevCurve',
                'collectElevAnnotations', 'layoutElevLabels',
-               'renderElevLabels', 'drawElevAxes', 'updateElevBadges']:
+               'renderElevLabels', 'drawElevAxes', 'updateElevBadges',
+               'createPrimaryTrackDragSnapper',
+               'bindMeasureEndpointDrag', 'addMeasureEndpointMarker', 'measurePointFromHit',
+               'buildTrackLatLngs', 'schedulePostRestoreReset',
+               'bindPrimaryMiniDrag', 'applyPrimaryMiniPosition',
+               'schedulePrimaryMiniPositionApply', 'waypointIcon',
+               'addManualWaypointAt', 'enterAddWaypointMode', 'exitAddWaypointMode',
+               'nearestTrackIdxNearPrimary', 'getMeasureStatsCache',
+               'computeMeasureStats', 'renderMeasureSegmentLine',
+               'queueMeasureLiveUpdate', 'applyMeasureEndpointHit']:
         check(f"函数 {fn}", evalj(f"typeof {fn} === 'function'"))
 
     check("handleFiles 已瘦身（< 30 行）",
@@ -194,6 +203,64 @@ try:
     check("drawElevBar 已瘦身（< 40 行）",
           evalj("drawElevBar.toString().split('\\n').length < 40"),
           str(evalj("drawElevBar.toString().split('\\n').length")))
+
+    print("\n▸ v1.31.5：测距端点拖拽回归")
+    draggable_marker = evalj("""
+      (() => {
+        const fixed = measureMarker(30, 100, 'A', '#22c55e');
+        const drag = measureMarker(30, 100, 'A', '#22c55e', {draggable: true});
+        return {
+          fixedInteractive: fixed.options.interactive,
+          fixedDraggable: !!fixed.options.draggable,
+          dragInteractive: drag.options.interactive,
+          dragDraggable: !!drag.options.draggable
+        };
+      })()
+    """)
+    check("测距 marker 默认不可交互，端点 marker 可拖动",
+          isinstance(draggable_marker, dict)
+          and draggable_marker.get("fixedInteractive") == False
+          and draggable_marker.get("fixedDraggable") == False
+          and draggable_marker.get("dragInteractive") == True
+          and draggable_marker.get("dragDraggable") == True,
+          str(draggable_marker))
+
+    check("measureCompute 使用可拖动端点 marker",
+          evalj("measureCompute.toString().includes('addMeasureEndpointMarker')"))
+    check("第三次点击替换端点逻辑已移除",
+          evalj("typeof nearestEndpointLabel === 'undefined' && typeof updateMeasureEndpoint === 'undefined'"))
+    check("拖动吸附使用 requestAnimationFrame 节流",
+          evalj("createPrimaryTrackDragSnapper.toString().includes('requestAnimationFrame') && createPrimaryTrackDragSnapper.toString().includes('cancelAnimationFrame')"))
+    check("测距与分段拖动共用吸附调度器",
+          evalj("bindMeasureEndpointDrag.toString().includes('createPrimaryTrackDragSnapper') && redrawSegmentLayer.toString().includes('createPrimaryTrackDragSnapper')"))
+    check("测距高亮线使用抽样点并防止旧计算回写",
+          evalj("renderMeasureSegmentLine.toString().includes('buildTrackLatLngs') && measureCompute.toString().includes('_computeSeq')"))
+    check("测距统计使用缓存而非整段遍历",
+          evalj("computeMeasureStats.toString().includes('getMeasureStatsCache') && !measureCompute.toString().includes('for(let i=i1+1')"))
+    check("测距拖动中实时更新线段和面板",
+          evalj("bindMeasureEndpointDrag.toString().includes('queueMeasureLiveUpdate') && createPrimaryTrackDragSnapper.toString().includes('opts.onSnap')"))
+    check("测距拖动吸附优先局部近邻搜索",
+          evalj("createPrimaryTrackDragSnapper.toString().includes('nearestTrackIdxNearPrimary')"))
+    check("测距复位会重新补画 A/B 黄线",
+          evalj("resetView.toString().includes('measureCompute') && resetView.toString().includes('measureState.ptA') && resetView.toString().includes('measureState.ptB')"))
+    check("分段高亮线使用抽样点",
+          evalj("redrawSegmentLayer.toString().includes('buildTrackLatLngs(tk, i1, i2, 900)')"))
+    check("缓存恢复使用延迟双阶段复位",
+          evalj("schedulePostRestoreReset.toString().includes('setTimeout') && _boot.toString().includes('schedulePostRestoreReset')"))
+    check("主轨迹浮动小卡支持拖动并记忆位置",
+          evalj("bindPrimaryMiniDrag.toString().includes('pointerdown') && bindPrimaryMiniDrag.toString().includes('localStorage') || (bindPrimaryMiniDrag.toString().includes('pointerdown') && savePrimaryMiniPosition.toString().includes('localStorage'))"))
+    check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
+          evalj("schedulePrimaryMiniPositionApply.toString().includes('setTimeout') && toggleSidebar.toString().includes('schedulePrimaryMiniPositionApply')"))
+    check("地图标注点显示分段 D 天数",
+          evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('main.days = day_meta.length')"))
+    check("标注点图标按 tag 统一渲染",
+          evalj("waypointIcon('supply') === '🏪' && addWpMarker.toString().includes('waypointIcon(wp)') && buildFilterGrid.toString().includes('waypointIcon(tag)') && buildDaysTab.toString().includes('waypointIcon(wp)')"))
+    check("顶部工具栏包含新增标注和下撤入口",
+          evalj("!!document.getElementById('add-waypoint-btn') && !!document.getElementById('add-escape-btn') && document.querySelectorAll('#map-toolbar .toolbar-group').length >= 4"))
+    check("新增标注按钮进入一次性点选模式",
+          evalj("enterAddWaypointMode.toString().includes('crosshair') && addManualWaypointAt.toString().includes('gps_idx') && addManualWaypointAt.toString().includes('buildDaysTab')"))
+    check("海拔填充沿完整曲线路径绘制",
+          evalj("!drawElevFill.toString().includes('SEGS') && drawElevFill.toString().includes('lineTo(pX(i), pY(pts[i][2]))')"))
 
     print("\n▸ 需求 3：KML.zip 导入")
     check("fflate.unzipSync 可用",
@@ -274,7 +341,7 @@ try:
         for p,n,d in results:
             if not p: print(f"  ✗ {n}" + (f"  ({d})" if d else ""))
         sys.exit(1)
-    print("✓ v1.31.0 功能测试全部通过")
+    print("✓ v1.31.5 功能测试全部通过")
 finally:
     chrome.terminate()
     try: chrome.wait(timeout=3)

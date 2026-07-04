@@ -1,109 +1,124 @@
-# Hiking Trail Mapper
+<div align="center">
 
-[中文](README.md) | [English](README.en.md)
+<p><a href="README.md">中文</a> | <a href="README.en.md">English</a></p>
 
-A single-file HTML application for viewing and managing KML hiking trails. All dependencies (Leaflet, polylineDecorator, fflate) are inlined. No build step, no server, works over the `file://` protocol.
+<h1>🗺️ Hiking Trail Mapper</h1>
 
-- Version: v1.31.0
-- Size: ~475 KB
-- License: [MIT](LICENSE)
+**Single-file KML hiking map · import, measure, segment, export**
 
-## Features
+</div>
 
-- **Import**: Multi-select KML files; KML archives (`.zip` / `.kml.zip`) are accepted and unpacked automatically; merges `gx:Track` and `LineString`; treats `Point` placemarks as waypoints.
-- **Overlay**: Multiple trails on the same map, primary trail rendered prominently.
-- **Base maps**: Esri World Imagery (satellite) and Esri World Shaded Relief (terrain).
-- **Coloring modes**: By day, by elevation gradient, by waypoint comparison.
-- **Waypoints**: 13 auto-classified tags; sidebar chip filters; double-click to rename; right-click (desktop) or long-press (mobile, 600 ms) to add; projected to nearest track point to avoid visual drift.
-- **Elevation chart**: Custom Canvas rendering; annotates camps and peaks with leader lines; click on the curve to locate the corresponding point on the map.
-- **Groups**: Trails belong to a group; tab bar switches the active group; ticking any trail reveals a batch-move toolbar.
-- **Persistence**: IndexedDB with 300 ms debounce; state is restored automatically on reload.
-- **Export**: KML ZIP bundle (with a merged file); itinerary Markdown.
-- **i18n**: Chinese / English toggle.
+<!-- [中文](README.md) | [English](README.en.md) -->
 
-Full feature list and interaction details in [docs/FEATURES.en.md](docs/FEATURES.en.md).
+Hiking Trail Mapper is a single-file KML trail viewer and organizer. Maps, overlays, waypoints, elevation charts, grouping, import/export, and local persistence all live in one HTML file. There is no build step and no server requirement; download it and open it in a browser.
 
-## Getting started
+## 🚀 Quick Start
 
-No installation required. Download [`hiking-trail-mapper.html`](hiking-trail-mapper.html) or clone this repository and open `index.html`:
+Open directly:
 
+```bash
+open index.html
 ```
+
+Or clone the repository:
+
+```bash
 git clone https://github.com/Sicily-love/hiking-trail-mapper.git
 open hiking-trail-mapper/index.html
 ```
 
 Import trails:
 
-- Click `Add trail` in the top-right and pick KML files or a KML archive; or
-- Drag files directly onto the browser window.
+- Click `Add trail` in the top-right and select one or more `.kml` files.
+- You can also select `.zip` / `.kml.zip`; KML files inside the archive are extracted automatically.
+- Drag-and-drop files onto the browser window is supported.
 
-## Converting GPX / GeoJSON
+## 🧭 What It Is For
 
-Only KML is parsed. Convert GPX with GDAL:
+| Scenario | Capability |
+|----------|------------|
+| Comparing routes | Overlay multiple trails, highlight the primary trail, and dim secondary trails |
+| Planning daily stages | Color by day and use the segment tool to generate distance, ascent, and camp data |
+| Inspecting a section | Pick A/B points on the primary trail and calculate on-trail distance, ascent, descent, and segment elevation |
+| Managing waypoints | Auto-classify 13 waypoint tags such as camp, pass, water, supply, bridge, and river |
+| Moving data between devices | Export the active group as a KML ZIP with individual KML files and a merged import file |
+| Offline trail work | No runtime CDN dependency except map tiles; project data is stored in browser IndexedDB |
 
-```
+See [docs/FEATURES.en.md](docs/FEATURES.en.md) for full interaction details and [docs/ARCHITECTURE.en.md](docs/ARCHITECTURE.en.md) for design notes.
+
+## ✨ Core Features
+
+- **KML import**: Supports `LineString`, `gx:Track`, and `Point` placemarks; skips macOS archive metadata.
+- **Groups and primary trail**: Trails can be grouped by route, plan, or date; each group remembers its own primary trail.
+- **Map rendering**: Leaflet is inlined; Esri satellite imagery and shaded terrain layers are available.
+- **Waypoints**: Auto-classification, chip filters, double-click rename, right-click or long-press add; waypoints snap to the nearest track point so the map and elevation chart stay aligned.
+- **Elevation chart**: Custom Canvas rendering for full-trail and measured-section views; clicking the curve locates the point on the map.
+- **Measure and segment tools**: Measure is for temporary section analysis; segment is for committing daily itinerary data.
+- **Export**: Export the active group as KML ZIP; export the primary trail itinerary as Markdown.
+- **Internationalization**: Chinese and English UI are bundled.
+
+## 🔒 Data and Privacy
+
+All trails, waypoints, and group state are stored in the current browser's IndexedDB. Nothing is uploaded. Clearing browser data, switching browsers, or moving to another device will make local data unavailable; use `Export -> KML ZIP` for transfer.
+
+## 🔁 GPX / GeoJSON
+
+This version only parses KML directly. Convert GPX first:
+
+```bash
 ogr2ogr -f KML output.kml input.gpx
 ```
 
-Or use an online converter such as gpx2kml.com.
+GeoJSON should also be converted to KML before import.
 
-## Repository layout
+## 🧪 Development and Tests
 
+There is no frontend build pipeline. The main application is [hiking-trail-mapper.html](hiking-trail-mapper.html), and [index.html](index.html) is the GitHub Pages entry with the same content.
+
+Common checks:
+
+```bash
+node tests/unit/test_math.js
+node tests/unit/test_enrich.js
+node tests/unit/verify_alignment.js
+./tests/run_full_check.sh
 ```
+
+`tests/unit/trail_core.js` mirrors pure calculation functions from the HTML for Node-based tests. When changing distance, ascent, elevation color, or waypoint snapping logic, keep the mirror in sync and run the alignment test.
+
+## 🔖 Versioning
+
+Version: v1.31.5
+
+Single-file size about 544 KB.
+
+The version number represents release cadence, not every small change as a large release:
+
+- `PATCH`: bug fixes, documentation, test scripts, compatibility fixes, and small interaction improvements.
+- `MINOR`: user-visible features, import/export capability, data-model fields, or major workflow changes.
+- `MAJOR`: incompatible data migrations, export format changes, or other breaking adjustments that require user action.
+
+When there is no breaking change or large feature, each user-visible fix, documentation polish, or small interaction improvement should normally ship as a `PATCH` release. Purely internal implementation details can still be grouped into one patch entry. Use `MINOR` or `MAJOR` only when the feature surface, data model, or compatibility boundary clearly changes.
+
+## 📁 Repository Layout
+
+```text
 hiking-trail-mapper/
-├── hiking-trail-mapper.html      Application (= index.html)
+├── hiking-trail-mapper.html      Single-file application
 ├── index.html                    GitHub Pages entry
-├── CHANGELOG.md                  Version history
-├── LICENSE
-├── docs/
-│   ├── FEATURES.md / .en.md      Features and interactions
-│   ├── ARCHITECTURE.md / .en.md  Architecture and design notes
-│   └── screenshots/
-├── examples/
-│   └── sample-trails/            Sample KML files
-├── tools/
-│   └── generate_route_images.py  Optional itinerary image generator
-└── references/
-    └── tag-rules.md              Waypoint tag rules
+├── CHANGELOG.md                  Release history
+├── docs/                         Feature, architecture, and testing docs
+├── examples/sample-trails/        Sample KML files
+├── references/tag-rules.md        Waypoint tag classification rules
+├── scripts/                       Static checks, browser tests, sync scripts
+├── tests/                         Unit and end-to-end tests
+└── tools/                         Optional helper tools
 ```
 
-## GitHub Pages
+## 🌐 Deployment
 
-Settings → Pages → Source: `Deploy from branch → main / (root)`. The application is a single HTML file, so `index.html` is the entire site.
+For GitHub Pages, select `Deploy from branch -> main / (root)`. Because this is a static single-file app, root-level `index.html` is the complete site.
 
-## Data
-
-All data lives in the browser's IndexedDB. Nothing is uploaded. Data is lost when the browser cache is cleared or on a different device; use `Export → KML ZIP` for cross-device transfer.
-
-## Tech stack
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| Leaflet | 1.9.4 | Map engine |
-| leaflet-polylineDecorator | — | Directional arrows |
-| fflate | 0.8.2 | ZIP encode/decode |
-| IndexedDB | native | Persistence |
-| Canvas 2D | native | Elevation chart |
-
-No CDN dependencies at runtime, apart from map tiles.
-
-## Browser compatibility
-
-Tested on Chrome, Safari, iOS Safari, and Android Chrome. Opens directly from `file://`; previously loaded tiles remain viewable offline.
-
-## Contributing
-
-Issues and pull requests are welcome, particularly:
-
-- KML samples from other regions;
-- Screenshots (`docs/screenshots/`);
-- Additional base map adapters (Mapbox, Tianditu, AMap, etc.);
-- Direct GPX / GeoJSON parsing;
-- Offline tile caching (`leaflet-offline`);
-- Additional i18n translations.
-
-See [docs/ARCHITECTURE.en.md](docs/ARCHITECTURE.en.md) before changing code.
-
-## License
+## 📄 License
 
 [MIT](LICENSE)

@@ -4,6 +4,86 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v1.31.5 — 2026-07-04
+
+**中文**
+
+- 🐛 修复测距模式选完 A/B 后点击复位只调整视野、不补画 A/B 黄色高亮段的问题
+- ⚡ 测距统计改为使用累计里程/爬升/下降与分块最高海拔缓存，避免拖动端点后遍历整段轨迹导致数秒延迟
+- 📏 A/B 端点拖动中实时更新测距线与面板数值，松手后只做最终确认与海拔图刷新
+- 🧲 A/B 拖动吸附优先搜索当前端点附近的轨迹索引窗口，密集轨迹点场景下再回退到网格查找
+
+**English**
+
+- 🐛 Fix reset in measure mode after selecting A/B: the viewport fit now also redraws the yellow highlighted A/B segment
+- ⚡ Measure stats now use cumulative distance/ascent/descent plus cached block max elevation, avoiding full segment scans that caused multi-second endpoint update delays
+- 📏 A/B endpoint dragging now live-updates the measured line and panel values; dragend only confirms and refreshes the elevation chart
+- 🧲 A/B drag snapping first searches a local index window around the current endpoint, then falls back to grid lookup for dense-track cases
+
+## v1.31.4 — 2026-07-04
+
+**中文**
+
+- 🧭 主轨迹浮动小卡在侧栏收起动画结束后再次套用记忆位置，避免下一次收起时使用收起前的地图宽度计算位置
+- 📍 标注点图标统一按 tag 取标准图标，地图、行程页和筛选页不再受旧数据里历史 icon 影响
+- 🎛 顶部按钮重排为导航、分析、新增、数据四组，并为新增标注点与手动下撤入口预留固定位置
+- ➕ 新增顶部“标注”按钮：进入一次性点选模式，在主轨迹附近点击即可新增手动标注点
+
+**English**
+
+- 🧭 The primary mini card reapplies remembered position after the sidebar collapse transition, avoiding position math based on the pre-collapse map width
+- 📍 Waypoint icons now resolve from canonical tag icons so map markers, itinerary, and filter chips no longer depend on stale stored icons
+- 🎛 Top buttons are regrouped into navigation, analysis, creation, and data clusters with fixed slots for new waypoint and manual escape actions
+- ➕ Added a top “Mark” button for one-shot waypoint placement near the primary trail
+
+## v1.31.3 — 2026-07-04
+
+**中文**
+
+- ⚡ 测距拖动结束后先即时刷新 A/B 点位，再用抽样高亮线和计算序号避免旧结果回写，降低长路段更新延迟
+- 🎛 顶部工具栏、测距面板和分段面板按钮重新分组排布，整体对齐更稳定
+- 🧭 侧栏收起后的主轨迹浮动卡片支持点击拖动并记忆位置，短点击仍展开侧栏
+- 🔄 从浏览器缓存恢复数据后采用延迟两阶段复位，打开 HTML 时更稳定地贴合主轨迹
+- 📍 地图标注点标签显示 D 天数，并在分段应用后刷新标注、行程和主轨迹小卡
+- 🧪 Codex 沙箱内静态验收不再启动 Chrome；真实浏览器测试只通过外部 full check 执行
+
+**English**
+
+- ⚡ Measure endpoint drag now updates A/B markers immediately, then uses sampled highlight paths plus compute sequence guards to avoid stale result writes and reduce long-section lag
+- 🎛 Top toolbar plus measure/segment panel buttons are regrouped and aligned for steadier layout
+- 🧭 The collapsed-sidebar primary mini card is now draggable with remembered position; short click still opens the sidebar
+- 🔄 Browser-cache restore now performs a delayed two-phase reset so opening the HTML more reliably fits the primary trail
+- 📍 Map waypoint labels show D-day badges and refresh waypoints, itinerary, and the primary mini card after applying segments
+- 🧪 Codex sandbox static checks no longer launch Chrome; real browser validation only runs through the external full check
+
+## v1.31.2 — 2026-07-04
+
+**中文**
+
+- ⚡ 测距 A/B 与分段点拖动吸附改为 requestAnimationFrame 节流，每帧最多查一次最近主轨迹点，降低密集轨迹拖动卡顿
+- 🧭 测距与分段共用主轨迹拖动吸附调度器，dragend 会取消未执行帧，避免旧 marker 异步吸附干扰重绘
+
+**English**
+
+- ⚡ Measure A/B and segment point drag snapping now use requestAnimationFrame throttling, limiting nearest-primary-track lookup to once per frame and reducing lag on dense trails
+- 🧭 Measure and segment modes share the primary-track drag snap scheduler; dragend cancels pending frames to avoid stale marker snapping after redraw
+
+## v1.31.1 — 2026-07-03
+
+**中文**
+
+- 📝 README 标题居中并加入小图标，优化双语文档结构与版本策略说明
+- 🔖 日常修复、文档和小交互优化优先走 PATCH 小版本，不再把每项改动都当成大版本
+- 📈 海拔图填充改为与黑色曲线共用同一路径，修复曲线和下方图形边缘不重合的问题
+- 📏 测距模式改为先点击 A/B 两点，后续通过拖动 A/B 端点调整位置，逻辑与日期规划模式保持一致
+
+**English**
+
+- 📝 Center README title, add small icons, and improve bilingual documentation structure plus versioning notes
+- 🔖 Daily fixes, docs, and small interaction changes now use PATCH releases instead of treating every change as a large version bump
+- 📈 Elevation fill now shares the exact same path as the black curve, fixing the mismatch between curve and area edge
+- 📏 Measure mode now selects A/B with the first two clicks, then adjusts endpoints by dragging A/B, matching the date-planning flow
+
 ## v1.31.0 — 2026-07-02
 
 **中文**
@@ -15,13 +95,10 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 
 **English**
 
-- 🐛 Fix "select AB → reset → re-select B slow": measureReset now syncs elevation bar back to full-trail mode, avoiding race with next measureCompute\
-- ,
-        
-- ,
-        
-- ,
-        
+- 🐛 Fix "select AB → reset → re-select B slow": measureReset now syncs elevation bar back to full-trail mode, avoiding race with next measureCompute's refreshElevBar
+- ⚡ Elevation predictStackDepth uses for-loop for min/max/peakIdx/valleyIdx, replaces alts.map + Math.min(...spread) + indexOf; saves dozens of ms on long trails and avoids stack overflow
+- ✨ After restoring data from browser cache, auto-perform resetView so viewport snaps to primary trail
+- 🛠 sync_release.sh defaults to template (no longer pulls specialized HTML from hiking_trail_assets/current, avoids overwriting newer versions)
 
 ## v1.30.0 — 2026-07-02
 
@@ -36,9 +113,8 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 
 - 🎯 Pinpointed the real cause of on-trail click slowness: not JS handlers, but browser-level SVG path hit-testing — long trails have thousands of SVG path segments, each mousemove/mousedown triggers O(n) hit tests
 - ⚡ Measure/segment modes add .measure-active class to map container, CSS forces all SVG paths to pointer-events: none, browser completely skips hit-testing
-- ✂ Removed auto-fitBounds after measure A+B computed (user doesn\
-- ,
-        
+- ✂ Removed auto-fitBounds after measure A+B computed (user doesn't want view to jump during measurement)
+- ✂ Removed auto-resetView on measure exit
 
 ## v1.29.0 — 2026-07-02
 
@@ -86,19 +162,13 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 - ⚡ Measure click A/B generation greatly sped up: measureMarker from circleMarker+permanent tooltip to lightweight divIcon marker, reducing DOM layers and layout triggers
 - ⚡ Primary trail lat/lng cached as Float64Array, accelerates nearestTrackIdxOnPrimary O(n) search (3-5x speedup for large trails)
 - ⚡ Relaxed fast-tap thresholds: movement 6→10 px, time 400→800 ms, covers trackpad slow clicks
-- ⚡ Disabled Leaflet\
-- ,
-        
-- ,
-        
-- ,
-        
-- ,
-        
-- ,
-        
-- ,
-        
+- ⚡ Disabled Leaflet's L.Tap handler (tap: false), removes touch tap delay
+- ✨ After selecting A+B in measure mode, auto-fitBounds to the measured segment (60px padding), no manual reset needed
+- ✨ Exiting measure mode (✕ Exit or re-clicking 📏) auto-resets view to full primary trail
+- ✨ Applying segments syncs to sidebar Itinerary tab: not only writes day_meta and track dayId, but daily cards immediately show
+- ✨ Segment apply automatically tags primary trail waypoints with day field, itinerary tab precisely groups waypoints by day
+- ✨ Itinerary tab daily expansions fixed-show key types (camp/pass/water/supply/bridge/river/village/shelter/warn/fork/start/end), unaffected by filter
+- 🐛 Fix buildDaysTab crash when day_meta is undefined
 
 ## v1.26.0 — 2026-07-02
 
@@ -114,11 +184,9 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 
 - ⚡ Measure/segment click response near-instant: uses native pointerdown/pointerup (<400ms & <6px movement = tap), bypasses Leaflet click internal delay; click event kept as fallback
 - ✨ Applying segments now also refreshes sidebar "Itinerary" tab: not only writes day_meta and track dayId for export, but the tab immediately shows daily cards (D1/D2/…, distance, ascent, max, camp)
-- ✨ Segment generates seg description field (start elev → peak → end elev (km)), itinerary tab shows the day\
-- ,
-        
-- ,
-        
+- ✨ Segment generates seg description field (start elev → peak → end elev (km)), itinerary tab shows the day's summary at a glance
+- 🐛 Fix buildDaysTab crash when day_meta is undefined: shows "no daily itinerary set" placeholder
+- 🐛 Fix buildDaysTab showing "undefined" when dm.seg is empty: falls back to km/asc/desc/max combo
 
 ## v1.25.0 — 2026-07-01
 
@@ -133,17 +201,12 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 
 **English**
 
-- ⚡ Measure click response greatly sped up: doubleClickZoom disabled → removes Leaflet\
-- ,
-        
-- ,
-        
-- ,
-        
-- ,
-        
-- ,
-        
+- ⚡ Measure click response greatly sped up: doubleClickZoom disabled → removes Leaflet's internal ~200ms click delay
+- ⚡ Measure computation async: click immediately draws segment+markers, dist/asc/desc/max moved to next frame, elev chart to the frame after
+- ⚡ Array traversal optimized: avoid slice + spread (slow/stack overflow on big arrays), use for-loops + pre-allocated arrays
+- 🎨 Measure panel removed "Direction" field (always A→B, no need to show)
+- 🎨 Measure panel removed "⇄ Swap A/B" button (direction irrelevant, simplify UI)
+- 🎨 "⛰ Max in segment" no longer spans two columns, joins the two-column grid layout
 
 ## v1.24.0 — 2026-07-01
 
@@ -192,9 +255,8 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 
 - ✨ Finer-grained map zoom: zoomSnap=0.25 (snap to 0.25 level) + zoomDelta=0.5 (button/keyboard step) + wheelPxPerZoomLevel=120 (smoother wheel)
 - ✨ After importing KML/ZIP, auto-execute full reset (fitBounds to primary trail), no manual reset button click needed
-- ✨ Auto-reset on group switch, view immediately aligns to the new group\
-- ,
-        
+- ✨ Auto-reset on group switch, view immediately aligns to the new group's primary trail
+- ♻️ Extracted resetView() shared by reset button / import / group switch, consistent behavior (primary trail fallback + full redraw + fitBounds)
 
 ## v1.21.0 — 2026-07-01
 
@@ -210,16 +272,11 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 
 **English**
 
-- ✨ Primary trail no longer removed from the trail list, marked with gold left border and ★ badge instead (previously the primary trail "disappeared" into the top card and users couldn\
-- ,
-        
-- ,
-        
-- ,
-        
-- ,
-        
--  memory values
+- ✨ Primary trail no longer removed from the trail list, marked with gold left border and ★ badge instead (previously the primary trail "disappeared" into the top card and users couldn't find it)
+- ✨ "Set as Main" button on the primary card replaced with read-only "★ Main" label (prevents users from clicking to set themselves as primary)
+- ✨ Each group independently remembers its primary trail: state.primaryByGroup[groupName]. Switching primary in group A no longer pollutes group B; switching back preserves memory
+- 🔧 state.primaryTrailId is now a getter/setter bridging to primaryByGroup[activeGroup]. All legacy code upgraded transparently
+- 🔧 Full scenario coverage: group switch / group dropdown / batch move / trail delete / IndexedDB restore all correctly clean up other groups' memory values
 - 🔧 Backward compatible: legacy single-value primaryTrailId in old IndexedDB auto-migrates into primaryByGroup
 - 🧪 New E16 scenario (13 assertions) verifies full cross-group independent primary lifecycle; total 62/62 pass
 
@@ -647,13 +704,10 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 **English**
 
 - ✨ Manual escape route: click "＋ Add manual" in escape panel, then pick A/B on map
-- ✨ Auto-snaps to nearest trail (within 2km); uses A\
-- ,
-        
-- ,
-        
-- ,
-        
+- ✨ Auto-snaps to nearest trail (within 2km); uses A's trail when points are on different trails
+- ✨ Preview: A/B markers + red dashed polyline + auto flyToBounds
+- ✨ Route name editable before saving; persisted to IndexedDB
+- ✨ Manual routes show green "手动" badge and can be individually deleted (🗑)
 
 ## v1.7.0 — 2026-06-09
 
