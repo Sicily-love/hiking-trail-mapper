@@ -92,8 +92,8 @@ try:
         results.append((ok, name, detail))
         print(f"  {icon} {name}" + (f"  ({detail})" if detail else ""))
 
-    print("\n▸ 需求 4/1（v1.31.5）：分组交互 + 复选框合并")
-    check("APP_VERSION = v1.31.5", evalj("APP_VERSION") == "v1.31.5")
+    print("\n▸ 需求 4/1（v1.31.13）：分组交互 + 复选框合并")
+    check("APP_VERSION = v1.31.13", evalj("APP_VERSION") == "v1.31.13")
     check("state.batchMode 已移除",
           evalj("!('batchMode' in state)"),
           str(evalj("'batchMode' in state")))
@@ -160,7 +160,7 @@ try:
             })()
           """))
 
-    print("\n▸ v1.31.5：重构后的辅助函数存在性")
+    print("\n▸ v1.31.13：重构后的辅助函数存在性")
     for fn in ['renderGroupTabs', 'renderBatchToolbar', 'renderTrailCard',
                'trailCardHeaderHtml', 'trailCardExpandedHtml',
                'handleTrailCardClick', 'handleTrailDetailClick', 'handleTrailGroupChange',
@@ -173,7 +173,7 @@ try:
           evalj("buildTrailList.toString().split('\\n').length < 40"),
           str(evalj("buildTrailList.toString().split('\\n').length")))
 
-    print("\n▸ v1.31.5：3 个大函数深度拆分后新增的 helper")
+    print("\n▸ v1.31.13：3 个大函数深度拆分后新增的 helper")
     for fn in ['expandZipFiles', 'importSingleKml', 'findDuplicateTrail',
                'ensureUniqueTrailId', 'renderKmlImportRow', 'bindKmlImportRowEvents',
                'postImportFinalize',
@@ -191,7 +191,21 @@ try:
                'addManualWaypointAt', 'enterAddWaypointMode', 'exitAddWaypointMode',
                'nearestTrackIdxNearPrimary', 'getMeasureStatsCache',
                'computeMeasureStats', 'renderMeasureSegmentLine',
-               'queueMeasureLiveUpdate', 'applyMeasureEndpointHit']:
+               'queueMeasureLiveUpdate', 'applyMeasureEndpointHit',
+               'bindFloatingPanelDrag', 'initFloatingPanelPositions',
+               'applyFloatingPanelPosition', 'resetFloatingPanelPosition',
+               'clampFloatingPanelPosition', 'floatingStyleOriginRect',
+               'setFloatingPanelStyle', 'setMapMode', 'enterInteractionRenderMode',
+               'getDayIndexRange', 'computeDayRangeStats',
+               'showDaySegmentPreview', 'clearDaySegmentPreview',
+               'showMeasureElevReadout', 'hideMeasureElevReadout',
+               'resetMeasureElevReadout', 'setMeasureElevHint',
+               'measureReverse',
+               'segmentPointFromTrackIdx', 'segmentIndexesToPoints',
+               'segmentHasExplicitDayIds', 'segmentRangeFromDayMeta',
+               'restoreSegmentStateFromTrail', 'segmentInsertPoint',
+               'segmentDeleteDay', 'renumberSegmentCampEditsForInsert',
+               'renumberSegmentCampEditsForDelete']:
         check(f"函数 {fn}", evalj(f"typeof {fn} === 'function'"))
 
     check("handleFiles 已瘦身（< 30 行）",
@@ -204,7 +218,7 @@ try:
           evalj("drawElevBar.toString().split('\\n').length < 40"),
           str(evalj("drawElevBar.toString().split('\\n').length")))
 
-    print("\n▸ v1.31.5：测距端点拖拽回归")
+    print("\n▸ v1.31.13：测距端点拖拽回归")
     draggable_marker = evalj("""
       (() => {
         const fixed = measureMarker(30, 100, 'A', '#22c55e');
@@ -255,8 +269,102 @@ try:
           evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('main.days = day_meta.length')"))
     check("标注点图标按 tag 统一渲染",
           evalj("waypointIcon('supply') === '🏪' && addWpMarker.toString().includes('waypointIcon(wp)') && buildFilterGrid.toString().includes('waypointIcon(tag)') && buildDaysTab.toString().includes('waypointIcon(wp)')"))
-    check("顶部工具栏包含新增标注和下撤入口",
-          evalj("!!document.getElementById('add-waypoint-btn') && !!document.getElementById('add-escape-btn') && document.querySelectorAll('#map-toolbar .toolbar-group').length >= 4"))
+    check("顶部工具栏为无外层背景的 2 行固定顺序",
+          evalj("""
+            (() => {
+              const toolbar = document.getElementById('map-toolbar');
+              const rows = [...document.querySelectorAll('#map-toolbar .toolbar-group')]
+                .map(row => [...row.querySelectorAll('button')]
+                  .map(btn => btn.textContent.trim().replace(/\\s+/g, ' ')));
+              const bg = getComputedStyle(toolbar).backgroundColor;
+              return rows.length === 2
+                && rows[0].join('|') === '❓ 帮助|🎯 复位|📏 测距|📅 分段|📍 标注'
+                && rows[1].join('|') === '⚡ 下撤|⇌ 反向|+ 轨迹|📤 导出|🗑 清空'
+                && (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent');
+            })()
+          """))
+    check("顶部缓存按钮已移除",
+          evalj("!document.getElementById('storage-btn') && !document.getElementById('storage-text')"))
+    check("测距/分段进入时自动切换到标注点模式",
+          evalj("measureEnter.toString().includes('enterInteractionRenderMode') && segmentEnter.toString().includes('enterInteractionRenderMode') && setMapMode.toString().includes('state.mode = mode')"))
+    check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
+          evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('min: stats.minE') && segmentApply.toString().includes('i_start') && refreshElevBar.toString().includes('dayPreviewState.active')"))
+    check("地图 +/- 缩放步进已调大",
+          evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.5"))
+    check("海拔图与测距浮动栏支持拖动记忆和双击复位",
+          evalj("""
+            !!document.querySelector('#elev-bar [data-panel-drag]')
+            && !!document.querySelector('#measure-panel [data-panel-drag]')
+            && !!document.querySelector('#measure-panel .measure-panel-grip')
+            && bindFloatingPanelDrag.toString().includes('pointerdown')
+            && bindFloatingPanelDrag.toString().includes('localStorage')
+            && bindFloatingPanelDrag.toString().includes('dblclick')
+            && initFloatingPanelPositions.toString().includes('hiking_elev_bar_pos')
+            && initFloatingPanelPositions.toString().includes('hiking_measure_panel_pos')
+          """))
+    check("测距面板保留重新选点/反向/退出，测距信息拆散融入海拔图",
+          evalj("""
+            (() => {
+              const panelButtons = [...document.querySelectorAll('#measure-panel button')]
+                .map(btn => btn.textContent.trim().replace(/\\s+/g, ' '));
+              return panelButtons.join('|') === '🔄 重新选点|⇄ 反向|✕ 退出'
+                && !document.getElementById('measure-elev-overlay')
+                && !document.getElementById('measure-result')
+                && !!document.getElementById('measure-distance')
+                && !!document.querySelector('#measure-distance #m-dist')
+                && measureReverse.toString().includes('measureState.ptA = measureState.ptB')
+                && updateMeasureReadout.toString().includes('elev-stat-asc')
+                && updateMeasureReadout.toString().includes('elev-stat-desc')
+                && updateMeasureReadout.toString().includes(\"stats.distKm.toFixed(2) + ' km'\")
+                && collectElevAnnotations.toString().includes('measureMode')
+                && collectElevAnnotations.toString().includes('measure-a')
+                && collectElevAnnotations.toString().includes('measure-b')
+                && collectElevAnnotations.toString().includes("Math.round(maxE) + 'm'")
+                && collectElevAnnotations.toString().includes("Math.round(minE) + 'm'")
+                && !collectElevAnnotations.toString().includes(\"'高 '\")
+                && !collectElevAnnotations.toString().includes(\"'低 '\")
+                && !drawElevAxes.toString().includes('fillText(Math.round(maxE)')
+                && !drawElevAxes.toString().includes('fillText(Math.round(minE)')
+                && refreshElevBar.toString().includes('measureMode: true');
+            })()
+          """))
+    check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
+          evalj("""
+            getDayIndexRange.toString().indexOf("dm.i_start") < getDayIndexRange.toString().indexOf("trail.track[i][5]")
+            && showDaySegmentPreview.toString().includes("computeDayRangeStats")
+            && showDaySegmentPreview.toString().includes("m-dist")
+            && showDaySegmentPreview.toString().includes("fitBounds")
+          """))
+    check("行程分段可恢复/默认起终点/插入边界/指定删除",
+          evalj("""
+            segmentEnter.toString().includes('restoreSegmentStateFromTrail')
+            && segmentEnter.toString().includes('resetView({restoreActive: true})')
+            && restoreSegmentStateFromTrail.toString().includes('[0, trail.track.length - 1]')
+            && restoreSegmentStateFromTrail.toString().includes('segmentRangeFromDayMeta')
+            && segmentInsertPoint.toString().includes('splice(insertAt, 0, pt)')
+            && renderSegmentList.toString().includes('seg-day-delete')
+            && segmentDeleteDay.toString().includes('renumberSegmentCampEditsForDelete')
+            && redrawSegmentLayer.toString().includes('draggable: isBoundary')
+          """))
+    check("天数模式入口移到行程页并可恢复原显示模式",
+          evalj("""
+            (() => {
+              const trailModes = [...document.querySelectorAll('#tab-trails [data-mode]')].map(btn => btn.dataset.mode);
+              const noDayButton = trailModes.join('|') === 'elev|waypoint'
+                && !document.querySelector('#tab-trails [data-mode="day"]');
+              setMapMode('waypoint');
+              document.querySelector('.tab[data-tab="days"]').click();
+              const entersDay = state.mode === 'day';
+              document.querySelector('.tab[data-tab="trails"]').click();
+              const restores = state.mode === 'waypoint';
+              return noDayButton
+                && entersDay
+                && restores
+                && buildDaysTab.toString().includes('days-summary')
+                && buildDaysTab.toString().includes('day-head-main')
+                && buildDaysTab.toString().includes('当日下降');
+            })()
+          """))
     check("新增标注按钮进入一次性点选模式",
           evalj("enterAddWaypointMode.toString().includes('crosshair') && addManualWaypointAt.toString().includes('gps_idx') && addManualWaypointAt.toString().includes('buildDaysTab')"))
     check("海拔填充沿完整曲线路径绘制",
@@ -341,7 +449,7 @@ try:
         for p,n,d in results:
             if not p: print(f"  ✗ {n}" + (f"  ({d})" if d else ""))
         sys.exit(1)
-    print("✓ v1.31.5 功能测试全部通过")
+    print("✓ v1.31.13 功能测试全部通过")
 finally:
     chrome.terminate()
     try: chrome.wait(timeout=3)

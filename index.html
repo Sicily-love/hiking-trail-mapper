@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <!-- ═══════════════════════════════════════════════════════════════
      徒步路线地图 (Hiking Trail Mapper) · 在线版
-     APP_VERSION: v1.31.5
-     BUILD_DATE:  2026-07-04
+     APP_VERSION: v1.31.13
+     BUILD_DATE:  2026-07-05
      ═══════════════════════════════════════════════════════════════ -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>徒步路线地图（在线版 v1.31.5）</title>
+<title>徒步路线地图（在线版 v1.31.13）</title>
 <style>
 /* Leaflet CSS (embedded) */
 /* required styles */
@@ -1485,34 +1485,113 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
 .filter-chip .cnt { color:var(--text-muted); font-size:10px; margin-left:auto; }
 
 /* ============ Day blocks ============ */
-.day-block { border-bottom:1px solid var(--line); }
+.days-summary {
+  padding:10px 12px 12px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0));
+}
+.days-summary h3 { margin-bottom:6px; }
+.days-summary-meta {
+  display:flex; flex-wrap:wrap; gap:6px;
+  font-size:10px; color:var(--text-muted);
+}
+.days-summary-meta span {
+  padding:3px 6px;
+  border:1px solid var(--line);
+  border-radius:4px;
+  background:var(--bg-1);
+}
+.day-block {
+  --day-color:var(--accent);
+  margin:10px 12px 12px;
+  border:1px solid var(--line);
+  border-left:4px solid var(--day-color);
+  border-radius:8px;
+  background:var(--bg-1);
+  box-shadow:0 1px 2px rgba(35, 28, 16, 0.10);
+  overflow:hidden;
+}
 .day-hdr {
-  padding:10px 16px; cursor:pointer;
-  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 11px 9px; cursor:pointer;
+  display:flex; align-items:center; gap:9px;
 }
 .day-hdr:hover { background:var(--bg-2); }
 .day-tag {
-  font-size:11px; font-weight:700; padding:2px 6px; border-radius:3px;
-  background:var(--bg-3); color:var(--text);
+  width:34px; height:34px; flex:0 0 34px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; border-radius:50%;
+  background:var(--day-color); color:var(--bg-0);
+  box-shadow:0 0 0 3px rgba(255,255,255,0.46);
 }
-.day-title { font-size:12px; color:var(--text); margin-left:8px; flex:1; }
-.day-meta { font-size:10px; color:var(--text-muted); }
-.day-body { padding:0 16px 12px; display:none; font-size:11px; }
+.day-head-main {
+  min-width:0; flex:1;
+  display:flex; flex-direction:column; gap:3px;
+}
+.day-route {
+  font-size:12px; color:var(--text); font-weight:700;
+  line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.day-title { font-size:10px; color:var(--text-muted); line-height:1.45; }
+.day-meta { font-size:11px; color:var(--text-muted); flex:0 0 auto; }
+.day-body {
+  padding:0 11px 11px 54px; display:none; font-size:11px;
+}
 .day-body.open { display:block; }
 .day-stats {
-  display:grid; grid-template-columns:1fr 1fr; gap:4px 12px;
-  padding:8px 0; color:var(--text-dim);
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
+  border:1px solid var(--line);
+  border-radius:6px;
+  overflow:hidden;
+  background:var(--bg-0);
+  color:var(--text-dim);
 }
-.day-stats .lab { font-size:10px; color:var(--text-muted); }
-.day-stats .val { color:var(--text); font-weight:500; }
+.day-stats .lab,
+.day-stats .val {
+  padding:6px 7px;
+  border-bottom:1px solid var(--line);
+}
+.day-stats .lab {
+  font-size:10px; color:var(--text-muted);
+  border-right:1px solid var(--line);
+}
+.day-stats .val {
+  color:var(--text); font-weight:650; text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.day-stats .lab:nth-last-child(-n+2),
+.day-stats .val:nth-last-child(-n+2) { border-bottom:none; }
 .day-seg {
-  background:var(--bg-2); border-left:2px solid var(--accent);
-  padding:6px 8px; font-size:10px; color:var(--text-dim); margin:4px 0 8px;
+  display:flex; align-items:flex-start; gap:6px;
+  padding:7px 8px; font-size:10px; line-height:1.5;
+  color:var(--text-dim); margin:0 0 8px;
+  border:1px solid var(--line); border-radius:6px;
+  background:var(--bg-0);
+}
+.day-seg .ic { color:var(--day-color); flex:0 0 auto; }
+.day-camp {
+  display:flex; align-items:center; gap:6px;
+  margin:8px 0 10px;
+  font-size:10px; color:var(--text-muted);
+}
+.day-camp b {
+  color:var(--text); font-size:11px; font-weight:650;
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.day-camp em {
+  margin-left:auto; color:var(--text-dim); font-style:normal;
+  font-variant-numeric:tabular-nums;
+}
+.day-preview-target { cursor:pointer; transition:background 0.15s, border-color 0.15s, box-shadow 0.15s; }
+.day-preview-target:hover { background:var(--bg-2); border-color:var(--accent); }
+.day-preview-target.active {
+  border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent);
+  background:rgba(184,137,92,0.16);
 }
 .day-evac-btn {
   display:inline-flex; align-items:center; gap:4px;
   padding:5px 9px; background:transparent; color:var(--danger);
-  border:1px solid var(--danger); border-radius:3px;
+  border:1px solid var(--danger); border-radius:5px;
   cursor:pointer; font-size:10px; font-family:inherit;
 }
 .day-evac-btn:hover { background:rgba(255,107,107,0.1); }
@@ -1604,29 +1683,30 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
 .map-btn:hover { background:var(--bg-2); color:var(--text); }
 #map-toolbar {
   position:absolute; top:8px; left:50%; transform:translateX(-50%);
-  z-index:540; display:flex; align-items:center; justify-content:center;
-  gap:6px; padding:6px; max-width:calc(100vw - 30px);
-  background:rgba(245,241,232,0.96);
-  border:1px solid #C8B998; border-radius:6px;
-  box-shadow:0 4px 14px rgba(58,40,20,0.18);
+  z-index:540; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; padding:0; max-width:calc(100vw - 30px);
+  background:transparent;
+  border:none; border-radius:0;
+  box-shadow:none;
   font-family:'Source Serif 4','PingFang SC',serif;
-  flex-wrap:wrap;
+  pointer-events:none;
 }
 .toolbar-group {
-  display:flex; align-items:center; gap:5px;
-  padding:0 6px;
-  border-right:1px solid rgba(122,110,84,0.28);
+  display:grid; grid-auto-flow:column; grid-auto-columns:76px;
+  align-items:center; justify-content:center; gap:5px;
+  padding:0;
 }
-.toolbar-group:last-child { border-right:none; }
 /* v1.12.5：顶部 toolbar 按钮样式（杂志风） */
 .tb-btn {
   display:inline-flex; align-items:center; justify-content:center; gap:4px;
-  min-height:30px; min-width:74px; box-sizing:border-box;
+  width:100%; min-height:30px; min-width:0; box-sizing:border-box;
   background:#FAF6EA; color:#1F2A1C;
   border:1px solid #C8B998; padding:5px 10px;
   border-radius:4px; font-size:12px; cursor:pointer;
   font-family:inherit; white-space:nowrap; line-height:1.25;
   transition:background 0.15s,border-color 0.15s,color 0.15s,box-shadow 0.15s;
+  pointer-events:auto;
+  box-shadow:0 3px 10px rgba(58,40,20,0.14);
 }
 .tb-btn:hover { background:#F0E9CF; border-color:var(--accent); color:var(--accent); }
 .tb-btn.on { background:var(--accent); color:#FBF6E6; border-color:var(--accent); }
@@ -1634,6 +1714,7 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
   display:grid; gap:8px; margin-top:10px;
 }
 .panel-actions-two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.panel-actions-three { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .panel-actions-four { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .panel-btn {
   min-height:30px; padding:6px 8px; border-radius:4px;
@@ -1645,6 +1726,57 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
 .panel-btn.muted { background:#374151; color:#e2e8f0; border-color:#374151; }
 .panel-btn.primary { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:600; }
 .panel-btn:hover { filter:brightness(1.08); }
+#measure-panel {
+  min-width:0 !important;
+  padding:8px !important;
+  background:rgba(30,36,51,0.92) !important;
+}
+#measure-panel .panel-actions {
+  margin-top:12px;
+  gap:6px;
+}
+#measure-panel .panel-btn {
+  min-width:92px;
+}
+.measure-panel-grip {
+  position:absolute; top:4px; left:50%; transform:translateX(-50%);
+  width:48px; height:12px; border-radius:999px;
+  cursor:move; pointer-events:auto; z-index:2;
+  background:repeating-linear-gradient(90deg, rgba(203,213,225,0.62) 0 2px, transparent 2px 6px);
+  opacity:0.42;
+}
+.measure-panel-grip:hover { opacity:0.78; }
+.measure-distance-readout,
+.measure-hint-line {
+  position:absolute; left:12px; z-index:3;
+  display:none; pointer-events:none;
+  font-family:'Source Serif 4','PingFang SC',serif;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.measure-distance-readout {
+  top:6px; left:120px; right:78px;
+  color:#A88528; font-size:11px; font-weight:700;
+  letter-spacing:0.03em; font-variant-numeric:tabular-nums;
+}
+.measure-hint-line {
+  top:34px; right:12px;
+  color:#7A6E54; font-size:9.5px; font-style:italic;
+  opacity:0.88;
+}
+.measure-distance-readout.active,
+.measure-hint-line.active { display:block; }
+.floating-dragging {
+  cursor:grabbing !important;
+  opacity:0.96;
+}
+.panel-drag-grip {
+  position:absolute; top:4px; left:50%; transform:translateX(-50%);
+  width:36px; height:12px; border-radius:999px;
+  cursor:move; pointer-events:auto; z-index:4;
+  background:repeating-linear-gradient(90deg, rgba(122,110,84,0.55) 0 2px, transparent 2px 6px);
+  opacity:0.38;
+}
+.panel-drag-grip:hover { opacity:0.72; }
 #primary-mini {
   position:absolute; top:54px; right:14px; z-index:550;
   width:240px; background:linear-gradient(180deg,#FBF6E6 0%,#F0E9CF 100%);
@@ -1659,8 +1791,8 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
 }
 @media (max-width: 760px) {
   #map-toolbar { top:6px; gap:4px; padding:5px; }
-  .toolbar-group { padding:0 3px; gap:3px; border-right:none; }
-  .tb-btn { min-height:28px; min-width:62px; padding:4px 7px; font-size:11px; }
+  .toolbar-group { grid-auto-columns:58px; gap:3px; padding:0; }
+  .tb-btn { min-height:28px; padding:4px 5px; font-size:10.5px; }
   .panel-actions-four { grid-template-columns:repeat(2,minmax(0,1fr)); }
   #primary-mini { width:min(240px, calc(100vw - 72px)); }
 }
@@ -1745,20 +1877,15 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
       <div class="toolbar-group">
         <button id="help-btn" class="tb-btn" title="帮助" data-i18n="action.help">❓ 帮助</button>
         <button id="reset-btn" class="tb-btn" title="复位到主轨迹" data-i18n="action.reset">🎯 复位</button>
-      </div>
-      <div class="toolbar-group">
         <button id="measure-btn" class="tb-btn" title="测距：在主轨迹上点两个点，计算爬升/下降/里程" data-i18n="action.measure">📏 测距</button>
         <button id="segment-btn" class="tb-btn" title="分段：在主轨迹上依次选点标记每天行程" data-i18n="action.segment">📅 分段</button>
-        <button id="reverse-btn" class="tb-btn" title="反向主轨迹" data-i18n="action.reverse">⇌ 反向</button>
-      </div>
-      <div class="toolbar-group">
         <button id="add-waypoint-btn" class="tb-btn" title="新增标注点：点击后在主轨迹附近点选位置" data-i18n="action.addWaypoint">📍 标注</button>
-        <button id="add-escape-btn" class="tb-btn" title="新增下撤路线：在地图上选择 A/B 两点" data-i18n="action.addEscape">⚡ 下撤</button>
-        <button id="add-trail-btn" class="tb-btn" title="添加新轨迹" data-i18n="action.add">+ 轨迹</button>
       </div>
       <div class="toolbar-group">
+        <button id="add-escape-btn" class="tb-btn" title="新增下撤路线：在地图上选择 A/B 两点" data-i18n="action.addEscape">⚡ 下撤</button>
+        <button id="reverse-btn" class="tb-btn" title="反向主轨迹" data-i18n="action.reverse">⇌ 反向</button>
+        <button id="add-trail-btn" class="tb-btn" title="添加新轨迹" data-i18n="action.add">+ 轨迹</button>
         <button id="export-btn" class="tb-btn" title="导出：当前组 KML ZIP / 行程 MD" data-i18n="action.export">📤 导出</button>
-        <button id="storage-btn" class="tb-btn" title="浏览器存储">💾 <span id="storage-text" data-i18n="storage.title">存储</span></button>
         <button id="clear-btn" class="tb-btn" title="清除所有轨迹" data-i18n="action.clear">🗑 清空</button>
       </div>
     </div>
@@ -1797,9 +1924,10 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
     </div>
   </div>
 
-  <!-- 右下角海拔剖面图 -->
-  <div id="elev-bar" style="position:absolute;bottom:28px;left:14px;width:340px;height:140px;background:#F2EBD3;border:1px solid #B8A878;border-radius:6px;z-index:500;pointer-events:none;box-shadow:0 6px 18px rgba(58,40,20,0.22),0 1px 0 rgba(255,255,255,0.55) inset;font-family:'Source Serif 4','思源宋体','Noto Serif SC',serif">
+  <!-- 左下角海拔剖面图 -->
+  <div id="elev-bar" style="position:absolute;bottom:28px;left:14px;width:340px;height:140px;background:#F2EBD3;border:1px solid #B8A878;border-radius:6px;z-index:500;pointer-events:auto;box-shadow:0 6px 18px rgba(58,40,20,0.22),0 1px 0 rgba(255,255,255,0.55) inset;font-family:'Source Serif 4','思源宋体','Noto Serif SC',serif">
     <canvas id="elev-canvas" style="width:100%;height:100%;display:block;border-radius:6px;pointer-events:none"></canvas>
+    <div class="panel-drag-grip" data-panel-drag title="拖动；双击恢复默认位置" aria-hidden="true"></div>
     <div id="elev-crosshair" style="position:absolute;top:14px;bottom:24px;width:1px;background:rgba(63,82,56,0.55);pointer-events:none;display:none"></div>
     <div id="elev-tip" style="position:absolute;top:4px;left:10px;background:#FFFAF0;border:1px solid #C8B998;padding:2px 8px;border-radius:3px;font-size:10px;color:#3F5238;pointer-events:none;display:none;white-space:nowrap;z-index:2;font-family:'Source Serif 4',serif"></div>
     <div id="elev-label" style="position:absolute;top:6px;left:12px;font-size:10px;color:#7A6E54;font-family:'Source Serif 4','PingFang SC',serif;pointer-events:none;letter-spacing:0.04em;font-style:italic">海拔剖面</div>
@@ -1808,6 +1936,8 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
       <span style="color:#3F5238" id="elev-stat-asc">↑-</span>&nbsp;
       <span style="color:#A8543C" id="elev-stat-desc">↓-</span>
     </div>
+    <div id="measure-distance" class="measure-distance-readout"><span id="m-dist">-</span></div>
+    <div id="measure-hint" class="measure-hint-line">在主轨迹上点击起点，再点击终点。</div>
   </div>
 
   <div id="sidebar"><button class="sidebar-close" id="sidebar-close" title="收起">⟩</button>
@@ -1830,12 +1960,10 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
         <div class="section">
           <h3 data-i18n="mode.title">显示模式</h3>
           <div class="btn-group" style="flex-wrap:wrap">
-            <button class="btn-mini on" data-mode="day" data-i18n="mode.day">天数模式</button>
-            <button class="btn-mini" data-mode="elev" data-i18n="mode.elev">海拔模式</button>
+            <button class="btn-mini on" data-mode="elev" data-i18n="mode.elev">海拔模式</button>
             <button class="btn-mini" data-mode="waypoint" data-i18n="mode.waypoint">标注点模式</button>
           </div>
           <div style="margin-top:8px;font-size:10px;color:var(--text-muted);line-height:1.6">
-            <b data-i18n="mode.day">天数模式</b><span data-i18n="mode.day.descSep">：</span><span data-i18n="mode.day.desc">每天用不同颜色</span><br>
             <b data-i18n="mode.elev">海拔模式</b><span data-i18n="mode.day.descSep">：</span><span data-i18n="mode.elev.desc">蓝→红表示低→高</span><br>
             <b data-i18n="mode.waypoint">标注点模式</b><span data-i18n="mode.day.descSep">：</span><span data-i18n="mode.waypoint.desc">主轨迹按海拔渐变；其他轨迹仅显示所选标注点（虚线轮廓）</span>
           </div>
@@ -1865,24 +1993,11 @@ body { font-family: var(--serif), -apple-system, 'PingFang SC', 'Helvetica Neue'
 <div id="wp-photo-tip" style="position:fixed;display:none;z-index:5000;background:rgba(20,24,32,0.96);border:1px solid #555;border-radius:6px;padding:5px;box-shadow:0 4px 16px rgba(0,0,0,0.5);pointer-events:none;max-width:280px"></div>
 <!-- 测距面板 -->
 <div id="measure-panel" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);display:none;z-index:5500;background:#1e2433;border:1px solid #3a4154;border-radius:8px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.6);font-size:12px;color:#e2e8f0;min-width:300px;max-width:90vw">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <b style="font-size:13px;color:#fbbf24">📏 测距模式</b>
-    <button id="measure-close" style="background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;padding:0;line-height:1">×</button>
-  </div>
-  <div id="measure-hint" style="color:#94a3b8;line-height:1.5">在主轨迹上点击 <b style="color:#fbbf24">起点</b>，再点击 <b style="color:#fbbf24">终点</b>。</div>
-  <div id="measure-result" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #2d3748">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px">
-      <div>📏 里程：<b id="m-dist" style="color:#fbbf24">-</b></div>
-      <div>↑ 爬升：<b id="m-asc" style="color:#22c55e">-</b></div>
-      <div>↓ 下降：<b id="m-desc" style="color:#ef4444">-</b></div>
-      <div>⛰ 段内最高：<b id="m-max" style="color:#fbbf24">-</b></div>
-      <div>🏔 起点海拔：<b id="m-eA" style="color:#cbd5e1">-</b></div>
-      <div>🏔 终点海拔：<b id="m-eB" style="color:#cbd5e1">-</b></div>
-    </div>
-    <div class="panel-actions panel-actions-two">
-      <button id="measure-reset" class="panel-btn muted">🔄 重新选点</button>
-      <button id="measure-exit" class="panel-btn ghost">✕ 退出</button>
-    </div>
+  <div class="measure-panel-grip" data-panel-drag title="拖动；双击恢复默认位置" aria-hidden="true"></div>
+  <div class="panel-actions panel-actions-three">
+    <button id="measure-reset" class="panel-btn muted">🔄 重新选点</button>
+    <button id="measure-reverse" class="panel-btn muted">⇄ 反向</button>
+    <button id="measure-exit" class="panel-btn ghost">✕ 退出</button>
   </div>
 </div>
 
@@ -2082,7 +2197,7 @@ const I18N = {
     'toast.loaded': '✓ 从浏览器恢复',
     'toast.full': '❌ 存储已满，请删除部分轨迹',
     'toast.imported': '✓ 已导入',
-    'storage.title': '浏览器存储',
+    'storage.title': '缓存',
     'storage.used': '已用',
     'storage.total': '总配额',
     'storage.persist': '请求持久化',
@@ -2214,7 +2329,7 @@ const I18N = {
     'toast.loaded': '✓ Restored',
     'toast.full': '❌ Storage full, please delete some trails',
     'toast.imported': '✓ Imported',
-    'storage.title': 'Browser Storage',
+    'storage.title': 'Cache',
     'storage.used': 'Used',
     'storage.total': 'Quota',
     'storage.persist': 'Request Persistence',
@@ -2257,8 +2372,142 @@ function applyI18n() {
 }
 
 /* ============ Changelog ============ */
-const APP_VERSION = 'v1.31.5';
+const APP_VERSION = 'v1.31.13';
 const CHANGELOG = [
+  {
+    version: 'v1.31.13',
+    date: '2026-07-05',
+    items: {
+      zh: [
+        '🎯 行程页点击 Day 信息后，地图会自动复位到该日轨迹段，同时保留 A/B 高亮与海拔段显示',
+      ],
+      en: [
+        '🎯 Clicking a Day entry in the itinerary now fits the map to that day segment while keeping A/B highlight and segment elevation view',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.12',
+    date: '2026-07-05',
+    items: {
+      zh: [
+        '📈 海拔图最高点/最低点恢复海拔数字标注，但仍保留红蓝颜色区分并取消左侧高低轴标',
+        '📅 行程分段进入时自动复位视野，并从已有 day_meta / dayId 恢复分段点；无天数信息时默认起点与终点',
+        '✂ 行程分段支持点击任意位置插入边界、拖动边界调整，并可在列表中指定删除某一天',
+        '🐛 修复 Day 1 预览在没有显式 dayId 时误把整条轨迹当作第一天的问题，优先使用 day_meta 范围',
+      ],
+      en: [
+        '📈 Elevation high/low points show elevation numbers again while keeping red/blue distinction and no left-side high/low axis labels',
+        '📅 Segment mode now resets the viewport on entry and restores boundaries from day_meta/day IDs, defaulting to start/end when no day data exists',
+        '✂ Segment mode can insert boundaries by clicking, drag boundaries to adjust them, and delete a specific day from the list',
+        '🐛 Fixed Day 1 preview treating the entire trail as day one when no explicit day IDs exist, preferring day_meta ranges instead',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.11',
+    date: '2026-07-04',
+    items: {
+      zh: [
+        '🎨 天数模式按天分色改为更柔和且区分度更高的新色板，并同步到分段预览与行程导出',
+        '📍 海拔图最高点/最低点改为仅用红蓝色点区分，取消数值文字与左侧高低海拔轴标',
+        '📏 测距 A/B 海拔固定贴在端点左右，里程放在“测距路段 · A → B”右侧，移除“已测量”等状态文字',
+        '⇄ 测距浮动面板新增“反向”按钮，可交换 A/B 并重新计算方向性的爬升/下降',
+        '🐛 修复行程页点击 Day 1 可能高亮错误轨迹段：优先使用当前轨迹点 dayId，再回退 day_meta 索引',
+      ],
+      en: [
+        '🎨 Day coloring now uses a softer, more distinguishable palette shared by day mode, segment preview, and itinerary export',
+        '📍 Elevation high/low points are now color-only dots, with numeric labels and left-side high/low axis labels removed',
+        '📏 Measure A/B elevations are pinned to the endpoint sides, distance sits next to “Measure segment · A → B”, and measured-status text is removed',
+        '⇄ The measure floating panel now has a Reverse button that swaps A/B and recalculates directional ascent/descent',
+        '🐛 Fixed itinerary Day 1 preview selecting the wrong segment by preferring current track day IDs before day_meta indexes',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.10',
+    date: '2026-07-04',
+    items: {
+      zh: [
+        '📈 测距信息不再堆成海拔图内的聚合框：A/B、最高点、最低点改为直接标注在海拔曲线对应位置',
+        '📏 测距里程独立显示在海拔图左上，爬升/下降统一使用海拔图右上统计位，整体更像图表原生信息',
+      ],
+      en: [
+        '📈 Measure details no longer use a bundled overlay box: A/B, high point, and low point are labeled directly on the elevation curve',
+        '📏 Measure distance is shown separately in the chart header while ascent/descent reuse the chart stats area for a more native chart layout',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.9',
+    date: '2026-07-04',
+    items: {
+      zh: [
+        '📅 行程页每日卡片重排为更清晰的摘要卡，突出路线、距离、爬升、下降、高低海拔与扎营点',
+        '🗺 天数模式入口从轨迹页移除，点击“行程”页时自动切换为按天分色，离开后回到此前的海拔/标注点模式',
+        '📍 海拔模式作为默认显示时保留水源、补给、桥河、起终点等核心标注，避免默认可读性下降',
+      ],
+      en: [
+        '📅 Daily itinerary cards are redesigned as clearer summary cards highlighting route, distance, ascent, descent, elevation range, and camp',
+        '🗺 Days mode is removed from the Trails tab and now activates automatically when opening the Itinerary tab, then restores the previous elevation/waypoint mode when leaving',
+        '📍 Elevation mode now keeps core waypoint types visible by default, including water, supply, bridge/river, start, and end markers',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.8',
+    date: '2026-07-04',
+    items: {
+      zh: [
+        '📏 测距浮动面板精简为“重新选点 / 退出”两个按钮，减少地图遮挡',
+        '📈 测距提示与里程、爬升、下降、A/B 海拔、段内最高等信息移入海拔图内部显示',
+        '📝 明确日程标注点逻辑：只使用主轨迹已吸附/落入当天范围的关键标注类型，不直接吸附其他轨迹点',
+      ],
+      en: [
+        '📏 Measure floating panel is reduced to only Reset and Exit buttons to reduce map obstruction',
+        '📈 Measure hints and stats now live inside the elevation chart: distance, ascent, descent, A/B elevation, and segment max elevation',
+        '📝 Clarified itinerary waypoint logic: it uses key waypoint types attached to the primary trail/day range, not arbitrary points from other trails',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.7',
+    date: '2026-07-04',
+    items: {
+      zh: [
+        '🎛 顶部工具栏去掉外层浅色背景，移除“缓存”入口，并重排为两行五列按钮',
+        '⚡ 测距与分段进入时自动切到标注点模式，避免海拔模式下多轨迹渐变分段带来的拖动卡顿',
+        '📅 行程页每日卡片补充最低海拔，并支持点击每日信息栏高亮对应当天轨迹与海拔剖面',
+        '🔎 地图 +/- 缩放按钮步进调大为 1 级，保留 0.5 级吸附以兼顾滚轮与触控板缩放',
+        '📝 README 补充 Vite + TypeScript + 模块化工程化实施方案与发布仍输出静态 HTML 的迁移路线',
+      ],
+      en: [
+        '🎛 The top toolbar no longer has an outer light background, removes the Cache entry, and uses a two-row five-column layout',
+        '⚡ Measure and segment tools now switch to waypoint mode on entry, avoiding drag lag from multi-trail elevation-gradient rendering',
+        '📅 Daily itinerary cards now include minimum elevation and can highlight that day’s map segment plus elevation profile when clicked',
+        '🔎 Map +/- zoom buttons now step by 1 level while retaining 0.5 snapping for wheel and trackpad zooming',
+        '📝 README now documents the Vite + TypeScript + modularization plan while keeping static HTML release output',
+      ]
+    }
+  },
+  {
+    version: 'v1.31.6',
+    date: '2026-07-04',
+    items: {
+      zh: [
+        '🎛 顶部工具栏改为三行固定网格：帮助/复位，测距/分段/标注/下撤/反向，轨迹/导出/缓存/清空',
+        '💾 顶部存储入口改名为“缓存”，按钮名称与当前功能表达保持一致',
+        '📈 海拔图支持拖动并记忆位置，双击拖动手柄可恢复默认左下角，减少复位后遮挡轨迹的问题',
+        '📏 测距浮动栏支持拖动并记忆位置，双击标题行恢复默认居中位置，避免遮挡当前测距路段',
+      ],
+      en: [
+        '🎛 Top toolbar now uses a fixed three-row grid: help/reset, measure/segment/mark/escape/reverse, trail/export/cache/clear',
+        '💾 The storage entry is renamed to “Cache” for a shorter, clearer toolbar label',
+        '📈 Elevation chart is draggable with remembered position; double-click the drag grip to restore the default bottom-left placement',
+        '📏 Measure panel is draggable with remembered position; double-click the title row to restore its default centered placement',
+      ]
+    }
+  },
   {
     version: 'v1.31.5',
     date: '2026-07-04',
@@ -3476,7 +3725,7 @@ const state = {
   // 每个显示模式独立的标注点类型可见集合
   modeVisibleTags: {
     day: new Set(['start','end','camp','pass','water','supply','bridge','river','highpoint']),
-    elev: new Set(['start','end','camp','pass']),
+    elev: new Set(['start','end','camp','pass','water','supply','bridge','river']),
     // v1.14.1：标注点模式默认包含 pass（垭口是最关键的对比要素之一）
     waypoint: new Set(['camp','pass','water','supply']),
   },
@@ -3488,7 +3737,7 @@ const state = {
   showTrack: true,
   showLabel: true,
   showHighPoint: true,
-  mode: 'day',
+  mode: 'elev',
   baseLayer: 'sat',
   activeEscape: null,
 };
@@ -3636,9 +3885,9 @@ const map = L.map('map', {
   center: [29.74, 99.65], zoom: 11,
   zoomControl: true, attributionControl: true,
   dragging: true, tap: false, touchZoom: true,  // v1.27.0：关闭 L.Tap 消除触屏 tap 延迟
-  // v1.22.0：更细粒度的缩放控制
-  zoomSnap: 0.25,            // 缩放对齐到 0.25 级（默认 1）
-  zoomDelta: 0.5,            // +/- 按钮和键盘每次变化 0.5 级（默认 1）
+  // v1.31.7：+/- 按钮步进调大，滚轮仍保持半级吸附
+  zoomSnap: 0.5,             // 缩放对齐到 0.5 级
+  zoomDelta: 1,              // +/- 按钮和键盘每次变化 1 级（更快放大/缩小）
   wheelPxPerZoomLevel: 120,  // 滚轮每 120px 触发 1 级缩放，比默认 60 更平滑
   wheelDebounceTime: 40,     // 滚轮防抖（默认 40，保留）
   // v1.25.0：关闭双击缩放，消除 Leaflet 内部 200ms click 延迟
@@ -3652,7 +3901,7 @@ map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank
   // 关键：套上 leaflet-control-attribution 类，自动继承同款 background/font-size/padding/line-height
   tag.className = 'leaflet-control-attribution';
   tag.id = 'version-tag-float';
-  tag.innerHTML = '<a href="javascript:void(0)" id="version-tag-link" title="点击查看更新日志">v1.31.5</a>';
+  tag.innerHTML = '<a href="javascript:void(0)" id="version-tag-link" title="点击查看更新日志">v1.31.13</a>';
   // 仅覆盖定位相关；样式继承自 .leaflet-control-attribution
   tag.style.position = 'absolute';
   tag.style.zIndex = '600';
@@ -3729,8 +3978,8 @@ function recomputeElevRange() {
 }
 
 /* ============ Color helpers ============ */
-// 天数分色（杂志风：苔绿/砖红/赭石/沙金/灰蓝/紫黛/暮粉）
-const dayPalette = ['#3F5238','#A8543C','#B8895C','#A88528','#6E7E7A','#5E5468','#A66E6E'];
+// 天数分色：柔和但有区分度，适合卫星图与米色面板上的连续天数阅读
+const dayPalette = ['#2F6B5F','#D96C4A','#E1A93B','#5577B8','#8A6BBE','#C45D83','#5E9F65','#C58B54'];
 
 function elevColor(e) {
   const t = Math.max(0, Math.min(1, (e - minE) / (maxE - minE)));
@@ -4027,9 +4276,9 @@ function showHelp() {
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">🎨 显示模式</h4>
     <ul style="padding-left:18px;margin:6px 0">
-      <li><b>天数模式</b>：每天用不同颜色，看分段</li>
       <li><b>海拔模式</b>：蓝→红表示低→高，看起伏</li>
       <li><b>标注点模式</b>：主轨迹海拔渐变 + 其他轨迹浅虚线，勾选类别标注点对比显示</li>
+      <li><b>行程页</b>：点击“行程”后地图自动按天分色</li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">🛠 顶部按钮</h4>
@@ -4042,7 +4291,6 @@ function showHelp() {
       <li><b>📍 标注</b>：在主轨迹附近点选新增手动标注点</li>
       <li><b>⚡ 下撤</b>：手动选择 A/B 生成下撤路线</li>
       <li><b>+ 轨迹</b>：上传新 KML</li>
-      <li><b>💾 存储</b>：查看浏览器存储用量，请求持久化</li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">📏 测距工具</h4>
@@ -4050,8 +4298,8 @@ function showHelp() {
       <li>点 <b>📏 测距</b> 进入测距模式（鼠标变十字准线）</li>
       <li>在地图主轨迹上点击 <b>A 点</b>，再点击 <b>B 点</b></li>
       <li>也可以直接 <b>点击右下角海拔图</b> 在地图上定位对应点</li>
-      <li>面板显示：里程 / ↑爬升 / ↓下降 / 起终海拔 / 方向</li>
-      <li><b>⇄ 交换 A/B</b>：反向计算；<b>🔄 重新选点</b>：重置；<b>✕ 退出</b>：退出</li>
+      <li>海拔图内直接标注 <b>A/B</b> 海拔，最高点/最低点仅用红蓝点区分；里程单独显示，爬升/下降使用右上统计位</li>
+      <li>测距浮动按钮保留 <b>🔄 重新选点</b>、<b>⇄ 反向</b> 与 <b>✕ 退出</b></li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">⇄ 轨迹反向</h4>
@@ -4062,11 +4310,11 @@ function showHelp() {
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">📊 右下角海拔图</h4>
     <ul style="padding-left:18px;margin:6px 0">
-      <li>默认显示主轨迹完整海拔剖面（右下角悬浮卡片）</li>
+      <li>默认显示主轨迹完整海拔剖面（左下角悬浮卡片）</li>
       <li>测距模式选完 A/B 后自动切换为 <b>路段海拔图</b>，退出恢复</li>
       <li>图内 <b>Hover</b>：十字准线 + 里程/海拔/爬升提示</li>
       <li>图内 <b>点击</b>：地图标记并 panTo 对应轨迹点（3 秒消失）</li>
-      <li>右下角显示当前路段 <b>↑爬升 / ↓下降</b> 总量</li>
+      <li>图内显示当前路段 <b>↑爬升 / ↓下降</b> 与测距结果</li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">📍 标注点交互</h4>
@@ -4106,9 +4354,9 @@ function showHelp() {
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">🎨 Display Modes</h4>
     <ul style="padding-left:18px;margin:6px 0">
-      <li><b>Days</b>: different color per day</li>
       <li><b>Elevation</b>: blue→red = low→high</li>
       <li><b>Waypoints</b>: main trail elevation gradient, others dashed</li>
+      <li><b>Itinerary</b>: opening the Itinerary tab automatically colors the map by day</li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">🛠 Top Buttons</h4>
@@ -4121,7 +4369,6 @@ function showHelp() {
       <li><b>📍 Mark</b>: add a manual waypoint near the primary trail</li>
       <li><b>⚡ Escape</b>: manually pick A/B for an escape route</li>
       <li><b>+ Trail</b>: upload new KML</li>
-      <li><b>💾 Storage</b>: usage / persistence</li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">📏 Measure Tool</h4>
@@ -4129,8 +4376,8 @@ function showHelp() {
       <li>Click <b>📏 Measure</b> → crosshair cursor</li>
       <li>Click <b>point A</b> then <b>point B</b> on the main trail</li>
       <li>Or click the <b>elevation chart</b> to pan to any point</li>
-      <li>Panel shows: distance / ↑ascent / ↓descent / elevations / direction</li>
-      <li><b>⇄ Swap A/B</b>: reverse; <b>🔄 Reset</b>: clear; <b>✕ Exit</b>: quit</li>
+      <li>The elevation chart labels <b>A/B</b> elevations directly; high and low points are color dots only, with distance separate and ascent/descent in the top-right stats</li>
+      <li>The measure floating controls only keep <b>🔄 Reset</b> and <b>✕ Exit</b></li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">⇄ Reverse Trail</h4>
@@ -4145,7 +4392,7 @@ function showHelp() {
       <li>In measure mode with A+B: switches to <b>segment view</b>, restores on exit</li>
       <li><b>Hover</b>: crosshair + km / elev / cumulative ascent tooltip</li>
       <li><b>Click</b>: map marker + panTo corresponding point (3s auto-remove)</li>
-      <li>Bottom-right shows <b>↑ascent / ↓descent</b> for current view</li>
+      <li>The chart shows <b>↑ascent / ↓descent</b> plus measure stats for the current view</li>
     </ul>
 
     <h4 style="color:var(--accent);margin:12px 0 6px;font-size:13px">📍 Waypoints</h4>
@@ -4547,6 +4794,149 @@ function buildPrimaryMini() {
   `;
   applyPrimaryMiniPosition(mini);
   bindPrimaryMiniDrag(mini);
+}
+
+function floatingBoundaryRect(mode) {
+  if(mode === 'map') {
+    const mapEl = document.getElementById('map');
+    if(mapEl) return mapEl.getBoundingClientRect();
+  }
+  return { left:0, top:0, width:window.innerWidth, height:window.innerHeight };
+}
+
+function floatingStyleOriginRect(el) {
+  if(!el || !el.offsetParent) return { left:0, top:0 };
+  return el.offsetParent.getBoundingClientRect();
+}
+
+function clampFloatingPanelPosition(el, left, top, mode) {
+  const rect = el.getBoundingClientRect();
+  const bounds = floatingBoundaryRect(mode);
+  const margin = 8;
+  const w = rect.width || el.offsetWidth || 300;
+  const h = rect.height || el.offsetHeight || 120;
+  const maxLeft = Math.max(margin, bounds.width - w - margin);
+  const maxTop = Math.max(margin, bounds.height - h - margin);
+  return {
+    left: Math.min(Math.max(margin, left), maxLeft),
+    top: Math.min(Math.max(margin, top), maxTop),
+  };
+}
+
+function setFloatingPanelStyle(el, pos, mode) {
+  const bounds = floatingBoundaryRect(mode);
+  const origin = floatingStyleOriginRect(el);
+  el.style.left = (bounds.left - origin.left + pos.left) + 'px';
+  el.style.top = (bounds.top - origin.top + pos.top) + 'px';
+  el.style.right = 'auto';
+  el.style.bottom = 'auto';
+  el.style.transform = 'none';
+}
+
+function applyFloatingPanelPosition(el, opts) {
+  if(!el || !opts || !opts.storageKey) return;
+  try {
+    const raw = localStorage.getItem(opts.storageKey);
+    if(!raw) return;
+    const pos = JSON.parse(raw);
+    if(!pos || !isFinite(pos.left) || !isFinite(pos.top)) return;
+    const p = clampFloatingPanelPosition(el, pos.left, pos.top, opts.mode);
+    setFloatingPanelStyle(el, p, opts.mode);
+  } catch(e) {}
+}
+
+function resetFloatingPanelPosition(el, opts) {
+  if(!el || !opts) return;
+  try { if(opts.storageKey) localStorage.removeItem(opts.storageKey); } catch(e) {}
+  const defaults = opts.defaultStyle || {};
+  ['left','right','top','bottom','transform'].forEach(k => {
+    el.style[k] = defaults[k] != null ? defaults[k] : '';
+  });
+}
+
+function bindFloatingPanelDrag(el, opts) {
+  if(!el || el._floatingDragBound) return;
+  el._floatingDragBound = true;
+  const handle = opts.handleSelector ? el.querySelector(opts.handleSelector) : el;
+  if(!handle) return;
+  let drag = null;
+  el._applyFloatingPosition = () => applyFloatingPanelPosition(el, opts);
+  el._resetFloatingPosition = () => resetFloatingPanelPosition(el, opts);
+  if(typeof L !== 'undefined' && L.DomEvent) {
+    L.DomEvent.disableClickPropagation(el);
+    L.DomEvent.disableScrollPropagation(el);
+  }
+
+  handle.addEventListener('pointerdown', e => {
+    if(e.button !== undefined && e.button !== 0) return;
+    if(e.target && e.target.closest && e.target.closest('button,a,input,textarea,select')) return;
+    const bounds = floatingBoundaryRect(opts.mode);
+    const rect = el.getBoundingClientRect();
+    drag = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      left: rect.left - bounds.left,
+      top: rect.top - bounds.top,
+      moved: false,
+    };
+    handle.setPointerCapture && handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  handle.addEventListener('pointermove', e => {
+    if(!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if(!drag.moved && Math.hypot(dx, dy) < 4) return;
+    drag.moved = true;
+    el.classList.add('floating-dragging');
+    const p = clampFloatingPanelPosition(el, drag.left + dx, drag.top + dy, opts.mode);
+    setFloatingPanelStyle(el, p, opts.mode);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  const finish = e => {
+    if(!drag || e.pointerId !== drag.id) return;
+    const moved = drag.moved;
+    drag = null;
+    el.classList.remove('floating-dragging');
+    try { handle.releasePointerCapture && handle.releasePointerCapture(e.pointerId); } catch(err) {}
+    e.preventDefault();
+    e.stopPropagation();
+    if(moved && opts.storageKey) {
+      const bounds = floatingBoundaryRect(opts.mode);
+      const rect = el.getBoundingClientRect();
+      const p = clampFloatingPanelPosition(el, rect.left - bounds.left, rect.top - bounds.top, opts.mode);
+      try { localStorage.setItem(opts.storageKey, JSON.stringify({left:Math.round(p.left), top:Math.round(p.top)})); } catch(err) {}
+    }
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', finish);
+  handle.addEventListener('dblclick', e => {
+    if(e.target && e.target.closest && e.target.closest('button,a,input,textarea,select')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resetFloatingPanelPosition(el, opts);
+  });
+  applyFloatingPanelPosition(el, opts);
+}
+
+function initFloatingPanelPositions() {
+  bindFloatingPanelDrag(document.getElementById('elev-bar'), {
+    storageKey: 'hiking_elev_bar_pos',
+    mode: 'map',
+    handleSelector: '[data-panel-drag]',
+    defaultStyle: { left:'14px', right:'auto', top:'auto', bottom:'28px', transform:'' },
+  });
+  bindFloatingPanelDrag(document.getElementById('measure-panel'), {
+    storageKey: 'hiking_measure_panel_pos',
+    mode: 'viewport',
+    handleSelector: '[data-panel-drag]',
+    defaultStyle: { left:'50%', right:'auto', top:'80px', bottom:'auto', transform:'translateX(-50%)' },
+  });
 }
 
 // 更新当前模式 · 标注点 标题
@@ -5039,6 +5429,124 @@ function buildFilterGrid() {
   });
 }
 
+const dayPreviewState = {
+  active: false,
+  layer: null,
+  trailId: null,
+  day: null,
+  iStart: null,
+  iEnd: null,
+};
+
+function getDayIndexRange(trail, dm) {
+  if(!trail || !trail.track || !trail.track.length || !dm) return null;
+  const n = trail.track.length;
+  const isValidIdx = v => Number.isInteger(v) && v >= 0 && v < n;
+  if(isValidIdx(dm.i_start) && isValidIdx(dm.i_end)) {
+    return { iStart: Math.min(dm.i_start, dm.i_end), iEnd: Math.max(dm.i_start, dm.i_end) };
+  }
+  let first = -1, last = -1;
+  let hasExplicitDayId = false;
+  for(let i=0; i<n; i++) {
+    const dayId = Number(trail.track[i][5]);
+    if(Number.isInteger(dayId) && dayId > 0) {
+      hasExplicitDayId = true;
+      if(dayId === dm.d) {
+        if(first < 0) first = i;
+        last = i;
+      }
+    }
+  }
+  if(hasExplicitDayId && first >= 0 && last >= first) return { iStart:first, iEnd:last };
+  if(trail.day_meta && typeof dm.km === 'number') {
+    let prevKm = 0;
+    for(const item of trail.day_meta) {
+      if(item === dm || item.d === dm.d) break;
+      prevKm += Number(item.km) || 0;
+    }
+    const endKm = prevKm + (Number(dm.km) || 0);
+    first = trail.track.findIndex(p => (p[3] || 0) >= prevKm - 0.02);
+    last = -1;
+    for(let i=n-1; i>=0; i--) {
+      if((trail.track[i][3] || 0) <= endKm + 0.02) { last = i; break; }
+    }
+    if(first >= 0 && last >= first) return { iStart:first, iEnd:last };
+  }
+  return null;
+}
+
+function computeDayRangeStats(trail, range) {
+  if(!trail || !range) return null;
+  const i1 = Math.max(0, Math.min(range.iStart, range.iEnd));
+  const i2 = Math.min(trail.track.length - 1, Math.max(range.iStart, range.iEnd));
+  if(i2 < i1) return null;
+  const cache = getMeasureStatsCache(trail);
+  let minE = Infinity, maxE = -Infinity;
+  for(let i=i1; i<=i2; i++) {
+    const e = trail.track[i][2] || 0;
+    if(e < minE) minE = e;
+    if(e > maxE) maxE = e;
+  }
+  if(cache) {
+    return {
+      km: Math.abs((cache.distCum[i2] || 0) - (cache.distCum[i1] || 0)),
+      asc: Math.max(0, (cache.ascCum[i2] || 0) - (cache.ascCum[i1] || 0)),
+      desc: Math.max(0, (cache.descCum[i2] || 0) - (cache.descCum[i1] || 0)),
+      max: maxE,
+      min: minE,
+    };
+  }
+  return segmentStats(i1, i2);
+}
+
+function clearDaySegmentPreview(opts = {}) {
+  if(dayPreviewState.layer) dayPreviewState.layer.clearLayers();
+  dayPreviewState.active = false;
+  dayPreviewState.trailId = null;
+  dayPreviewState.day = null;
+  dayPreviewState.iStart = null;
+  dayPreviewState.iEnd = null;
+  document.querySelectorAll('.day-preview-target.active').forEach(el => el.classList.remove('active'));
+  if(!measureState.active) hideMeasureElevReadout();
+  if(!opts.silent && typeof refreshElevBar === 'function') refreshElevBar();
+}
+
+function showDaySegmentPreview(trail, dm) {
+  const range = getDayIndexRange(trail, dm);
+  if(!range) { showToast('这一天缺少可定位的轨迹范围', 'error'); return; }
+  if(measureState.active || (typeof segmentState !== 'undefined' && segmentState.active)) {
+    showToast('请先退出测距/分段，再预览每日轨迹', 'info');
+    return;
+  }
+  if(dayPreviewState.active && dayPreviewState.trailId === trail.id && dayPreviewState.day === dm.d) {
+    clearDaySegmentPreview();
+    return;
+  }
+  if(!dayPreviewState.layer) dayPreviewState.layer = L.layerGroup().addTo(map);
+  clearDaySegmentPreview({silent:true});
+  const latlngs = buildTrackLatLngs(trail.track, range.iStart, range.iEnd, 1200);
+  if(latlngs.length < 2) return;
+  L.polyline(latlngs, { color:'#fbbf24', weight:6, opacity:0.9, interactive:false }).addTo(dayPreviewState.layer);
+  map.fitBounds(L.latLngBounds(latlngs), { padding:[60,60] });
+  const start = trail.track[range.iStart];
+  const end = trail.track[range.iEnd];
+  measureMarker(start[0], start[1], 'A', '#22c55e').addTo(dayPreviewState.layer);
+  measureMarker(end[0], end[1], 'B', '#ef4444').addTo(dayPreviewState.layer);
+  dayPreviewState.active = true;
+  dayPreviewState.trailId = trail.id;
+  dayPreviewState.day = dm.d;
+  dayPreviewState.iStart = range.iStart;
+  dayPreviewState.iEnd = range.iEnd;
+  document.querySelectorAll(`[data-day-preview="${dm.d}"]`).forEach(el => el.classList.add('active'));
+  const stats = computeDayRangeStats(trail, range);
+  const distEl = document.getElementById('m-dist');
+  const distBox = document.getElementById('measure-distance');
+  if(distEl && stats) distEl.textContent = Number(stats.km || 0).toFixed(1) + ' km';
+  if(distBox) distBox.classList.add('active');
+  setMeasureElevHint('');
+  if(typeof refreshElevBar === 'function') refreshElevBar();
+}
+
 function buildDaysTab() {
   const tab = document.getElementById('tab-days');
   tab.innerHTML = '';
@@ -5046,8 +5554,17 @@ function buildDaysTab() {
   const trail = DATA.trails.find(t => t.id === state.primaryTrailId);
   if(!trail) return;
   const trailHdr = document.createElement('div');
-  trailHdr.className = 'section';
-  trailHdr.innerHTML = `<h3 style="color:${trail.color}">★ ${trail.name}（主轨迹）</h3>`;
+  trailHdr.className = 'days-summary';
+  const totalDays = trail.day_meta && trail.day_meta.length ? trail.day_meta.length : (trail.days || 0);
+  trailHdr.innerHTML = `
+    <h3 style="color:${trail.color}">★ ${trail.name}（主轨迹）</h3>
+    <div class="days-summary-meta">
+      <span>${totalDays || '-'} 天</span>
+      <span>${trail.stats && trail.stats.distance_km != null ? trail.stats.distance_km : '-'} km</span>
+      <span>↑ ${trail.stats && trail.stats.ascent_m != null ? trail.stats.ascent_m : '-'} m</span>
+      <span>最高 ${trail.stats && trail.stats.max_elev != null ? trail.stats.max_elev : '-'} m</span>
+    </div>
+  `;
   tab.appendChild(trailHdr);
 
   // v1.26.0：若无 day_meta，显示占位提示
@@ -5060,9 +5577,17 @@ function buildDaysTab() {
   }
 
   trail.day_meta.forEach((dm, dIdx) => {
+      const range = getDayIndexRange(trail, dm);
+      const computed = computeDayRangeStats(trail, range) || {};
+      const dayKm = Number.isFinite(Number(dm.km)) ? Number(dm.km) : (computed.km || 0);
+      const dayAsc = Number.isFinite(Number(dm.asc)) ? Number(dm.asc) : (computed.asc || 0);
+      const dayDesc = Number.isFinite(Number(dm.desc)) ? Number(dm.desc) : (computed.desc || 0);
+      const dayMax = Number.isFinite(Number(dm.max)) ? Number(dm.max) : (computed.max || 0);
+      const dayMin = Number.isFinite(Number(dm.min)) ? Number(dm.min) : (computed.min || 0);
       const dayWps = trail.waypoints.filter(w => {
         // v1.27.0：优先用 wp.day 字段；否则用 day_meta cumulative km 划分
         if(w.day != null) return w.day === dm.d;
+        if(range && w.gps_idx != null) return w.gps_idx >= range.iStart && w.gps_idx <= range.iEnd;
         let prevKm = 0;
         for(let i=0;i<dIdx;i++) prevKm += trail.day_meta[i].km;
         const endKm = prevKm + dm.km;
@@ -5070,27 +5595,45 @@ function buildDaysTab() {
       });
       const block = document.createElement('div');
       block.className = 'day-block';
-      const color = dayPalette[dIdx % 4];
+      const color = dayPalette[dIdx % dayPalette.length];
+      const routeText = dm.seg || ((dayKm || '-') + 'km · ↑' + (Math.round(dayAsc) || '-') + ' · ↓' + (Math.round(dayDesc) || '-') + ' · ⛰' + (Math.round(dayMax) || '-'));
+      const campName = dm.camp || '未设置扎营点';
+      const campElevNum = (dm.camp_elev == null || dm.camp_elev === '') ? NaN : Number(dm.camp_elev);
+      const campElevText = Number.isFinite(campElevNum) ? Math.round(campElevNum) + ' m' : '-';
+      block.style.setProperty('--day-color', color);
       block.innerHTML = `
         <div class="day-hdr" data-toggle>
-          <span class="day-tag" style="background:${color};color:var(--bg-0)">D${dm.d}</span>
-          <span class="day-title">${dm.km}km · ↑${dm.asc}m · 顶${dm.max}m</span>
+          <span class="day-tag">D${dm.d}</span>
+          <span class="day-head-main">
+            <span class="day-route">${routeText}</span>
+            <span class="day-title">${dayKm.toFixed(1)} km · ↑${Math.round(dayAsc)} m · ↓${Math.round(dayDesc)} m</span>
+          </span>
           <span class="day-meta">▾</span>
         </div>
         <div class="day-body open">
-          <div class="day-seg">📍 ${dm.seg || ((dm.km||'-')+'km · ↑'+(dm.asc||'-')+' · ↓'+(dm.desc||'-')+' · ⛰'+(dm.max||'-'))}</div>
-          <div class="day-stats">
-            <span class="lab">距离</span><span class="val">${dm.km} km</span>
-            <span class="lab">爬升</span><span class="val">${dm.asc} m</span>
-            <span class="lab">最高</span><span class="val">${dm.max} m</span>
-            <span class="lab">营地</span><span class="val">${dm.camp_elev} m</span>
+          <div class="day-seg day-preview-target" data-day-preview="${dm.d}" title="点击高亮当天轨迹">
+            <span class="ic">📍</span><span>${routeText}</span>
           </div>
-          <div style="font-size:10px;color:var(--text-muted);margin:4px 0">🏕 ${dm.camp}</div>
+          <div class="day-stats day-preview-target" data-day-preview="${dm.d}" title="点击高亮当天轨迹">
+            <span class="lab">距离</span><span class="val">${dayKm.toFixed(1)} km</span>
+            <span class="lab">当日爬升</span><span class="val">${Math.round(dayAsc)} m</span>
+            <span class="lab">当日下降</span><span class="val">${Math.round(dayDesc)} m</span>
+            <span class="lab">最高海拔</span><span class="val">${Math.round(dayMax)} m</span>
+            <span class="lab">最低海拔</span><span class="val">${Math.round(dayMin)} m</span>
+            <span class="lab">扎营点</span><span class="val">${campElevText}</span>
+          </div>
+          <div class="day-camp"><span>🏕</span><span>扎营点</span><b>${campName}</b><em>${campElevText}</em></div>
           <button class="day-evac-btn" data-trail="${trail.id}" data-day="${dm.d}">⚡ 下撤方案</button>
           <div class="wp-list"></div>
         </div>
       `;
       tab.appendChild(block);
+      block.querySelectorAll('.day-preview-target').forEach(el => {
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          showDaySegmentPreview(trail, dm);
+        });
+      });
       const list = block.querySelector('.wp-list');
       // v1.27.0：行程 tab 固定显示这几类关键信息（不受 filter 影响）
       const DAYTAB_TAGS = new Set(['camp','pass','water','supply','bridge','river','village','shelter','warn','fork','start','end','highpoint']);
@@ -5207,12 +5750,22 @@ function buildLegend() {
 
 /* ============ Wire up controls ============ */
 // tabs
+let lastNonDayMode = state.mode === 'day' ? 'elev' : state.mode;
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
+    const tabName = t.dataset.tab;
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
-    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+    document.getElementById('tab-'+tabName).classList.add('active');
+    if(tabName === 'days') {
+      if(state.mode !== 'day') lastNonDayMode = state.mode;
+      setMapMode('day');
+    } else if(state.mode === 'day') {
+      if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
+      setMapMode(lastNonDayMode || 'elev');
+      if(typeof refreshElevBar === 'function') refreshElevBar();
+    }
   });
 });
 
@@ -5230,26 +5783,37 @@ document.addEventListener('click', e => {
   }
 });
 
+function setMapMode(mode, opts = {}) {
+  document.querySelectorAll('[data-mode]').forEach(x => {
+    x.classList.toggle('on', x.dataset.mode === mode);
+  });
+  state.mode = mode;
+  if(mode !== 'day') lastNonDayMode = mode;
+  // 标注点模式下显示 tag 选择面板，并确保已渲染按钮
+  const wpModePanel = document.getElementById('waypoint-mode-tags');
+  if(wpModePanel) {
+    wpModePanel.style.display = state.mode === 'waypoint' ? 'block' : 'none';
+    if(state.mode === 'waypoint') {
+      // 防御性重渲染（避免在某些时序下 grid 为空）
+      try { buildWaypointModeTagGrid(); } catch(e) {}
+    }
+  }
+  // 切换模式后更新模式·标注点 标题 + 重建 filter-grid（visibleTags 现在是该模式独立 Set）
+  if(typeof updateModeTagTitle === 'function') updateModeTagTitle();
+  if(typeof buildFilterGrid === 'function') buildFilterGrid();
+  drawTracks(); drawWaypoints(); buildLegend();
+  if(opts.toast) showToast(opts.toast, 'info');
+}
+
+function enterInteractionRenderMode(toolName) {
+  if(state.mode !== 'waypoint') {
+    setMapMode('waypoint', { toast: `${toolName}已切换到标注点模式以提升拖动流畅度` });
+  }
+}
+
 // mode buttons
 document.querySelectorAll('[data-mode]').forEach(b => {
-  b.addEventListener('click', () => {
-    document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('on'));
-    b.classList.add('on');
-    state.mode = b.dataset.mode;
-    // 标注点模式下显示 tag 选择面板，并确保已渲染按钮
-    const wpModePanel = document.getElementById('waypoint-mode-tags');
-    if(wpModePanel) {
-      wpModePanel.style.display = state.mode === 'waypoint' ? 'block' : 'none';
-      if(state.mode === 'waypoint') {
-        // 防御性重渲染（避免在某些时序下 grid 为空）
-        try { buildWaypointModeTagGrid(); } catch(e) {}
-      }
-    }
-    // 切换模式后更新模式·标注点 标题 + 重建 filter-grid（visibleTags 现在是该模式独立 Set）
-    if(typeof updateModeTagTitle === 'function') updateModeTagTitle();
-    if(typeof buildFilterGrid === 'function') buildFilterGrid();
-    drawTracks(); drawWaypoints(); buildLegend();
-  });
+  b.addEventListener('click', () => setMapMode(b.dataset.mode));
 });
 
 // 标注点模式：tag 选择按钮
@@ -5984,6 +6548,8 @@ function measureEnter() {
     showToast('请先设置主轨迹', 'error');
     return;
   }
+  enterInteractionRenderMode('测距');
+  clearDaySegmentPreview({silent:true});
   measureState.active = true;
   // v1.28.0：诊断日志（默认关闭，PERF_DEBUG=true 打开）
   if(window.PERF_DEBUG === true) {
@@ -5997,9 +6563,10 @@ function measureEnter() {
   measureState._computeSeq++;
   if(!measureState.layer) measureState.layer = L.layerGroup().addTo(map);
   clearMeasureLayer();
-  document.getElementById('measure-panel').style.display = 'block';
-  document.getElementById('measure-result').style.display = 'none';
-  document.getElementById('measure-hint').innerHTML = '在主轨迹上点击 <b style="color:#fbbf24">起点</b>，再点击 <b style="color:#fbbf24">终点</b>。';
+  const measurePanel = document.getElementById('measure-panel');
+  measurePanel.style.display = 'block';
+  if(measurePanel._applyFloatingPosition) measurePanel._applyFloatingPosition();
+  resetMeasureElevReadout('在主轨迹上点击起点，再点击终点。');
   // 改鼠标样式
   map.getContainer().style.cursor = 'crosshair';
   // v1.30.0：加 measure-active 类，让 CSS 关闭所有 SVG path 的命中测试（消除 O(n) 命中检测的浏览器层瓶颈）
@@ -6014,6 +6581,7 @@ function measureExit() {
   measureState._computeSeq++;
   clearMeasureLayer();
   document.getElementById('measure-panel').style.display = 'none';
+  hideMeasureElevReadout();
   map.getContainer().style.cursor = '';
   // v1.30.0：移除 measure-active 类，恢复 SVG path 的命中检测
   map.getContainer().classList.remove('measure-active');
@@ -6028,12 +6596,22 @@ function measureReset() {
   measureState._justDragged = false;
   measureState._computeSeq++;
   clearMeasureLayer();
-  document.getElementById('measure-result').style.display = 'none';
-  document.getElementById('measure-hint').innerHTML = '在主轨迹上点击 <b style="color:#fbbf24">起点</b>，再点击 <b style="color:#fbbf24">终点</b>。';
+  resetMeasureElevReadout('在主轨迹上点击起点，再点击终点。');
   // v1.31.0：复位时把海拔图刷回全轨模式，否则下次 measureCompute 的 refreshElevBar 会与残留状态竞态，出现"选 B 慢"
   if(typeof refreshElevBar === 'function') {
     requestAnimationFrame(() => refreshElevBar());
   }
+}
+
+function measureReverse() {
+  if(!measureState.ptA || !measureState.ptB) {
+    showToast('请先选择 A/B 两点', 'info');
+    return;
+  }
+  const oldA = measureState.ptA;
+  measureState.ptA = measureState.ptB;
+  measureState.ptB = oldA;
+  measureCompute();
 }
 
 function measureMarker(lat, lng, label, color, opts = {}) {
@@ -6055,6 +6633,34 @@ function clearMeasureLayer() {
   }
   if(measureState.layer) measureState.layer.clearLayers();
   measureState.segmentLine = null;
+}
+
+function showMeasureElevReadout() {
+  const dist = document.getElementById('measure-distance');
+  const hint = document.getElementById('measure-hint');
+  if(dist) dist.classList.add('active');
+  if(hint) hint.classList.add('active');
+}
+
+function hideMeasureElevReadout() {
+  const dist = document.getElementById('measure-distance');
+  const hint = document.getElementById('measure-hint');
+  if(dist) dist.classList.remove('active');
+  if(hint) hint.classList.remove('active');
+}
+
+function setMeasureElevHint(html) {
+  const hint = document.getElementById('measure-hint');
+  if(hint) hint.innerHTML = html;
+  if(hint) hint.classList.toggle('active', !!html);
+}
+
+function resetMeasureElevReadout(hintText) {
+  const dist = document.getElementById('measure-distance');
+  const distText = document.getElementById('m-dist');
+  if(dist) dist.classList.remove('active');
+  if(distText) distText.textContent = '-';
+  setMeasureElevHint(hintText || '在主轨迹上点击起点，再点击终点。');
 }
 
 function renderMeasureSegmentLine(maxPoints = 900) {
@@ -6079,24 +6685,20 @@ function updateMeasureReadout(loading = false) {
   const a = measureState.ptA, b = measureState.ptB;
   if(!a || !b) return;
   const dist_el = document.getElementById('m-dist');
-  const asc_el = document.getElementById('m-asc');
-  const desc_el = document.getElementById('m-desc');
-  const eA_el = document.getElementById('m-eA');
-  const eB_el = document.getElementById('m-eB');
-  const max_el = document.getElementById('m-max');
-  eA_el.textContent = Math.round(a.elev) + ' m';
-  eB_el.textContent = Math.round(b.elev) + ' m';
-  document.getElementById('measure-result').style.display = 'block';
+  const ascEl = document.getElementById('elev-stat-asc');
+  const descEl = document.getElementById('elev-stat-desc');
+  showMeasureElevReadout();
   if(loading) {
-    dist_el.textContent = '⋯'; asc_el.textContent = '⋯'; desc_el.textContent = '⋯'; max_el.textContent = '⋯';
+    if(dist_el) dist_el.textContent = '⋯';
+    if(ascEl) ascEl.textContent = '↑⋯';
+    if(descEl) descEl.textContent = '↓⋯';
     return;
   }
   const stats = computeMeasureStats(a, b);
   if(!stats) return;
-  dist_el.textContent = stats.distKm.toFixed(2) + ' km';
-  asc_el.textContent = stats.asc + ' m';
-  desc_el.textContent = stats.desc + ' m';
-  max_el.textContent = stats.maxE + ' m';
+  if(dist_el) dist_el.textContent = stats.distKm.toFixed(2) + ' km';
+  if(ascEl) ascEl.textContent = '↑' + stats.asc + 'm';
+  if(descEl) descEl.textContent = '↓' + stats.desc + 'm';
 }
 
 function queueMeasureLiveUpdate() {
@@ -6117,15 +6719,10 @@ function applyMeasureEndpointHit(label, hit, live = false) {
   if(current && current.idx === pt.idx) return false;
   if(label === 'A') {
     measureState.ptA = pt;
-    document.getElementById('measure-hint').innerHTML = live
-      ? '↻ 正在调整起点（A）。'
-      : '↻ 起点已更新（A）。拖动 A/B 可继续调整。';
   } else {
     measureState.ptB = pt;
-    document.getElementById('measure-hint').innerHTML = live
-      ? '↻ 正在调整终点（B）。'
-      : '↻ 终点已更新（B）。拖动 A/B 可继续调整。';
   }
+  setMeasureElevHint('');
   return true;
 }
 
@@ -6384,9 +6981,9 @@ function measureCompute() {
   addMeasureEndpointMarker(a, 'A', '#22c55e');
   addMeasureEndpointMarker(b, 'B', '#ef4444');
 
-  // 立即先显示"计算中"状态，端点海拔同步刷新。
+  // 立即先显示计算中的数值状态，端点海拔由海拔图标注呈现。
   updateMeasureReadout(true);
-  document.getElementById('measure-hint').textContent = '✓ 已测量。拖动 A/B 可调整，或点「重新选点」。';
+  setMeasureElevHint('');
 
   // ── 计算重活放到下一帧，不阻塞点击 ──
   requestAnimationFrame(() => {
@@ -6428,52 +7025,102 @@ const segmentState = {
   _justDragged: false,
 };
 
+function segmentPointFromTrackIdx(trail, idx) {
+  if(!trail || !trail.track || !trail.track.length) return null;
+  const i = Math.max(0, Math.min(trail.track.length - 1, Math.round(idx || 0)));
+  const p = trail.track[i];
+  return { idx:i, lat:p[0], lng:p[1], elev:p[2] || 0, km:p[3] || 0 };
+}
+
+function segmentIndexesToPoints(trail, indexes) {
+  if(!trail || !trail.track || !trail.track.length) return [];
+  const n = trail.track.length;
+  const clean = Array.from(new Set((indexes || [])
+    .map(v => Math.max(0, Math.min(n - 1, Math.round(Number(v)))))
+    .filter(v => Number.isInteger(v))))
+    .sort((a, b) => a - b);
+  if(clean[0] !== 0) clean.unshift(0);
+  if(clean[clean.length - 1] !== n - 1) clean.push(n - 1);
+  return clean.map(idx => segmentPointFromTrackIdx(trail, idx)).filter(Boolean);
+}
+
+function segmentHasExplicitDayIds(trail) {
+  return !!(trail && trail.track && trail.track.some(p => {
+    const d = Number(p[5]);
+    return Number.isInteger(d) && d > 0;
+  }));
+}
+
+function segmentRangeFromDayMeta(trail, dm) {
+  if(!trail || !trail.track || !trail.track.length || !dm) return null;
+  const n = trail.track.length;
+  const isValidIdx = v => Number.isInteger(v) && v >= 0 && v < n;
+  if(isValidIdx(dm.i_start) && isValidIdx(dm.i_end)) {
+    return { iStart: Math.min(dm.i_start, dm.i_end), iEnd: Math.max(dm.i_start, dm.i_end) };
+  }
+  return getDayIndexRange(trail, dm);
+}
+
+function restoreSegmentStateFromTrail(trail) {
+  segmentState.points = [];
+  segmentState.campEdits = {};
+  if(!trail || !trail.track || !trail.track.length) return;
+  const indexes = [];
+  const meta = (trail.day_meta || []).slice().sort((a, b) => (a.d || 0) - (b.d || 0));
+
+  if(meta.length) {
+    meta.forEach((dm, i) => {
+      const range = segmentRangeFromDayMeta(trail, dm);
+      if(range) {
+        if(i === 0) indexes.push(range.iStart);
+        indexes.push(range.iEnd);
+      }
+      if(dm.camp && dm.camp !== '-') {
+        segmentState.campEdits[dm.d || (i + 1)] = { name: dm.camp, elev: dm.camp_elev || null };
+      }
+    });
+  }
+
+  if(indexes.length < 2 && segmentHasExplicitDayIds(trail)) {
+    let currentDay = Number(trail.track[0][5]) || null;
+    indexes.push(0);
+    for(let i=1; i<trail.track.length; i++) {
+      const d = Number(trail.track[i][5]) || null;
+      if(d && currentDay && d !== currentDay) {
+        indexes.push(i - 1);
+        currentDay = d;
+      } else if(d && !currentDay) {
+        currentDay = d;
+      }
+    }
+    indexes.push(trail.track.length - 1);
+  }
+
+  segmentState.points = segmentIndexesToPoints(trail, indexes.length >= 2 ? indexes : [0, trail.track.length - 1]);
+}
+
 function segmentEnter() {
   const main = DATA.trails.find(t => t.id === state.primaryTrailId);
   if(!main || !main.track || !main.track.length) {
     showToast('请先设置主轨迹', 'error');
     return;
   }
+  enterInteractionRenderMode('分段');
+  clearDaySegmentPreview({silent:true});
   // 与测距互斥
   if(measureState.active) measureExit();
   if(typeof addEscapeState !== 'undefined' && addEscapeState.active && typeof addEscapeExit === 'function') addEscapeExit();
 
   segmentState.active = true;
-  segmentState.points = [];
-  segmentState.campEdits = {};
   if(!segmentState.layer) segmentState.layer = L.layerGroup().addTo(map);
   segmentState.layer.clearLayers();
-
-  // 预填充：如果 main.day_meta 已有数据，尝试从 track dayId 恢复分段点
-  if(main.day_meta && main.day_meta.length && main.track[0].length >= 6) {
-    const dayIds = main.track.map(p => p[5] || 1);
-    let curDay = dayIds[0];
-    // D1 起点 = track[0]
-    const p0 = main.track[0];
-    segmentState.points.push({ idx:0, lat:p0[0], lng:p0[1], elev:p0[2]||0, km:p0[3]||0 });
-    for(let i=1; i<dayIds.length; i++) {
-      if(dayIds[i] !== curDay) {
-        // 上一天在 i-1 结束
-        const p = main.track[i-1];
-        segmentState.points.push({ idx:i-1, lat:p[0], lng:p[1], elev:p[2]||0, km:p[3]||0 });
-        curDay = dayIds[i];
-      }
-    }
-    // 最后一天的终点
-    const pn = main.track[main.track.length-1];
-    segmentState.points.push({ idx: main.track.length-1, lat:pn[0], lng:pn[1], elev:pn[2]||0, km:pn[3]||0 });
-    // 恢复营地信息
-    main.day_meta.forEach(dm => {
-      if(dm.camp && dm.camp !== '-') {
-        segmentState.campEdits[dm.d] = { name: dm.camp, elev: dm.camp_elev || null };
-      }
-    });
-  }
+  restoreSegmentStateFromTrail(main);
 
   document.getElementById('segment-panel').style.display = 'flex';
   map.getContainer().style.cursor = 'crosshair';
   // v1.30.0：分段模式也开启 SVG path 命中测试跳过
   map.getContainer().classList.add('measure-active');
+  if(typeof resetView === 'function') resetView({restoreActive: true});
   updateSegmentUI();
 }
 
@@ -6487,17 +7134,72 @@ function segmentExit() {
 }
 
 function segmentUndo() {
-  if(segmentState.points.length === 0) return;
-  const removedIdx = segmentState.points.length - 1;
-  segmentState.points.pop();
-  // 清掉对应营地编辑（营地属于第 removedIdx 天）
-  if(removedIdx > 0) delete segmentState.campEdits[removedIdx];
-  updateSegmentUI();
+  segmentDeleteDay(segmentState.points.length - 1);
 }
 
 function segmentClear() {
-  segmentState.points = [];
+  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+  segmentState.points = main ? segmentIndexesToPoints(main, [0, main.track.length - 1]) : [];
   segmentState.campEdits = {};
+  updateSegmentUI();
+}
+
+function renumberSegmentCampEditsForInsert(insertAt) {
+  const old = segmentState.campEdits || {};
+  const next = {};
+  Object.keys(old).forEach(k => {
+    const d = Number(k);
+    next[d >= insertAt ? d + 1 : d] = old[k];
+  });
+  segmentState.campEdits = next;
+}
+
+function renumberSegmentCampEditsForDelete(dayNo, oldDayCount) {
+  const old = segmentState.campEdits || {};
+  const next = {};
+  for(let d=1; d<=oldDayCount; d++) {
+    if(d === dayNo) continue;
+    const newDay = d < dayNo ? d : d - 1;
+    if(old[d]) next[newDay] = old[d];
+  }
+  segmentState.campEdits = next;
+}
+
+function segmentInsertPoint(pt) {
+  const pts = segmentState.points;
+  if(!pt) return false;
+  if(pts.some(p => p.idx === pt.idx)) {
+    showToast('该点已选中，请选另一个位置', 'error');
+    return false;
+  }
+  let insertAt = -1;
+  for(let i=1; i<pts.length; i++) {
+    if(pt.idx > pts[i-1].idx && pt.idx < pts[i].idx) {
+      insertAt = i;
+      break;
+    }
+  }
+  if(insertAt < 0) {
+    showToast('请点击现有行程范围内的未占用位置', 'error');
+    return false;
+  }
+  renumberSegmentCampEditsForInsert(insertAt);
+  pts.splice(insertAt, 0, pt);
+  updateSegmentUI();
+  return true;
+}
+
+function segmentDeleteDay(dayNo) {
+  const pts = segmentState.points;
+  const oldDayCount = pts.length - 1;
+  if(oldDayCount <= 1) {
+    showToast('至少保留 1 天行程', 'info');
+    return;
+  }
+  if(dayNo < 1 || dayNo > oldDayCount) return;
+  const removePointIdx = dayNo < oldDayCount ? dayNo : dayNo - 1;
+  pts.splice(removePointIdx, 1);
+  renumberSegmentCampEditsForDelete(dayNo, oldDayCount);
   updateSegmentUI();
 }
 
@@ -6517,18 +7219,19 @@ function segmentStats(startIdx, endIdx) {
   const asc = Math.round(accumulatorAscent(elevs, 10).slice(-1)[0] || 0);
   const desc = Math.round(accumulatorDescent(elevs, 10).slice(-1)[0] || 0);
   const maxE = Math.round(Math.max(...elevs));
-  return { km: (dist_m/1000).toFixed(2), asc, desc, maxE };
+  const minE = Math.round(Math.min(...elevs));
+  return { km: (dist_m/1000).toFixed(2), asc, desc, maxE, max: maxE, minE, min: minE };
 }
 
 function updateSegmentUI() {
   const pts = segmentState.points;
   const hint = document.getElementById('segment-hint');
   if(pts.length === 0) {
-    hint.innerHTML = '在主轨迹上点击选择<b style="color:#fbbf24">起点</b>（D1 起点）。之后每次点击 = 增加一天。';
+    hint.innerHTML = '自动使用主轨迹起点与终点作为 1 天行程；点击轨迹中间位置可插入新的分段边界。';
   } else if(pts.length === 1) {
     hint.innerHTML = '✓ 起点已选（<span style="color:#22c55e">▲</span> D1 起点）。再点击选择 <b style="color:#fbbf24">D1 终点</b>（也是 D2 起点）。';
   } else {
-    hint.innerHTML = '✓ 已分 <b style="color:#60a5fa">' + (pts.length - 1) + '</b> 天。继续点击增加下一天，或<b style="color:#fbbf24">拖动分段点</b>调整每天边界。';
+    hint.innerHTML = '✓ 已分 <b style="color:#60a5fa">' + (pts.length - 1) + '</b> 天。点击轨迹插入边界，拖动黄色分段点调整，或在列表中删除指定日期。';
   }
   renderSegmentList();
   redrawSegmentLayer();
@@ -6541,7 +7244,7 @@ function renderSegmentList() {
     list.innerHTML = '<div style="color:#64748b;text-align:center;padding:16px 0;font-size:11px">尚未选中任何一天…</div>';
     return;
   }
-  const DAY_COLORS = ['#E8531A','#1A7BC4','#3A9B47','#B86FCC','#C49B1A','#1AABA3','#C42D2D','#6B7CC4'];
+  const DAY_COLORS = dayPalette;
   let html = '';
   for(let d=1; d<pts.length; d++) {
     const stats = segmentStats(pts[d-1].idx, pts[d].idx);
@@ -6552,7 +7255,8 @@ function renderSegmentList() {
     html += '<div style="background:#0f1420;border-left:3px solid '+color+';padding:8px 10px;margin-bottom:6px;border-radius:4px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<b style="color:'+color+';font-size:12px">D'+d+'</b>' +
-        '<span style="color:#94a3b8;font-size:10px">'+stats.km+'km · ↑'+stats.asc+' · ↓'+stats.desc+' · ⛰'+stats.maxE+'</span>' +
+        '<span style="color:#94a3b8;font-size:10px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:8px">'+stats.km+'km · ↑'+stats.asc+' · ↓'+stats.desc+' · 高'+stats.maxE+' · 低'+stats.minE+'</span>' +
+        '<button class="seg-day-delete" data-day="'+d+'" title="删除 D'+d+'" style="margin-left:6px;background:transparent;border:1px solid #3a4154;color:#94a3b8;border-radius:3px;font-size:10px;line-height:1;padding:3px 5px;cursor:pointer">删除</button>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#94a3b8;margin-bottom:4px">' +
         '<label style="width:56px;flex:0 0 56px">营地名</label>' +
@@ -6582,6 +7286,13 @@ function renderSegmentList() {
       segmentState.campEdits[d].elev = isNaN(v) ? null : v;
     });
   });
+  list.querySelectorAll('.seg-day-delete').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      segmentDeleteDay(+e.currentTarget.dataset.day);
+    });
+  });
 }
 
 function redrawSegmentLayer() {
@@ -6591,7 +7302,7 @@ function redrawSegmentLayer() {
   if(!main) return;
   const tk = main.track;
   const pts = segmentState.points;
-  const DAY_COLORS = ['#E8531A','#1A7BC4','#3A9B47','#B86FCC','#C49B1A','#1AABA3','#C42D2D','#6B7CC4'];
+  const DAY_COLORS = dayPalette;
   // 为每天绘制不同颜色高亮线段
   for(let d=1; d<pts.length; d++) {
     const a = pts[d-1].idx, b = pts[d].idx;
@@ -6602,16 +7313,18 @@ function redrawSegmentLayer() {
   }
   // 绘制分段点标记（可拖拽的 divIcon Marker）
   pts.forEach((p, i) => {
-    const label = i === 0 ? '起' : ('D'+i);
+    const isBoundary = i > 0 && i < pts.length - 1;
+    const label = i === 0 ? '起' : (i === pts.length - 1 ? '终' : ('D'+i));
     const color = i === 0 ? '#22c55e' : (i === pts.length-1 ? '#ef4444' : '#fbbf24');
     const icon = L.divIcon({
       className: 'segment-marker',
-      html: '<div style="width:22px;height:22px;background:'+color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a1a1a;font-size:10px;font-family:sans-serif;cursor:move">'+label+'</div>',
+      html: '<div style="width:22px;height:22px;background:'+color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a1a1a;font-size:10px;font-family:sans-serif;cursor:'+(isBoundary?'move':'default')+'">'+label+'</div>',
       iconSize: [22, 22],
       iconAnchor: [11, 11],
     });
-    const marker = L.marker([p.lat, p.lng], { icon, draggable: true, autoPan: true }).addTo(segmentState.layer);
+    const marker = L.marker([p.lat, p.lng], { icon, draggable: isBoundary, autoPan: true }).addTo(segmentState.layer);
     marker._segIdx = i;
+    if(!isBoundary) return;
     const snapper = createPrimaryTrackDragSnapper(marker);
     // 拖动过程中：吸附到主轨迹上（同时约束在相邻分段点之间）
     marker.on('drag', ev => snapper.schedule(ev));
@@ -6686,17 +7399,22 @@ function segmentApply() {
     const campData = segmentState.campEdits[d] || {};
     const startElev = Math.round(pts[d-1].elev);
     const endElev = Math.round(pts[d].elev);
+    const iStart = Math.min(pts[d-1].idx, pts[d].idx);
+    const iEnd = Math.max(pts[d-1].idx, pts[d].idx);
     // seg 描述：起点海拔 → 最高海拔 → 终点海拔（km）
-    const seg = `起 ${startElev}m → 顶 ${stats.maxE}m → 终 ${endElev}m（${stats.km}km）`;
+    const seg = `起 ${startElev}m → 顶 ${stats.maxE}m → 低 ${stats.minE}m → 终 ${endElev}m（${stats.km}km）`;
     day_meta.push({
       d: d,
       km: parseFloat(stats.km),
       asc: stats.asc,
       desc: stats.desc,
       max: stats.maxE,
+      min: stats.minE,
       seg: seg,
       camp: campData.name && campData.name.trim() ? campData.name.trim() : '-',
       camp_elev: campData.elev != null ? Math.round(campData.elev) : Math.round(pts[d].elev),
+      i_start: iStart,
+      i_end: iEnd,
     });
   }
   main.day_meta = day_meta;
@@ -6752,6 +7470,8 @@ const measureExitBtn = document.getElementById('measure-exit');
 if(measureExitBtn) measureExitBtn.addEventListener('click', measureExit);
 const measureResetBtn = document.getElementById('measure-reset');
 if(measureResetBtn) measureResetBtn.addEventListener('click', measureReset);
+const measureReverseBtn = document.getElementById('measure-reverse');
+if(measureReverseBtn) measureReverseBtn.addEventListener('click', measureReverse);
 
 // v1.26.0：测距/分段模式改用原生 pointerdown/pointerup 快速触发（绕过 Leaflet click 内部延迟）
 // 判断"不是拖拽" = down 到 up 位置差 < 6px 且时间 < 400ms
@@ -6816,10 +7536,7 @@ if(measureResetBtn) measureResetBtn.addEventListener('click', measureReset);
         if(!hit) { showToast('请点击主轨迹附近（200m 内）', 'error'); return; }
         const p = hit.point;
         const pt = { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
-        const last = segmentState.points[segmentState.points.length - 1];
-        if(last && last.idx === pt.idx) { showToast('该点已选中，请选另一个位置', 'error'); return; }
-        segmentState.points.push(pt);
-        updateSegmentUI();
+        segmentInsertPoint(pt);
         _mark('分段 updateSegmentUI');
       });
       return;
@@ -6860,7 +7577,7 @@ if(measureResetBtn) measureResetBtn.addEventListener('click', measureReset);
       _mark('marker 吸附');
       if(!measureState.ptA) {
         measureState.ptA = pt;
-        document.getElementById('measure-hint').innerHTML = '✓ 起点已选（A）。再点击 <b style="color:#fbbf24">终点</b>。';
+        setMeasureElevHint('再点击终点。');
         _mark('A hint');
       } else if(!measureState.ptB) {
         if(pt.idx === measureState.ptA.idx) {
@@ -6912,14 +7629,7 @@ map.on('click', e => {
     }
     const p = hit.point;
     const pt = { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
-    // 去重：若和上一个分段点相同 idx，忽略
-    const last = segmentState.points[segmentState.points.length - 1];
-    if(last && last.idx === pt.idx) {
-      showToast('该点已选中，请选另一个位置', 'error');
-      return;
-    }
-    segmentState.points.push(pt);
-    updateSegmentUI();
+    segmentInsertPoint(pt);
     return;
   }
   if(!measureState.active) return;
@@ -6940,7 +7650,7 @@ map.on('click', e => {
     measureState.ptA = pt;
     measureState.layer.clearLayers();
     measureMarker(pt.lat, pt.lng, 'A', '#22c55e').addTo(measureState.layer);
-    document.getElementById('measure-hint').innerHTML = '✓ 起点已选（A）。再点击 <b style="color:#fbbf24">终点</b>。';
+    setMeasureElevHint('再点击终点。');
   } else if(!measureState.ptB) {
     // 第二次点击：设终点 B
     if(pt.idx === measureState.ptA.idx) {
@@ -7013,7 +7723,9 @@ function computeElevLayout(pts, opts) {
   const kmEnd = km[km.length-1];
   const kmRange = kmEnd - kmStart || 1;
 
-  const PL = 44, PR = 16, PT = 22, PB = 34;
+  const PL = opts.measureMode ? 58 : 44;
+  const PR = opts.measureMode ? 58 : 16;
+  const PT = 22, PB = 34;
   const pw = W - PL - PR;
   const ph = H - PT - PB;
   const pX = i => PL + ((km[i] - kmStart) / kmRange) * pw;
@@ -7124,7 +7836,8 @@ function collectElevAnnotations(pts, layout, opts) {
   annos.push({
     idx: peakIdx, kmVal: km[peakIdx], elev: maxE,
     text: Math.round(maxE) + 'm',
-    color: '#A8543C', priority: 100, side: 'top', kind: 'peak',
+    color: '#A8543C', dotColor: '#A8543C', dotRadius: 3.4,
+    priority: 100, side: 'top', kind: 'peak',
   });
 
   const valleyIdx = alts.indexOf(minE);
@@ -7132,7 +7845,22 @@ function collectElevAnnotations(pts, layout, opts) {
     annos.push({
       idx: valleyIdx, kmVal: km[valleyIdx], elev: minE,
       text: Math.round(minE) + 'm',
-      color: '#5C7A8C', priority: 50, side: 'bottom', kind: 'low',
+      color: '#5C7A8C', dotColor: '#5C7A8C', dotRadius: 3.4,
+      priority: 50, side: 'bottom', kind: 'low',
+    });
+  }
+
+  if(opts.measureMode && pts.length >= 2) {
+    annos.push({
+      idx: 0, kmVal: km[0], elev: pts[0][2] || 0,
+      text: 'A ' + Math.round(pts[0][2] || 0) + 'm',
+      color: '#2F7D55', dotColor: '#22c55e', priority: 130, labelSide: 'left', kind: 'measure-a',
+    });
+    const endIdx = pts.length - 1;
+    annos.push({
+      idx: endIdx, kmVal: km[endIdx], elev: pts[endIdx][2] || 0,
+      text: 'B ' + Math.round(pts[endIdx][2] || 0) + 'm',
+      color: '#A8543C', dotColor: '#ef4444', priority: 130, labelSide: 'right', kind: 'measure-b',
     });
   }
 
@@ -7164,16 +7892,16 @@ function collectElevAnnotations(pts, layout, opts) {
  * 副作用：修改 annos 每项的 labelLeft/labelTop；返回顶部溢出量给外层调整 H
  */
 function layoutElevLabels(annos, layout, pts) {
-  const { pX, pY, PL, PT, pw, ph, km, kmStart, kmRange } = layout;
+  const { pX, pY, PL, PT, pw, ph, W, km, kmStart, kmRange } = layout;
   const fontSize = annos.length <= 5 ? 9.5 : annos.length <= 9 ? 8.5 : 7.5;
   const annoFont = `${fontSize}px 'Source Serif 4', 'PingFang SC', sans-serif`;
   const measure = txt => { elevCtx.font = annoFont; return elevCtx.measureText(txt).width; };
 
   annos.forEach(a => {
     a.x = pX(a.idx);
-    a.tw = measure(a.text);
-    a.lw = a.tw + 2;
-    a.lh = fontSize + 3;
+    a.tw = a.dotOnly ? 0 : measure(a.text || '');
+    a.lw = a.dotOnly ? 0 : a.tw + 2;
+    a.lh = a.dotOnly ? 0 : fontSize + 3;
   });
 
   const placed = [];
@@ -7181,14 +7909,18 @@ function layoutElevLabels(annos, layout, pts) {
   let overflow = 0;
 
   annos.forEach(a => {
+    if(a.dotOnly || !a.text) return;
     const gap = 4;
     const aY = pY(a.elev);
     const cands = [];
-    // 优先四角紧贴
-    cands.push({ left: a.x + gap, top: aY - a.lh - 2 });
-    cands.push({ left: a.x - gap - a.lw, top: aY - a.lh - 2 });
-    cands.push({ left: a.x + gap, top: aY + 4 });
-    cands.push({ left: a.x - gap - a.lw, top: aY + 4 });
+    const rightTop = { left: a.x + gap, top: aY - a.lh - 2 };
+    const leftTop = { left: a.x - gap - a.lw, top: aY - a.lh - 2 };
+    const rightBottom = { left: a.x + gap, top: aY + 4 };
+    const leftBottom = { left: a.x - gap - a.lw, top: aY + 4 };
+    // A/B 测距标注固定偏左/偏右；其他标注仍按四角避让。
+    if(a.labelSide === 'left') cands.push(leftTop, leftBottom, rightTop, rightBottom);
+    else if(a.labelSide === 'right') cands.push(rightTop, rightBottom, leftTop, leftBottom);
+    else cands.push(rightTop, leftTop, rightBottom, leftBottom);
     // 向上逐层外推
     for(let k = 1; k <= 6; k++) {
       const dyk = k * (a.lh + 2);
@@ -7203,8 +7935,8 @@ function layoutElevLabels(annos, layout, pts) {
     }
 
     const isOk = c => {
-      if(c.left + a.lw > PL + pw - 1) return false;
-      if(c.left < PL + 1) return false;
+      if(c.left + a.lw > W - 2) return false;
+      if(c.left < 2) return false;
       if(c.top < PT + 1) return false;
       if(c.top + a.lh > PT + ph - 2) return false;
       for(const p of placed) {
@@ -7220,7 +7952,7 @@ function layoutElevLabels(annos, layout, pts) {
       chosen = cands[0];
       if(chosen.top < PT + 1) overflow = Math.max(overflow, (PT + 1) - chosen.top);
     }
-    a.labelLeft = Math.max(PL + 1, Math.min(chosen.left, PL + pw - 1 - a.lw));
+    a.labelLeft = Math.max(2, Math.min(chosen.left, W - 2 - a.lw));
     a.labelTop = Math.max(PT + 1, chosen.top);
     placed.push({ left: a.labelLeft, top: a.labelTop, lw: a.lw, lh: a.lh });
   });
@@ -7236,12 +7968,13 @@ function renderElevLabels(annos, layout) {
   annos.forEach(a => {
     // 黑点
     elevCtx.beginPath();
-    elevCtx.arc(a.x, pY(a.elev), 2.5, 0, Math.PI*2);
-    elevCtx.fillStyle = '#1F2A1C';
+    elevCtx.arc(a.x, pY(a.elev), a.dotRadius || 2.5, 0, Math.PI*2);
+    elevCtx.fillStyle = a.dotColor || '#1F2A1C';
     elevCtx.fill();
     elevCtx.strokeStyle = 'rgba(245,241,225,0.9)';
     elevCtx.lineWidth = 0.8;
     elevCtx.stroke();
+    if(a.dotOnly || !a.text) return;
     // 引线：label 靠点侧的中点 → 黑点
     const aY = pY(a.elev);
     const lx = a.labelLeft >= a.x ? a.labelLeft : a.labelLeft + a.lw;
@@ -7265,15 +7998,9 @@ function renderElevLabels(annos, layout) {
   });
 }
 
-/** 绘制 Y 轴两端海拔标签 + X 轴里程刻度 */
+/** 绘制 X 轴里程刻度 */
 function drawElevAxes(layout) {
-  const { PL, PT, pw, ph, H, minE, maxE, kmStart, kmRange } = layout;
-  // Y 轴
-  elevCtx.textAlign = 'right';
-  elevCtx.fillStyle = '#7A6E54';
-  elevCtx.font = `italic 9px 'Source Serif 4', serif`;
-  elevCtx.fillText(Math.round(maxE), PL - 5, PT + 8);
-  elevCtx.fillText(Math.round(minE), PL - 5, PT + ph - 2);
+  const { PL, PT, pw, ph, H, kmStart, kmRange } = layout;
 
   // X 轴刻度
   const tickCount = Math.max(2, Math.min(7, Math.floor(pw / 80) + 1));
@@ -7318,7 +8045,12 @@ function drawElevBar(pts, color, label, opts) {
   const layout = computeElevLayout(pts, opts);
 
   // 供 hit test / tooltip 使用
-  _elevBarData = { pts, minE: layout.minE, maxE: layout.maxE, color: color || '#3F5238', km: layout.km };
+  _elevBarData = {
+    pts, minE: layout.minE, maxE: layout.maxE,
+    color: color || '#3F5238',
+    km: layout.km,
+    PL: layout.PL, PR: layout.PR, pw: layout.pw,
+  };
   if(elevLabel) elevLabel.textContent = label || t('elev.title');
   updateElevBadges(layout.alts);
 
@@ -7358,6 +8090,17 @@ function refreshElevBar() {
         kmFromZero: true,
         waypoints: main.waypoints,
         segIdxStart: i1, segIdxEnd: i2, reversed,
+        measureMode: true,
+      });
+    } else if(dayPreviewState.active && dayPreviewState.trailId === main.id && dayPreviewState.iStart != null && dayPreviewState.iEnd != null) {
+      const i1 = Math.min(dayPreviewState.iStart, dayPreviewState.iEnd);
+      const i2 = Math.max(dayPreviewState.iStart, dayPreviewState.iEnd);
+      const segPts = main.track.slice(i1, i2 + 1);
+      drawElevBar(segPts, '#fbbf24', `D${dayPreviewState.day} · ${t('elev.measure')}`, {
+        kmFromZero: true,
+        waypoints: main.waypoints,
+        segIdxStart: i1, segIdxEnd: i2, reversed: false,
+        measureMode: true,
       });
     } else {
       drawElevBar(main.track, main.color, (main.name || t('mini.primary')) + ' · ' + t('elev.title'), {
@@ -7512,8 +8255,8 @@ if(elevCanvas) {
     if(!_elevBarData) return null;
     const rect = elevCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
-    // 与 drawElevBar 内部一致
-    const PL = 44, PR = 16;
+    const PL = _elevBarData.PL != null ? _elevBarData.PL : 44;
+    const PR = _elevBarData.PR != null ? _elevBarData.PR : 16;
     const pw = rect.width - PL - PR;
     if(mx < PL || mx > PL + pw) return null;
     const ratio = (mx - PL) / pw;
@@ -8199,7 +8942,7 @@ async function exportItineraryMD() {
   const days = {};
   track.forEach(p => { const d = p[5] || 1; if(!days[d]) days[d] = []; days[d].push(p); });
   const dayKeys = Object.keys(days).map(Number).sort((a,b) => a-b);
-  const DAY_COLORS = ['#E8531A','#1A7BC4','#3A9B47','#B86FCC','#C49B1A','#1AABA3','#C42D2D','#6B7CC4'];
+  const DAY_COLORS = dayPalette;
 
   // ── 辅助函数 ──
   function haversine2d(p1, p2) {
@@ -8210,6 +8953,7 @@ async function exportItineraryMD() {
   function dayDist2(pts) { let d=0; for(let i=1;i<pts.length;i++) d+=haversine2d(pts[i-1],pts[i]); return d.toFixed(1); }
   function dayAsc2(pts) { let a=0,prev=pts[0][2]; pts.forEach(p=>{const d=p[2]-prev;if(d>10)a+=d;prev=p[2];}); return Math.round(a); }
   function dayMax2(pts) { return Math.round(Math.max(...pts.map(p=>p[2]))); }
+  function dayMin2(pts) { return Math.round(Math.min(...pts.map(p=>p[2]))); }
 
   // ── 生成每天海拔剖面图 ──
   showToast('⏳ 生成行程图…');
@@ -8223,16 +8967,16 @@ async function exportItineraryMD() {
   md += `> 总里程 **${main.stats.distance_km}km** · 爬升 **${main.stats.ascent_m}m** · 最高 **${main.stats.max_elev}m** · ${dayKeys.length}天\n\n---\n\n`;
 
   // 汇总表格
-  md += `| 天数 | 里程 | 爬升 | 最高海拔 | 营地 |\n|---|---|---|---|---|\n`;
+  md += `| 天数 | 里程 | 爬升 | 最高海拔 | 最低海拔 | 营地 |\n|---|---|---|---|---|---|\n`;
   if(main.day_meta && main.day_meta.length) {
     main.day_meta.forEach(d => {
-      md += `| D${d.d||'?'} | ${d.km||'-'}km | ${d.asc||'-'}m | ${d.max||'-'}m | ${d.camp||'-'}(${d.camp_elev||'?'}m) |\n`;
+      md += `| D${d.d||'?'} | ${d.km||'-'}km | ${d.asc||'-'}m | ${d.max||'-'}m | ${d.min||'-'}m | ${d.camp||'-'}(${d.camp_elev||'?'}m) |\n`;
     });
   } else {
     dayKeys.forEach((dk, di) => {
       const pts = days[dk];
       const camp = main.waypoints.find(w => w.tag === 'camp' && (w.day || di+1) === dk);
-      md += `| D${dk} | ${dayDist2(pts)}km | ${dayAsc2(pts)}m | ${dayMax2(pts)}m | ${camp ? camp.label + ' ' + camp.elev + 'm' : '-'} |\n`;
+      md += `| D${dk} | ${dayDist2(pts)}km | ${dayAsc2(pts)}m | ${dayMax2(pts)}m | ${dayMin2(pts)}m | ${camp ? camp.label + ' ' + camp.elev + 'm' : '-'} |\n`;
     });
   }
   md += '\n---\n\n';
@@ -8241,13 +8985,13 @@ async function exportItineraryMD() {
   dayKeys.forEach((dk, di) => {
     const pts = days[dk];
     const color = DAY_COLORS[di % DAY_COLORS.length];
-    const km = dayDist2(pts), asc = dayAsc2(pts), maxE = dayMax2(pts);
+    const km = dayDist2(pts), asc = dayAsc2(pts), maxE = dayMax2(pts), minE = dayMin2(pts);
     const camp = main.waypoints.find(w => w.tag === 'camp' && ((w.day || di+1) === dk));
     const passes = main.waypoints.filter(w => w.tag === 'pass' && ((w.day || di+1) === dk));
     const imgUrl = dayCharts[dk];
 
     md += `## D${dk}\n\n`;
-    md += `**里程**: ${km}km　**爬升**: ${asc}m　**最高**: ${maxE}m`;
+    md += `**里程**: ${km}km　**爬升**: ${asc}m　**最高**: ${maxE}m　**最低**: ${minE}m`;
     if(camp) md += `　**营地**: ${camp.label} (${camp.elev}m)`;
     md += '\n\n';
     if(passes.length) md += passes.map(p => `**垭口**: ${p.label} (${p.elev}m)`).join('　') + '\n\n';
@@ -8278,6 +9022,7 @@ function rebuildAll(opts={}) {
     const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
     state.primaryTrailId = (inGroup[0] || DATA.trails[0]).id;
   }
+  if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
   // 刷新所有面板
   buildTrailList();
   buildHeaderStats();
@@ -8736,7 +9481,9 @@ function buildDayMeta(trackPoints, track, enrichedWps, cumD) {
     const km = (cumD[i_e] - cumD[i_s]) / 1000;
     const segElevs = trackPoints.slice(i_s, i_e+1).map(p => p.elev);
     const asc = accumulatorAscent(segElevs, 10).slice(-1)[0];
+    const desc = accumulatorDescent(segElevs, 10).slice(-1)[0];
     const maxE = Math.max(...segElevs);
+    const minE = Math.min(...segElevs);
     const dayWps = enrichedWps.filter(w => w.gps_idx >= i_s && w.gps_idx <= i_e);
     const camps = dayWps.filter(w => w.tag === 'camp');
     const camp = camps[camps.length-1];
@@ -8745,7 +9492,9 @@ function buildDayMeta(trackPoints, track, enrichedWps, cumD) {
       d, date: '',
       km: +km.toFixed(1),
       asc: Math.round(asc),
+      desc: Math.round(desc),
       max: Math.round(maxE),
+      min: Math.round(minE),
       camp: camp ? camp.label : '未标注',
       camp_elev: camp ? camp.elev : Math.round(maxE),
       seg: keyWps.length ? keyWps.slice(0,5).map(w => w.label).join(' → ') : `D${d}行程`,
@@ -9094,6 +9843,7 @@ if(map && !window.__wpAddBound) { window.__wpAddBound = true;
   map.getContainer().addEventListener('touchmove', () => { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }, {passive: true});
 }
 
+initFloatingPanelPositions();
 
 buildHeaderStats();
 buildTrailList();

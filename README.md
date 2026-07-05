@@ -86,11 +86,26 @@ node tests/unit/verify_alignment.js
 
 `tests/unit/trail_core.js` 是 HTML 内纯计算函数的 Node 镜像；修改距离、爬升、海拔颜色、waypoint snap 等计算逻辑时，需要同步镜像并跑对齐测试。
 
+## 🧱 工程化实施方案
+
+目标是把源码逐步工程化成 **Vite + TypeScript + 模块化文件**，但发布物仍保持 `index.html` / 静态资源，GitHub Pages 仍可直接部署。
+
+推荐分阶段推进：
+
+1. **建立并行工程目录**：新增 `src/`、`public/`、`vite.config.ts`、`tsconfig.json`，先不删除现有单文件入口。
+2. **抽离纯计算模块**：优先拆出距离、爬升、海拔、分段、waypoint snap、KML 解析等无 DOM 逻辑，并让现有单元测试直接覆盖 TypeScript 源码。
+3. **抽离状态与渲染边界**：把 `state`、IndexedDB、轨迹绘制、标注点绘制、海拔图、测距/分段工具拆成独立模块，减少全局变量互相影响。
+4. **建立类型契约**：定义 `Trail`、`Waypoint`、`DayMeta`、`MeasurePoint`、`EscapeRoute` 等接口，先使用宽松迁移，再逐步收紧。
+5. **双入口过渡**：开发期使用 Vite dev server；发布期通过构建脚本输出静态 `dist/index.html`，再同步到根目录或 GitHub Pages 发布目录。
+6. **保持回归验证**：保留 `./tests/run_full_check.sh`，新增 TypeScript 类型检查、模块单测和少量浏览器 E2E，确保工程化过程中测距、分段、导出不回退。
+
+这样做的主要收益是：代码更容易定位和审查，测距/分段这类高风险逻辑能被独立测试，浏览器交互和数据模型的边界更清晰；代价是初期会增加构建配置和迁移成本，所以应按模块逐步替换，而不是一次性重写。
+
 ## 🔖 版本策略
 
-版本：v1.31.5
+版本：v1.31.13
 
-单文件大小约 544 KB。
+单文件大小约 580 KB。
 
 版本号只表示对外发布节奏，不把每一项小改动都当成大版本：
 

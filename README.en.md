@@ -86,11 +86,26 @@ node tests/unit/verify_alignment.js
 
 `tests/unit/trail_core.js` mirrors pure calculation functions from the HTML for Node-based tests. When changing distance, ascent, elevation color, or waypoint snapping logic, keep the mirror in sync and run the alignment test.
 
+## 🧱 Engineering Plan
+
+The target architecture is **Vite + TypeScript + modular source files**, while the published artifact remains `index.html` / static files so GitHub Pages deployment stays simple.
+
+Recommended phases:
+
+1. **Create a parallel source tree**: add `src/`, `public/`, `vite.config.ts`, and `tsconfig.json` without deleting the current single-file entry.
+2. **Extract pure calculation modules first**: distance, ascent/descent, elevation, segmentation, waypoint snapping, and KML parsing should move before DOM-heavy code, with unit tests pointed at the TypeScript source.
+3. **Separate state and rendering boundaries**: split `state`, IndexedDB persistence, track rendering, waypoint rendering, elevation chart, and measure/segment tools into modules to reduce global coupling.
+4. **Add type contracts**: define interfaces such as `Trail`, `Waypoint`, `DayMeta`, `MeasurePoint`, and `EscapeRoute`; migrate loosely first, then tighten types.
+5. **Use two entries during migration**: use the Vite dev server for development; keep a release script that emits static `dist/index.html` and syncs it to the root or Pages publish directory.
+6. **Keep regression coverage**: retain `./tests/run_full_check.sh`, add TypeScript type checks, module unit tests, and focused browser E2E checks so measure, segment, and export workflows do not regress.
+
+The benefit is easier code review, isolated tests for high-risk measure/segment logic, and clearer boundaries between browser interaction and the data model. The cost is build setup and migration overhead, so this should be done module by module rather than as a one-shot rewrite.
+
 ## 🔖 Versioning
 
-Version: v1.31.5
+Version: v1.31.13
 
-Single-file size about 544 KB.
+Single-file size about 580 KB.
 
 The version number represents release cadence, not every small change as a large release:
 

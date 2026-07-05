@@ -4,6 +4,124 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v1.31.13 — 2026-07-05
+
+**中文**
+
+- 🎯 行程页点击 Day 信息后，地图会自动复位到该日轨迹段，同时保留 A/B 高亮与海拔段显示
+
+**English**
+
+- 🎯 Clicking a Day entry in the itinerary now fits the map to that day segment while keeping A/B highlight and segment elevation view
+
+## v1.31.12 — 2026-07-05
+
+**中文**
+
+- 📈 海拔图最高点/最低点恢复海拔数字标注，但仍保留红蓝颜色区分并取消左侧高低轴标
+- 📅 行程分段进入时自动复位视野，并从已有 day_meta / dayId 恢复分段点；无天数信息时默认起点与终点
+- ✂ 行程分段支持点击任意位置插入边界、拖动边界调整，并可在列表中指定删除某一天
+- 🐛 修复 Day 1 预览在没有显式 dayId 时误把整条轨迹当作第一天的问题，优先使用 day_meta 范围
+
+**English**
+
+- 📈 Elevation high/low points show elevation numbers again while keeping red/blue distinction and no left-side high/low axis labels
+- 📅 Segment mode now resets the viewport on entry and restores boundaries from day_meta/day IDs, defaulting to start/end when no day data exists
+- ✂ Segment mode can insert boundaries by clicking, drag boundaries to adjust them, and delete a specific day from the list
+- 🐛 Fixed Day 1 preview treating the entire trail as day one when no explicit day IDs exist, preferring day_meta ranges instead
+
+## v1.31.11 — 2026-07-04
+
+**中文**
+
+- 🎨 天数模式按天分色改为更柔和且区分度更高的新色板，并同步到分段预览与行程导出
+- 📍 海拔图最高点/最低点改为仅用红蓝色点区分，取消数值文字与左侧高低海拔轴标
+- 📏 测距 A/B 海拔固定贴在端点左右，里程放在“测距路段 · A → B”右侧，移除“已测量”等状态文字
+- ⇄ 测距浮动面板新增“反向”按钮，可交换 A/B 并重新计算方向性的爬升/下降
+- 🐛 修复行程页点击 Day 1 可能高亮错误轨迹段：优先使用当前轨迹点 dayId，再回退 day_meta 索引
+
+**English**
+
+- 🎨 Day coloring now uses a softer, more distinguishable palette shared by day mode, segment preview, and itinerary export
+- 📍 Elevation high/low points are now color-only dots, with numeric labels and left-side high/low axis labels removed
+- 📏 Measure A/B elevations are pinned to the endpoint sides, distance sits next to “Measure segment · A → B”, and measured-status text is removed
+- ⇄ The measure floating panel now has a Reverse button that swaps A/B and recalculates directional ascent/descent
+- 🐛 Fixed itinerary Day 1 preview selecting the wrong segment by preferring current track day IDs before day_meta indexes
+
+## v1.31.10 — 2026-07-04
+
+**中文**
+
+- 📈 测距信息不再堆成海拔图内的聚合框：A/B、最高点、最低点改为直接标注在海拔曲线对应位置
+- 📏 测距里程独立显示在海拔图左上，爬升/下降统一使用海拔图右上统计位，整体更像图表原生信息
+
+**English**
+
+- 📈 Measure details no longer use a bundled overlay box: A/B, high point, and low point are labeled directly on the elevation curve
+- 📏 Measure distance is shown separately in the chart header while ascent/descent reuse the chart stats area for a more native chart layout
+
+## v1.31.9 — 2026-07-04
+
+**中文**
+
+- 📅 行程页每日卡片重排为更清晰的摘要卡，突出路线、距离、爬升、下降、高低海拔与扎营点
+- 🗺 天数模式入口从轨迹页移除，点击“行程”页时自动切换为按天分色，离开后回到此前的海拔/标注点模式
+- 📍 海拔模式作为默认显示时保留水源、补给、桥河、起终点等核心标注，避免默认可读性下降
+
+**English**
+
+- 📅 Daily itinerary cards are redesigned as clearer summary cards highlighting route, distance, ascent, descent, elevation range, and camp
+- 🗺 Days mode is removed from the Trails tab and now activates automatically when opening the Itinerary tab, then restores the previous elevation/waypoint mode when leaving
+- 📍 Elevation mode now keeps core waypoint types visible by default, including water, supply, bridge/river, start, and end markers
+
+## v1.31.8 — 2026-07-04
+
+**中文**
+
+- 📏 测距浮动面板精简为“重新选点 / 退出”两个按钮，减少地图遮挡
+- 📈 测距提示与里程、爬升、下降、A/B 海拔、段内最高等信息移入海拔图内部显示
+- 📝 明确日程标注点逻辑：只使用主轨迹已吸附/落入当天范围的关键标注类型，不直接吸附其他轨迹点
+
+**English**
+
+- 📏 Measure floating panel is reduced to only Reset and Exit buttons to reduce map obstruction
+- 📈 Measure hints and stats now live inside the elevation chart: distance, ascent, descent, A/B elevation, and segment max elevation
+- 📝 Clarified itinerary waypoint logic: it uses key waypoint types attached to the primary trail/day range, not arbitrary points from other trails
+
+## v1.31.7 — 2026-07-04
+
+**中文**
+
+- 🎛 顶部工具栏去掉外层浅色背景，移除“缓存”入口，并重排为两行五列按钮
+- ⚡ 测距与分段进入时自动切到标注点模式，避免海拔模式下多轨迹渐变分段带来的拖动卡顿
+- 📅 行程页每日卡片补充最低海拔，并支持点击每日信息栏高亮对应当天轨迹与海拔剖面
+- 🔎 地图 +/- 缩放按钮步进调大为 1 级，保留 0.5 级吸附以兼顾滚轮与触控板缩放
+- 📝 README 补充 Vite + TypeScript + 模块化工程化实施方案与发布仍输出静态 HTML 的迁移路线
+
+**English**
+
+- 🎛 The top toolbar no longer has an outer light background, removes the Cache entry, and uses a two-row five-column layout
+- ⚡ Measure and segment tools now switch to waypoint mode on entry, avoiding drag lag from multi-trail elevation-gradient rendering
+- 📅 Daily itinerary cards now include minimum elevation and can highlight that day’s map segment plus elevation profile when clicked
+- 🔎 Map +/- zoom buttons now step by 1 level while retaining 0.5 snapping for wheel and trackpad zooming
+- 📝 README now documents the Vite + TypeScript + modularization plan while keeping static HTML release output
+
+## v1.31.6 — 2026-07-04
+
+**中文**
+
+- 🎛 顶部工具栏改为三行固定网格：帮助/复位，测距/分段/标注/下撤/反向，轨迹/导出/缓存/清空
+- 💾 顶部存储入口改名为“缓存”，按钮名称与当前功能表达保持一致
+- 📈 海拔图支持拖动并记忆位置，双击拖动手柄可恢复默认左下角，减少复位后遮挡轨迹的问题
+- 📏 测距浮动栏支持拖动并记忆位置，双击标题行恢复默认居中位置，避免遮挡当前测距路段
+
+**English**
+
+- 🎛 Top toolbar now uses a fixed three-row grid: help/reset, measure/segment/mark/escape/reverse, trail/export/cache/clear
+- 💾 The storage entry is renamed to “Cache” for a shorter, clearer toolbar label
+- 📈 Elevation chart is draggable with remembered position; double-click the drag grip to restore the default bottom-left placement
+- 📏 Measure panel is draggable with remembered position; double-click the title row to restore its default centered placement
+
 ## v1.31.5 — 2026-07-04
 
 **中文**
