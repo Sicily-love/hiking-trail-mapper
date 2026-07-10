@@ -115,6 +115,10 @@ try:
     # ═══════════════════════════════════════════════════════════════
     print("\n▸ E1 · 空 workspace 启动")
     check("APP_VERSION 存在", isinstance(evalj("APP_VERSION"), str))
+    check("TypeScript core runtime 已内联并激活",
+          evalj("!!window.HikingTrailCore && window.__HTM_CORE_RUNTIME__ === window.HikingTrailCore && computeElevationRenderModel === window.HikingTrailCore.computeElevationRenderModel"))
+    check("TypeScript app runtime 已内联并激活",
+          evalj("!!window.HikingTrailApp && window.__HTM_APP_RUNTIME__ === window.HikingTrailApp && document.documentElement.dataset.ui === 'field-console'"))
     check("state 对象已初始化", evalj("typeof state === 'object' && state !== null"))
     check("DATA 对象已初始化", evalj("typeof DATA === 'object' && Array.isArray(DATA.trails)"))
     check("Leaflet map 已实例化", evalj("typeof map === 'object' && !!map"))

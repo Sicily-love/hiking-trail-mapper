@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-清理 online_kml_template.html 里过时的版本标记注释。
+清理 src/app/runtime.js 里过时的版本标记注释。
 
 策略：
 - 保留：v1.14.1 / v1.15.0 / v1.16.0（最近 3 版）
@@ -13,8 +13,8 @@
 import re, sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-TMPL = ROOT / "hiking-trail-mapper.html"
+ROOT = Path(__file__).resolve().parents[2]
+TMPL = ROOT / "src" / "app" / "runtime.js"
 KEEP_VERSIONS = {'v1.14.1', 'v1.15.0', 'v1.16.0'}
 
 html = TMPL.read_text(encoding='utf-8')

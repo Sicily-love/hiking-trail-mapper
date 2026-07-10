@@ -4,12 +4,16 @@ v1.15.0 功能测试：
   1. 分组交互重构 —— trail-batch-check 元素存在 + 无 batchMode 引用
   2. KML.zip 导入 —— fflate.unzipSync 在页面里能真的解压
 """
-import json, subprocess, socket, time, urllib.request, zipfile, io, sys, os, shutil
+import json, subprocess, socket, time, urllib.request, zipfile, io, sys, os, shutil, re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 TMPL = ROOT / "hiking-trail-mapper.html"
 SAMPLE_KML = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
+EXPECTED_VERSION = re.search(
+    r"const APP_VERSION = '(v\d+\.\d+\.\d+)'",
+    TMPL.read_text(encoding="utf-8"),
+).group(1)
 
 def chrome_bin():
     candidates = [
@@ -92,8 +96,10 @@ try:
         results.append((ok, name, detail))
         print(f"  {icon} {name}" + (f"  ({detail})" if detail else ""))
 
-    print("\n▸ 需求 4/1（v1.31.13）：分组交互 + 复选框合并")
-    check("APP_VERSION = v1.31.13", evalj("APP_VERSION") == "v1.31.13")
+    print(f"\n▸ 需求 4/1（{EXPECTED_VERSION}）：分组交互 + 复选框合并")
+    check(f"APP_VERSION = {EXPECTED_VERSION}", evalj("APP_VERSION") == EXPECTED_VERSION)
+    check("TypeScript core runtime 已接管关键函数",
+          evalj("!!window.HikingTrailCore && window.__HTM_CORE_RUNTIME__ === window.HikingTrailCore && haversine === window.HikingTrailCore.haversine && buildDayPreviewRenderModel === window.HikingTrailCore.buildDayPreviewRenderModel"))
     check("state.batchMode 已移除",
           evalj("!('batchMode' in state)"),
           str(evalj("'batchMode' in state")))
@@ -160,7 +166,7 @@ try:
             })()
           """))
 
-    print("\n▸ v1.31.13：重构后的辅助函数存在性")
+    print(f"\n▸ {EXPECTED_VERSION}：重构后的辅助函数存在性")
     for fn in ['renderGroupTabs', 'renderBatchToolbar', 'renderTrailCard',
                'trailCardHeaderHtml', 'trailCardExpandedHtml',
                'handleTrailCardClick', 'handleTrailDetailClick', 'handleTrailGroupChange',
@@ -173,7 +179,7 @@ try:
           evalj("buildTrailList.toString().split('\\n').length < 40"),
           str(evalj("buildTrailList.toString().split('\\n').length")))
 
-    print("\n▸ v1.31.13：3 个大函数深度拆分后新增的 helper")
+    print(f"\n▸ {EXPECTED_VERSION}：3 个大函数深度拆分后新增的 helper")
     for fn in ['expandZipFiles', 'importSingleKml', 'findDuplicateTrail',
                'ensureUniqueTrailId', 'renderKmlImportRow', 'bindKmlImportRowEvents',
                'postImportFinalize',
@@ -218,7 +224,7 @@ try:
           evalj("drawElevBar.toString().split('\\n').length < 40"),
           str(evalj("drawElevBar.toString().split('\\n').length")))
 
-    print("\n▸ v1.31.13：测距端点拖拽回归")
+    print(f"\n▸ {EXPECTED_VERSION}：测距端点拖拽回归")
     draggable_marker = evalj("""
       (() => {
         const fixed = measureMarker(30, 100, 'A', '#22c55e');
@@ -248,7 +254,24 @@ try:
     check("测距与分段拖动共用吸附调度器",
           evalj("bindMeasureEndpointDrag.toString().includes('createPrimaryTrackDragSnapper') && redrawSegmentLayer.toString().includes('createPrimaryTrackDragSnapper')"))
     check("测距高亮线使用抽样点并防止旧计算回写",
-          evalj("renderMeasureSegmentLine.toString().includes('buildTrackLatLngs') && measureCompute.toString().includes('_computeSeq')"))
+          evalj("""
+            (() => {
+              const track = Array.from({length: 1200}, (_, i) => [30 + i / 100000, 100, 1000 + i, i / 10]);
+              const model = buildMeasureSegmentRenderModel(
+                track,
+                {idx: 0, lat: 30, lng: 100, elev: 1000, km: 0},
+                {idx: 1199, lat: 30.01199, lng: 100, elev: 2199, km: 119.9},
+                900
+              );
+              return buildMeasureSegmentRenderModel === window.HikingTrailCore.buildMeasureSegmentRenderModel
+                && !!model
+                && model.latLngs.length === 900
+                && model.latLngs[0][0] === track[0][0]
+                && model.latLngs[899][0] === track[1199][0]
+                && renderMeasureSegmentLine.toString().includes('buildMeasureSegmentRenderModel')
+                && measureCompute.toString().includes('_computeSeq');
+            })()
+          """))
     check("测距统计使用缓存而非整段遍历",
           evalj("computeMeasureStats.toString().includes('getMeasureStatsCache') && !measureCompute.toString().includes('for(let i=i1+1')"))
     check("测距拖动中实时更新线段和面板",
@@ -258,7 +281,24 @@ try:
     check("测距复位会重新补画 A/B 黄线",
           evalj("resetView.toString().includes('measureCompute') && resetView.toString().includes('measureState.ptA') && resetView.toString().includes('measureState.ptB')"))
     check("分段高亮线使用抽样点",
-          evalj("redrawSegmentLayer.toString().includes('buildTrackLatLngs(tk, i1, i2, 900)')"))
+          evalj("""
+            (() => {
+              const track = Array.from({length: 1200}, (_, i) => [30 + i / 100000, 100, 1000 + i, i / 10]);
+              const points = [
+                {idx: 0, lat: track[0][0], lng: 100, elev: 1000, km: 0},
+                {idx: 600, lat: track[600][0], lng: 100, elev: 1600, km: 60},
+                {idx: 1199, lat: track[1199][0], lng: 100, elev: 2199, km: 119.9}
+              ];
+              const model = buildSegmentLayerModel(track, points, ['#123456'], 900);
+              return buildSegmentLayerModel === window.HikingTrailCore.buildSegmentLayerModel
+                && model.segments.length === 2
+                && model.segments.every(segment => segment.latLngs.length <= 900)
+                && model.markers[0].markerOptions.draggable === false
+                && model.markers[1].markerOptions.draggable === true
+                && model.markers[2].markerOptions.draggable === false
+                && redrawSegmentLayer.toString().includes('buildSegmentLayerModel');
+            })()
+          """))
     check("缓存恢复使用延迟双阶段复位",
           evalj("schedulePostRestoreReset.toString().includes('setTimeout') && _boot.toString().includes('schedulePostRestoreReset')"))
     check("主轨迹浮动小卡支持拖动并记忆位置",
@@ -269,18 +309,21 @@ try:
           evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('main.days = day_meta.length')"))
     check("标注点图标按 tag 统一渲染",
           evalj("waypointIcon('supply') === '🏪' && addWpMarker.toString().includes('waypointIcon(wp)') && buildFilterGrid.toString().includes('waypointIcon(tag)') && buildDaysTab.toString().includes('waypointIcon(wp)')"))
-    check("顶部工具栏为无外层背景的 2 行固定顺序",
+    check("Field Console 工具栏含品牌、两组命令和移动端更多菜单",
           evalj("""
             (() => {
               const toolbar = document.getElementById('map-toolbar');
-              const rows = [...document.querySelectorAll('#map-toolbar .toolbar-group')]
-                .map(row => [...row.querySelectorAll('button')]
-                  .map(btn => btn.textContent.trim().replace(/\\s+/g, ' ')));
-              const bg = getComputedStyle(toolbar).backgroundColor;
-              return rows.length === 2
-                && rows[0].join('|') === '❓ 帮助|🎯 复位|📏 测距|📅 分段|📍 标注'
-                && rows[1].join('|') === '⚡ 下撤|⇌ 反向|+ 轨迹|📤 导出|🗑 清空'
-                && (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent');
+              const commandIds = ['help-btn','reset-btn','measure-btn','segment-btn','add-waypoint-btn',
+                'add-escape-btn','reverse-btn','add-trail-btn','export-btn','clear-btn'];
+              return document.documentElement.dataset.ui === 'field-console'
+                && !!window.HikingTrailApp
+                && window.__HTM_APP_RUNTIME__ === window.HikingTrailApp
+                && !!toolbar.querySelector('.toolbar-brand')
+                && !!toolbar.querySelector('#toolbar-more')
+                && commandIds.every(id => {
+                  const button = document.getElementById(id);
+                  return !!button && !!button.querySelector('.tb-icon') && !!button.querySelector('.tb-label');
+                });
             })()
           """))
     check("顶部缓存按钮已移除",
@@ -312,7 +355,8 @@ try:
                 && !document.getElementById('measure-result')
                 && !!document.getElementById('measure-distance')
                 && !!document.querySelector('#measure-distance #m-dist')
-                && measureReverse.toString().includes('measureState.ptA = measureState.ptB')
+                && (measureReverse.toString().includes('measureState.ptA = measureState.ptB')
+                  || measureReverse.toString().includes('reverseMeasureEndpoints'))
                 && updateMeasureReadout.toString().includes('elev-stat-asc')
                 && updateMeasureReadout.toString().includes('elev-stat-desc')
                 && updateMeasureReadout.toString().includes(\"stats.distKm.toFixed(2) + ' km'\")
@@ -337,14 +381,29 @@ try:
           """))
     check("行程分段可恢复/默认起终点/插入边界/指定删除",
           evalj("""
-            segmentEnter.toString().includes('restoreSegmentStateFromTrail')
-            && segmentEnter.toString().includes('resetView({restoreActive: true})')
-            && restoreSegmentStateFromTrail.toString().includes('[0, trail.track.length - 1]')
-            && restoreSegmentStateFromTrail.toString().includes('segmentRangeFromDayMeta')
-            && segmentInsertPoint.toString().includes('splice(insertAt, 0, pt)')
-            && renderSegmentList.toString().includes('seg-day-delete')
-            && segmentDeleteDay.toString().includes('renumberSegmentCampEditsForDelete')
-            && redrawSegmentLayer.toString().includes('draggable: isBoundary')
+            (() => {
+              const core = window.HikingTrailCore;
+              const track = Array.from({length: 10}, (_, i) => [30 + i / 10000, 100, 1000 + i, i]);
+              const defaults = core.restoreSegmentIndexes(track, []);
+              const restored = core.restoreSegmentIndexes(track, [
+                {d: 1, i_start: 0, i_end: 4},
+                {d: 2, i_start: 4, i_end: 9}
+              ]);
+              const endpoints = core.segmentIndexesToPoints(track, defaults);
+              const inserted = core.insertSegmentPoint(endpoints, core.pointFromTrackIndex(track, 4));
+              const deleted = inserted && core.deleteSegmentDay(inserted.points, 1);
+              const model = buildSegmentLayerModel(track, inserted ? inserted.points : endpoints, ['#123456'], 900);
+              return segmentEnter.toString().includes('restoreSegmentStateFromTrail')
+                && segmentEnter.toString().includes('resetView({restoreActive: true})')
+                && defaults.join('|') === '0|9'
+                && restored.join('|') === '0|4|9'
+                && !!inserted && inserted.insertAt === 1
+                && deleted.length === 2
+                && model.markers[1].markerOptions.draggable === true
+                && renderSegmentList.toString().includes('seg-day-delete')
+                && segmentDeleteDay.toString().includes('renumberSegmentCampEditsForDeleteFrom')
+                && redrawSegmentLayer.toString().includes('m.markerOptions');
+            })()
           """))
     check("天数模式入口移到行程页并可恢复原显示模式",
           evalj("""
@@ -368,7 +427,23 @@ try:
     check("新增标注按钮进入一次性点选模式",
           evalj("enterAddWaypointMode.toString().includes('crosshair') && addManualWaypointAt.toString().includes('gps_idx') && addManualWaypointAt.toString().includes('buildDaysTab')"))
     check("海拔填充沿完整曲线路径绘制",
-          evalj("!drawElevFill.toString().includes('SEGS') && drawElevFill.toString().includes('lineTo(pX(i), pY(pts[i][2]))')"))
+          evalj("""
+            (() => {
+              const pts = [[30, 100, 1000, 0], [30.1, 100.1, 1200, 1], [30.2, 100.2, 900, 2]];
+              const layout = computeElevationLayout(pts, {width: 320, height: 160});
+              const model = computeElevationRenderModel(pts, layout);
+              const fillSrc = drawElevFill.toString();
+              return !fillSrc.includes('SEGS')
+                && computeElevationRenderModel === window.HikingTrailCore.computeElevationRenderModel
+                && model.fillPolygon.length === model.curve.length + 2
+                && model.curve.every((point, index) => {
+                  const fillPoint = model.fillPolygon[index + 1];
+                  return fillPoint.x === point.x && fillPoint.y === point.y;
+                })
+                && fillSrc.includes('renderModel.fillPolygon')
+                && fillSrc.includes('lineTo(fillPolygon[i].x, fillPolygon[i].y)');
+            })()
+          """))
 
     print("\n▸ 需求 3：KML.zip 导入")
     check("fflate.unzipSync 可用",
@@ -449,7 +524,7 @@ try:
         for p,n,d in results:
             if not p: print(f"  ✗ {n}" + (f"  ({d})" if d else ""))
         sys.exit(1)
-    print("✓ v1.31.13 功能测试全部通过")
+    print(f"✓ {EXPECTED_VERSION} 功能测试全部通过")
 finally:
     chrome.terminate()
     try: chrome.wait(timeout=3)

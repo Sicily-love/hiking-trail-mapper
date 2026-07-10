@@ -73,39 +73,66 @@ GeoJSON 也建议先转换为 KML 后再导入。
 
 ## 🧪 开发与测试
 
-本项目没有前端构建流程，主要代码在 [hiking-trail-mapper.html](hiking-trail-mapper.html)，[index.html](index.html) 是同内容的 GitHub Pages 入口。
+项目已经完成 Vite + TypeScript 工程化和浏览器层拆分，同时继续提供可直接打开的 [hiking-trail-mapper.html](hiking-trail-mapper.html) / [index.html](index.html)。两个根 HTML 都由 `src/template`、`src/ui`、`src/core` 和 `src/app` 自动生成，因此 `file://` 使用方式不变，也不再需要手工同步两份页面。
 
-常用检查：
+安装与开发：
 
 ```bash
-node tests/unit/test_math.js
-node tests/unit/test_enrich.js
-node tests/unit/verify_alignment.js
+npm ci
+npm run dev
+npm run test:unit
+npm run typecheck
+npm run build
 ./tests/run_full_check.sh
+npm run test:visual:capture
 ```
 
-`tests/unit/trail_core.js` 是 HTML 内纯计算函数的 Node 镜像；修改距离、爬升、海拔颜色、waypoint snap 等计算逻辑时，需要同步镜像并跑对齐测试。
+`npm run build` 输出 `dist/index.html`、`dist/hiking-trail-mapper.html` 和 `dist/release.json`。`npm run release:prepare` 会依次同步发布物、运行真实 Chrome 完整测试、构建并检查 `dist/`。
 
-## 🧱 工程化实施方案
+`src/core/*.ts` 是距离、爬升、KML、存储、测距、分段、Day 预览与海拔图渲染模型的运行时真源；`src/app`、`src/features` 和 `src/adapters` 管理应用状态、交互 controller、Leaflet 与 IndexedDB 边界；`src/ui` 管理 Field Console 视觉和响应式行为。发布对齐测试直接比较内嵌 runtime 与 TypeScript 源码行为，不再保留重复核心函数。
 
-目标是把源码逐步工程化成 **Vite + TypeScript + 模块化文件**，但发布物仍保持 `index.html` / 静态资源，GitHub Pages 仍可直接部署。
+## 🧱 当前工程结构
 
-推荐分阶段推进：
+当前采用“模块化源码 + 单文件兼容发布”的结构：
 
-1. **建立并行工程目录**：新增 `src/`、`public/`、`vite.config.ts`、`tsconfig.json`，先不删除现有单文件入口。
-2. **抽离纯计算模块**：优先拆出距离、爬升、海拔、分段、waypoint snap、KML 解析等无 DOM 逻辑，并让现有单元测试直接覆盖 TypeScript 源码。
-3. **抽离状态与渲染边界**：把 `state`、IndexedDB、轨迹绘制、标注点绘制、海拔图、测距/分段工具拆成独立模块，减少全局变量互相影响。
-4. **建立类型契约**：定义 `Trail`、`Waypoint`、`DayMeta`、`MeasurePoint`、`EscapeRoute` 等接口，先使用宽松迁移，再逐步收紧。
-5. **双入口过渡**：开发期使用 Vite dev server；发布期通过构建脚本输出静态 `dist/index.html`，再同步到根目录或 GitHub Pages 发布目录。
-6. **保持回归验证**：保留 `./tests/run_full_check.sh`，新增 TypeScript 类型检查、模块单测和少量浏览器 E2E，确保工程化过程中测距、分段、导出不回退。
+1. `src/core/*.ts` 负责确定性计算、数据转换和渲染模型。
+2. `src/app` 与 `src/features` 负责应用状态和测距、分段、Day、海拔交互 controller。
+3. `src/adapters` 隔离 Leaflet 与 IndexedDB 副作用，`src/ui` 负责工作台 DOM 和视觉系统。
+4. `scripts/build/generate_release_html.mjs` 将模板、CSS、两个 TS runtime 和浏览器适配脚本合成为根 HTML。
+5. Vite 从生成的 `index.html` 构建 `dist/`；GitHub Actions 验证后部署 GitHub Pages。
 
-这样做的主要收益是：代码更容易定位和审查，测距/分段这类高风险逻辑能被独立测试，浏览器交互和数据模型的边界更清晰；代价是初期会增加构建配置和迁移成本，所以应按模块逐步替换，而不是一次性重写。
+这种结构让直接打开 HTML、GitHub Pages 和工程化开发同时成立，也避免为了框架而重写稳定的 Leaflet 交互层。
+
+## 🧩 里程碑进度
+
+| 里程碑 | 当前状态 | 已完成 | 后续重点 |
+|--------|----------|--------|----------|
+| Milestone 1：测试护栏增强 | ✅ 完成 | 单元、核心契约、UI/发布契约、HTML↔`src/core` 对齐、静态、真实 Chrome 功能和 E2E 测试均纳入六阶段完整验证 | 按新增行为持续补测试 |
+| Milestone 2：工程骨架 | ✅ 完成 | Vite、TypeScript、`src/`、`dev.html`、类型检查和构建命令可用，根目录 HTML 仍可直接打开 | 常规维护 |
+| Milestone 3：核心功能模块化 | ✅ 完成 | 核心函数、应用状态、features 和 adapters 均进入 `src`；45 个 HTML fallback 已删除，内嵌 runtime 直接接受行为对齐测试 | 按新功能继续拆小 controller |
+| Milestone 4：UI 系统化 | ✅ 完成 | Field Console 统一桌面命令台、路线库、海拔分析坞、Day 时间轴、移动端操作栏和 bottom sheet | 使用真实数据持续做视觉回归 |
+| Milestone 5：发布链路收口 | ✅ 完成 | 根 HTML 自动生成、Vite 正式构建、双入口、`release.json`、版本 bump、完整发布检查和 GitHub Pages Actions 均已固定 | 观察首次远端 Actions 运行结果 |
+
+后续维护优先级：
+
+1. 核心 fallback 已全部删除；后续纯计算继续只修改 `src/core`，不再恢复 HTML 同名实现。
+2. 真实轨迹截图回归已覆盖 Day 卡片、A/B 测距、两日分段、桌面与移动工作台。
+3. 剩余较长的浏览器 runtime 后续按导入、导出和地图交互继续拆成 controller。
+
+## 🧭 GPX / GeoJSON 扩展评估
+
+这两种格式适合独立功能版本实现，不与本轮工程化和 UI 修复混在同一个补丁：
+
+- **GPX**：可将 `trk/trkseg/trkpt`、`rte/rtept` 和 `wpt` 归一到现有轨迹/标注模型；海拔和时间字段较明确，主要风险是多段轨迹拼接规则。
+- **GeoJSON**：可支持 `FeatureCollection` 下的 `LineString`、`MultiLineString` 和 `Point`；第三维坐标可作为海拔，但 waypoint 类型、名称和照片属性没有统一字段，需要可配置映射。
+- **推荐边界**：新增 `src/core/gpx.ts`、`src/core/geojson.ts`，统一输出当前 KML 使用的 import model；UI 只负责文件类型分派，存储、测距和分段不感知源格式。
+- **测试要求**：每种格式至少覆盖单线、多段、无海拔、带时间、混合 waypoint 和非法文件，并验证导入后与 KML 轨迹行为一致。
 
 ## 🔖 版本策略
 
-版本：v1.31.13
+版本：v1.32.1
 
-单文件大小约 580 KB。
+单文件大小约 630 KB（包含 Leaflet、fflate 和自动生成的 TypeScript core/app 运行时）。
 
 版本号只表示对外发布节奏，不把每一项小改动都当成大版本：
 
@@ -119,20 +146,35 @@ node tests/unit/verify_alignment.js
 
 ```text
 hiking-trail-mapper/
-├── hiking-trail-mapper.html      单文件应用
-├── index.html                    GitHub Pages 入口
+├── hiking-trail-mapper.html      自动生成的单文件应用
+├── index.html                    自动生成的 GitHub Pages 入口
+├── dev.html                      Vite 开发入口
+├── src/                          模板、UI、core、app、features 与 adapters 源码
+├── public/                       Vite 静态资源占位
+├── scripts/
+│   ├── build/                    HTML 生成、core 同步和 Vite 正式构建
+│   ├── release/                  版本、元数据、文档同步和发布准备
+│   └── maintenance/              一次性维护与源码清理工具
+├── .github/workflows/pages.yml   验证与 GitHub Pages 部署
+├── dist/                         Vite 正式构建产物（生成，不提交）
+├── package.json                  工程化脚本与可选构建依赖
+├── tsconfig.json                 TypeScript 配置
+├── vite.config.mts                Vite 配置
 ├── CHANGELOG.md                  发布历史
 ├── docs/                         功能、架构、测试说明
 ├── examples/sample-trails/        示例 KML
 ├── references/tag-rules.md        标注点分类规则
-├── scripts/                       静态验收、功能测试、同步脚本
-├── tests/                         单元测试与端到端测试
+├── tests/
+│   ├── unit/                     core、app、UI、发布与 runtime 对齐测试
+│   ├── browser/                  真实 Chrome 静态与功能测试
+│   ├── e2e/                      端到端用户流程
+│   └── visual/                   真实 KML 多状态截图回归
 └── tools/                         可选辅助工具
 ```
 
 ## 🌐 部署
 
-GitHub Pages 选择 `Deploy from branch -> main / (root)` 即可。因为应用是静态单文件，根目录的 `index.html` 就是完整站点。
+仓库已提供 `.github/workflows/pages.yml`。在 GitHub Pages 的 Source 中选择 **GitHub Actions**；推送 `main` 后，工作流会运行完整验证、构建 `dist/` 并部署。根目录 `index.html` 仍可用于直接打开或传统 branch/root 部署。
 
 ## 📄 License
 

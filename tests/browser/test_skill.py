@@ -12,7 +12,7 @@ Skill 静态验收测试（无 CDP，不启交互式 Chrome）
 import re, subprocess, tempfile, os, sys, shutil
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 TMPL = ROOT / "hiking-trail-mapper.html"
 RELEASE = ROOT
 HTML = TMPL.read_text(encoding='utf-8')
@@ -62,7 +62,10 @@ required_funcs = [
     'haversine', 'reverseTrail',
 ]
 for fn in required_funcs:
-    found = bool(re.search(rf"\bfunction\s+{fn}\b|\b{fn}\s*=\s*(?:async\s+)?(?:function|\()", HTML))
+    found = bool(re.search(
+        rf"\bfunction\s+{fn}\b|\b{fn}\s*=\s*(?:async\s+)?(?:function|\()|\b{fn}\s*=\s*HTM_(?:CORE|APP)\.",
+        HTML,
+    ))
     check(f"函数 {fn}", found)
 
 print("\n▸ 关键状态字段")

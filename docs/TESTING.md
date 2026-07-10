@@ -7,16 +7,21 @@
 ```bash
 # 在仓库根跑（github-release/hiking-trail-mapper/）
 ./tests/run_full_check.sh
+npm run test:visual:capture
 ```
+
+`npm run test:visual:capture` 必须在真实系统环境运行，会载入示例 KML 并输出 1440、1024、390、320 四档截图和布局报告；它不会在 Codex seatbelt 沙箱中启动 Chrome。
 
 预期输出（v1.19.0+）：
 
 ```
 ✓ Phase 1 · JS 语法检查
-✓ Phase 2 · 单元测试 + 对齐（42 + 13 项）
+✓ Phase 2 · 单元测试 + 对齐（117 + 71 项）
+✓ Phase 2b · TypeScript / Vite 构建
+✓ Phase 2c · 发布元数据一致性（43/43）
 ✓ Phase 3 · 静态验收（54/54）
-✓ Phase 4 · 功能测试（55/55）
-✓ Phase 5 · 端到端测试（39/39）
+✓ Phase 4 · 功能测试（130/130）
+✓ Phase 5 · 端到端测试（63/63）
 ✓ Phase 6 · sync 一致性检查
 ✓ 全部 6 个阶段测试通过
 ```
@@ -43,7 +48,7 @@
 
 ```bash
 node --check /tmp/htm-inline.js
-python3 scripts/test_skill.py
+python3 tests/browser/test_skill.py
 ```
 
 ## 六个阶段详解
@@ -57,19 +62,51 @@ python3 scripts/test_skill.py
 
 ### Phase 2 · 单元测试（Node 层）
 
-三个测试脚本：
+十一个测试脚本：
 
 | 脚本 | 覆盖 | 项数 |
 |------|------|------|
 | `tests/unit/test_math.js` | haversine / smoothElev / accumulatorAscent/Descent / elevRatioColor / computeCumulativeDistance / computeTrailStats / generateNextTrailId | 30 |
 | `tests/unit/test_enrich.js` | enrichWaypoints / trailContentHash | 12 |
-| `tests/unit/verify_alignment.js` | `trail_core.js` 与 HTML 内实现对齐 | 13 |
+| `tests/unit/test_core_contract.js` | `src/core/*.ts` 导出契约、CommonJS 兼容桥、跨模块组合行为 | 4 |
+| `tests/unit/test_kml_core.js` | KML 坐标、`gx:coord`、图片 URL、短标签、标题兜底、导入模型组装等规则 | 11 |
+| `tests/unit/test_storage_core.js` | IndexedDB 快照形状、读/写/删除操作模型、activeTrails 序列化、legacy primaryTrailId 迁移、activeGroup=null 和 primaryByGroup 清理 | 12 |
+| `tests/unit/test_measure_itinerary.js` | A/B 测距、轨迹抽稀、海拔布局/绘制命令、分段恢复/拖动、Day 预览、每日统计、营地归属 | 29 |
+| `tests/unit/test_vite_entry.js` | 开发入口、生产 Vite 入口、静态产物与内联 TypeScript 运行时契约 | 5 |
+| `tests/unit/test_app_architecture.js` | app state、交互 controller、复位视野计划、海拔坞与 Leaflet adapter | 6 |
+| `tests/unit/test_ui_contract.js` | Field Console、命令台裁切、复位视野、海拔坞、Day 时间轴、bottom sheet、真实状态截图与无障碍契约 | 11 |
+| `tests/unit/test_release_pipeline.js` | 核心运行时重现、版本 bump、发布准备和 GitHub Pages 工作流 | 8 |
+| `tests/unit/verify_alignment.js` | 正式 HTML 内嵌 runtime 与 `src/core` 行为对齐、无重复 fallback | 23 |
 
 **特别注意 verify_alignment**：
-`tests/unit/trail_core.js` 是 HTML 里纯函数的**镜像副本**（供 Node 端复用与测试）。
-如果修改了 HTML 里的 haversine / accumulatorAscent 等，**必须同步 `trail_core.js`**，否则对齐测试会失败。
+`src/core/*.ts` 是纯函数运行时真源，`src/app`、`src/features` 和 `src/adapters` 是浏览器应用层真源；`scripts/build/generate_release_html.mjs` 会生成两个内联 runtime。对齐测试直接执行正式 HTML 中的 core IIFE，不再依赖重复函数源码。
 
-### Phase 3 · 静态验收（scripts/test_skill.py）
+### Phase 2b · TypeScript / Vite 构建
+
+如果已经安装 `node_modules`，完整检查会继续执行：
+
+```bash
+npm run typecheck
+npm run build -- --outDir .vite-build --emptyOutDir
+```
+
+构建会输出两个静态 HTML 入口和 `release.json`。没有安装依赖时普通完整检查会提示跳过 TypeScript/Vite 阶段，但正式发布必须先 `npm ci`，并使用 `npm run release:prepare`。
+
+### Phase 2c · 发布元数据一致性
+
+执行 `python3 scripts/release/check_release_metadata.py`，覆盖：
+
+- HTML 注释、`<title>`、`APP_VERSION`、`CHANGELOG` 顶部、右下角版本标签
+- `README.md` / `README.en.md`
+- `package.json` / `package-lock.json`
+- `index.html` 与 `hiking-trail-mapper.html` 是否同步
+- 内联核心运行时、Vite 生产入口、构建/版本脚本与 npm 命令
+- GitHub Pages Actions 版本、权限和部署入口
+- `vite.config.mts`、`tsconfig.json` 与 `.gitignore` 约束
+
+这一步只检查发布元数据，不改变业务代码。
+
+### Phase 3 · 静态验收（tests/browser/test_skill.py）
 
 54 项，覆盖：
 - 版本号一致性（HTML 头注释、`<title>`、`APP_VERSION`、`version-tag` 五处必须相同）
@@ -81,14 +118,14 @@ python3 scripts/test_skill.py
 
 ### Phase 4 · 功能测试（headless Chrome）
 
-`scripts/test_v1_18.py` — 55 项。运行时行为验证：
+`tests/browser/test_v1_31.py` — 130 项。运行时行为验证：
 - 拆分后 22 个辅助函数（v1.17.0 + v1.18.0）都是 `typeof === 'function'`
 - 大函数瘦身达成：`handleFiles < 30 行`、`drawElevBar < 40 行` 等
 - KML.zip 端到端：解压 → __MACOSX 跳过 → 加入 DATA.trails
 
-### Phase 5 · 端到端测试（14 大场景）
+### Phase 5 · 端到端测试（16 大场景）
 
-`tests/e2e/run_all.py` — 39 项，覆盖：
+`tests/e2e/run_all.py` — 62 项，覆盖：
 
 | ID | 场景 |
 |----|------|
@@ -106,10 +143,12 @@ python3 scripts/test_skill.py
 | E12 | i18n 中英切换 |
 | E13 | KML 导出 |
 | E14 | file:// 运行时错误检测 |
+| E15 | 无选中分组（activeGroup=null） |
+| E16 | 每组独立主轨迹 |
 
 ### Phase 6 · sync 一致性
 
-跑 `scripts/sync_release.sh`：
+跑 `scripts/release/sync_release.sh`：
 - 从 skill 模板 `user-skills/hiking-trail-mapper/assets/online_kml_template.html` 反推到 github-release 通用版
 - CHANGELOG 提取
 - README 徽章更新
@@ -121,8 +160,20 @@ python3 scripts/test_skill.py
 
 ```bash
 node tests/unit/test_math.js         # 单独跑单元
-node tests/unit/verify_alignment.js  # 检查是否 trail_core.js 未同步
+node tests/unit/test_core_contract.js # 检查 TS 核心模块导出契约
+node tests/unit/test_storage_core.js # 检查 IndexedDB 状态快照契约
+node tests/unit/test_measure_itinerary.js # 检查测距/分段核心契约
+node tests/unit/test_vite_entry.js # 检查 Vite 开发入口契约
+node tests/unit/verify_alignment.js  # 检查 src/core 是否与 HTML 同步
 ```
+
+### 发布元数据失败
+
+```bash
+python3 scripts/release/check_release_metadata.py
+```
+
+多半是版本号、README、package lock、`index.html` 同步或构建配置文件名有一处没有跟随更新。
 
 ### 端到端失败
 
@@ -135,7 +186,7 @@ uv run --with websocket-client python3 tests/e2e/run_all.py 2>&1 | tail -30
 ### 静态验收失败
 
 ```bash
-python3 scripts/test_skill.py 2>&1 | grep "✗"
+python3 tests/browser/test_skill.py 2>&1 | grep "✗"
 ```
 
 多半是版本号有一处没更新，或者某个新增字段没登记到快照。
@@ -154,16 +205,16 @@ python3 scripts/test_skill.py 2>&1 | grep "✗"
 
 ### 加一个单元测试
 
-在 `tests/unit/` 新建 `test_XXX.js`，用 `require('./trail_core')`：
+在 `tests/unit/` 新建 `test_XXX.js`，优先用 `require('../../src/core/index.ts')`；若需要兼容旧测试，也可用 `require('./trail_core')`：
 
 ```javascript
 const assert = require('assert');
-const { yourFn } = require('./trail_core');
+const { yourFn } = require('../../src/core/index.ts');
 
 // ... 断言
 ```
 
-把 `yourFn` 也加到 `tests/unit/trail_core.js` 和 `verify_alignment.js`。
+把 `yourFn` 加到 `src/core` 对应模块与 `src/core/index.ts`，必要时再加到 `verify_alignment.js`。
 
 ### 加一个 E2E 场景
 

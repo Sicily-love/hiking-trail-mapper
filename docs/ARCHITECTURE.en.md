@@ -6,19 +6,51 @@ For contributors and the technically curious.
 
 ## Overview
 
-Single-file HTML. No build pipeline. No external dependencies. All resources (Leaflet, fflate, CSS, JS, i18n dictionaries, CHANGELOG) live inside the same HTML file.
+The release remains a directly openable single-file HTML, but root HTML is generated. `src/core` owns DOM-free calculations and render models; `src/app` and `src/features` own state and interaction controllers; `src/adapters` isolates Leaflet/IndexedDB; and `src/ui` owns the Field Console. `scripts/build/generate_release_html.mjs` composes embedded `HikingTrailCore`, `HikingTrailApp`, and browser runtimes.
+
+## Engineering Source Tree
+
+```text
+src/
+├── template/app.html  Single-file release shell without generated CSS/runtime
+├── ui/
+│   ├── workbench.css  Field Console visuals and responsive layout
+│   └── workbench.ts   Command, sidebar, and elevation-dock DOM controller
+├── app/
+│   ├── state.ts       Application state and per-group primary descriptors
+│   ├── index.ts       App runtime barrel
+│   └── runtime.js     Browser events and Canvas/Leaflet orchestration
+├── features/          Measurement, itinerary, Day, and elevation controllers
+├── adapters/          Leaflet and IndexedDB effect boundaries
+├── core/
+│   ├── types.ts       Base types
+│   ├── geo.ts         haversine / cumulative distance / nearest point
+│   ├── elevation.ts   smoothing, ascent/descent, elevation color, stats
+│   ├── elevationProfile.ts elevation layout, render data, annotation layout/commands, panel height
+│   ├── kml.ts         KML coordinates, image URLs, labels, and import model assembly
+│   ├── trail.ts       trail id, waypoint snap, content hash
+│   ├── measure.ts     A/B range, thinned segment lines, measurement stats
+│   ├── itinerary.ts   segment points, boundary moves, day stats, camp edit ownership
+│   ├── render.ts      Leaflet models for measurement, segmentation, and Day preview
+│   └── index.ts       core module barrel
+├── main.ts            Vite development entry, exposes both TypeScript runtimes
+└── ../dev.html        Vite development shell, iframe-loading current release HTML
+```
+
+`src` is the only source entry. Root `index.html` and `hiking-trail-mapper.html` are generated and should not be edited directly. Forty-five duplicate core fallbacks were removed; alignment tests execute the embedded production IIFE in Node and compare it with `src/core` for identical inputs. `tests/unit/trail_core.js` remains only a CommonJS test bridge.
 
 ## Why single-file
 
 - **Zero deployment friction**: GitHub Pages / cloud storage / local folder / AirDropped to phone — anywhere HTML runs
 - **`file://` protocol compatible**: works fully offline for previously-loaded map data
-- **Fork-friendly**: clone once, all changes diff cleanly in one file
+- **Fork-friendly**: source is split by responsibility while release remains one file
 
-## Why no framework
+## Why the Published Artifact Stays Single-File
 
-- Single-file apps aren't a good fit for Webpack/Vite/Rollup
+- The release artifact stays simple for `file://` and GitHub Pages deployment
+- The Vite / TypeScript core now powers the production runtime while remaining embedded in one file
 - Leaflet is enough; React/Vue would be overhead
-- Raw DOM + event listeners = tiny bundle (~475KB total, of which Leaflet is ~140KB, fflate ~32KB)
+- Native DOM and event listeners keep runtime overhead low; the complete single file is about 630KB including Leaflet, fflate, and both TS runtimes
 
 ## Structure (all inside one HTML)
 
@@ -37,12 +69,13 @@ hiking-trail-mapper.html
 └── <script>
     ├── Leaflet 1.9.4 UMD (embedded, ~140KB)
     ├── leaflet-polylineDecorator (embedded)
+    ├── HikingTrailCore IIFE (generated from src/core)
     ├── const APP_VERSION / CHANGELOG (bilingual)
     ├── i18n dictionaries (zh / en)
     ├── state object (activeTrails / expandedTrails / primaryTrailId / activeGroup / batchMode / batchSelected …)
     ├── DATA object (trails array + calc_method)
     ├── KML parser (parseKML)
-    ├── Compute engine (haversine / accumulator_ascent / smooth_elev / enrich_waypoints)
+    ├── Core runtime bindings (measure / itinerary / KML / storage / elevation models)
     ├── Rendering layer (buildTrailList / buildPrimaryCard / drawElevBar / draw*)
     ├── Interaction layer (right-click menu / long-press / dblclick rename / group switch / batch select)
     ├── Persistence layer (loadFromStorage / saveToStorage / IndexedDB wrappers)
@@ -175,12 +208,17 @@ See Chinese version for full call graphs.
 tests/
 ├── run_full_check.sh    # One-command 6 phases
 ├── unit/
-│   ├── trail_core.js    # Pure function mirror (Node reuse)
+│   ├── trail_core.js    # CommonJS bridge → src/core/index.ts
 │   ├── test_math.js     # 30 math assertions
 │   ├── test_enrich.js   # 12 snap/hash assertions
-│   └── verify_alignment.js  # 13 HTML↔trail_core alignment
+│   ├── test_core_contract.js     # 4 TS core export contract checks
+│   ├── test_kml_core.js          # 11 KML import model/primitive assertions
+│   ├── test_storage_core.js      # 12 IndexedDB snapshot/read-write-operation/restore contract assertions
+│   ├── test_measure_itinerary.js # 27 measure/elevation-layout-render-annotation-panel-height/itinerary/Day preview/render-model assertions
+│   ├── test_vite_entry.js        # 3 Vite development entry assertions
+│   └── verify_alignment.js       # 67 HTML↔src/core alignment checks
 └── e2e/
-    └── run_all.py       # 14 scenarios / 39 assertions (headless Chrome)
+    └── run_all.py       # 16 scenarios / 62 assertions (headless Chrome)
 ```
 
 ## Unified state mutation entry: applyChange
@@ -195,16 +233,22 @@ applyChange({ save: true, fit: false, tracksOnly: false })
 
 Call after all state changes, replacing pre-v1.16.0 scattered `rebuildAll + saveToStorage` pattern.
 
-## Release checklist (each template change)
+## Release checklist
 
-Since v1.19.0 use `./tests/run_full_check.sh` for one-command 6-phase testing:
+Use the fixed release flow:
 
-1. Update HTML top comment `APP_VERSION` + `BUILD_DATE`
-2. Update `<title>` version
-3. Update `version-tag` DOM
-4. Update JS `const APP_VERSION`
-5. Append CHANGELOG entry (both zh + en)
-6. `./tests/run_full_check.sh` → 6/6 green
+```bash
+npm run version:bump -- patch --zh "中文更新项" --en "English change"
+npm run release:prepare
+```
+
+`release:prepare` performs these steps in order:
+
+1. Generate and verify the embedded `HikingTrailCore`
+2. Synchronize both root HTML files, CHANGELOG, and README versions
+3. Run all six validation phases
+4. Build production `dist/` with Vite
+5. Verify both static entrypoints and `release.json`
 
 ## Common performance traps
 

@@ -35,7 +35,7 @@ user-skills/hiking-trail-mapper/
 └── scripts/                     # Data scrape/process scripts (Python)
 ```
 
-The two HTMLs are **one-way synced** (skill → release) via `scripts/sync_release.sh`.
+The two HTML files are **generated one-way** from `src` via `scripts/release/sync_release.sh`.
 
 ## Getting Started
 

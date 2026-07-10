@@ -73,39 +73,64 @@ GeoJSON should also be converted to KML before import.
 
 ## 🧪 Development and Tests
 
-There is no frontend build pipeline. The main application is [hiking-trail-mapper.html](hiking-trail-mapper.html), and [index.html](index.html) is the GitHub Pages entry with the same content.
+The Vite + TypeScript architecture and browser-layer split are complete while [hiking-trail-mapper.html](hiking-trail-mapper.html) / [index.html](index.html) remain directly openable. Both root files are generated from `src/template`, `src/ui`, `src/core`, and `src/app`, preserving `file://` use without manually maintaining duplicate pages.
 
 Common checks:
 
 ```bash
-node tests/unit/test_math.js
-node tests/unit/test_enrich.js
-node tests/unit/verify_alignment.js
+npm ci
+npm run dev
+npm run test:unit
+npm run typecheck
+npm run build
 ./tests/run_full_check.sh
+npm run test:visual:capture
 ```
 
-`tests/unit/trail_core.js` mirrors pure calculation functions from the HTML for Node-based tests. When changing distance, ascent, elevation color, or waypoint snapping logic, keep the mirror in sync and run the alignment test.
+`npm run build` emits `dist/index.html`, `dist/hiking-trail-mapper.html`, and `dist/release.json`. `npm run release:prepare` synchronizes artifacts, runs the complete real-Chrome suite, builds, and verifies `dist/`.
 
-## 🧱 Engineering Plan
+`src/core/*.ts` is the runtime source of truth for calculations and render models. `src/app`, `src/features`, and `src/adapters` own application state, interaction controllers, and Leaflet/IndexedDB boundaries; `src/ui` owns the Field Console design and responsive behavior. Release alignment tests compare the embedded runtime directly with TypeScript behavior, so duplicate core functions are no longer retained.
 
-The target architecture is **Vite + TypeScript + modular source files**, while the published artifact remains `index.html` / static files so GitHub Pages deployment stays simple.
+## 🧱 Current Architecture
 
-Recommended phases:
+The project uses modular source with a single-file-compatible release:
 
-1. **Create a parallel source tree**: add `src/`, `public/`, `vite.config.ts`, and `tsconfig.json` without deleting the current single-file entry.
-2. **Extract pure calculation modules first**: distance, ascent/descent, elevation, segmentation, waypoint snapping, and KML parsing should move before DOM-heavy code, with unit tests pointed at the TypeScript source.
-3. **Separate state and rendering boundaries**: split `state`, IndexedDB persistence, track rendering, waypoint rendering, elevation chart, and measure/segment tools into modules to reduce global coupling.
-4. **Add type contracts**: define interfaces such as `Trail`, `Waypoint`, `DayMeta`, `MeasurePoint`, and `EscapeRoute`; migrate loosely first, then tighten types.
-5. **Use two entries during migration**: use the Vite dev server for development; keep a release script that emits static `dist/index.html` and syncs it to the root or Pages publish directory.
-6. **Keep regression coverage**: retain `./tests/run_full_check.sh`, add TypeScript type checks, module unit tests, and focused browser E2E checks so measure, segment, and export workflows do not regress.
+1. `src/core/*.ts` owns deterministic calculations, data transforms, and render models.
+2. `src/app` and `src/features` own application state and interaction controllers.
+3. `src/adapters` isolates Leaflet and IndexedDB effects while `src/ui` owns the workbench DOM and visual system.
+4. `scripts/build/generate_release_html.mjs` composes the template, CSS, both TS runtimes, and browser adapter into root HTML.
+5. Vite builds `dist/`; GitHub Actions verifies pull requests and deploys from `main`.
 
-The benefit is easier code review, isolated tests for high-risk measure/segment logic, and clearer boundaries between browser interaction and the data model. The cost is build setup and migration overhead, so this should be done module by module rather than as a one-shot rewrite.
+## 🧩 Milestone Status
+
+| Milestone | Status | Done | Next focus |
+|-----------|--------|------|------------|
+| Milestone 1: Test guardrails | ✅ Complete | Unit, core contract, UI/release contract, HTML↔`src/core` alignment, static, real-Chrome functional, and E2E tests are part of the six-phase check | Keep adding focused tests with new behavior |
+| Milestone 2: Engineering skeleton | ✅ Complete | Vite, TypeScript, `src/`, `dev.html`, type checking, and builds work while root HTML remains directly openable | Routine maintenance |
+| Milestone 3: Core feature modularization | ✅ Complete | Core functions, app state, features, and adapters live in `src`; 45 HTML fallbacks were removed and embedded runtime behavior is tested directly | Keep new controllers focused |
+| Milestone 4: UI systemization | ✅ Complete | Field Console unifies the desktop command surface, route library, elevation dock, Day timeline, mobile action bar, and bottom sheets | Continue visual regression with real data |
+| Milestone 5: Release pipeline closure | ✅ Complete | Generated root HTML, production Vite build, dual entries, `release.json`, versioning, release checks, and Pages Actions are fixed | Observe the first remote Actions run |
+
+Maintenance priorities:
+
+1. Core fallbacks are fully removed; deterministic behavior continues to change only in `src/core`.
+2. Real-trail visual regression now covers Day cards, A/B measurement, two-day segmentation, and desktop/mobile workspaces.
+3. Continue splitting the remaining browser runtime by import, export, and map interaction controllers.
+
+## 🧭 GPX / GeoJSON Evaluation
+
+These formats should ship as a separate feature release rather than being mixed into this engineering and UI patch:
+
+- **GPX**: normalize `trk/trkseg/trkpt`, `rte/rtept`, and `wpt` into the current trail/waypoint model. Elevation and time are well defined; multi-segment joining is the main policy decision.
+- **GeoJSON**: support `LineString`, `MultiLineString`, and `Point` features. A third coordinate can represent elevation, but waypoint type, name, and photo properties require configurable mapping.
+- **Recommended boundary**: add `src/core/gpx.ts` and `src/core/geojson.ts`, both emitting the same import model as KML. The UI only dispatches by file type; storage, measurement, and itinerary remain source-format agnostic.
+- **Test requirement**: cover single-line, multi-part, missing elevation, timestamps, mixed waypoints, and invalid files, then verify imported behavior matches KML.
 
 ## 🔖 Versioning
 
-Version: v1.31.13
+Version: v1.32.1
 
-Single-file size about 580 KB.
+Single-file size about 630 KB, including Leaflet, fflate, and generated TypeScript core/app runtimes.
 
 The version number represents release cadence, not every small change as a large release:
 
@@ -119,20 +144,35 @@ When there is no breaking change or large feature, each user-visible fix, docume
 
 ```text
 hiking-trail-mapper/
-├── hiking-trail-mapper.html      Single-file application
-├── index.html                    GitHub Pages entry
+├── hiking-trail-mapper.html      Generated single-file application
+├── index.html                    Generated GitHub Pages entry
+├── dev.html                      Vite development entry
+├── src/                          Template, UI, core, app, features, and adapters
+├── public/                       Vite static asset placeholder
+├── scripts/
+│   ├── build/                    HTML generation, core sync, and Vite production build
+│   ├── release/                  Versioning, metadata, docs sync, and release preparation
+│   └── maintenance/              One-off maintenance and source cleanup tools
+├── .github/workflows/pages.yml   Verification and GitHub Pages deployment
+├── dist/                         Generated production output, not committed
+├── package.json                  Engineering scripts and optional build deps
+├── tsconfig.json                 TypeScript config
+├── vite.config.mts                Vite config
 ├── CHANGELOG.md                  Release history
 ├── docs/                         Feature, architecture, and testing docs
 ├── examples/sample-trails/        Sample KML files
 ├── references/tag-rules.md        Waypoint tag classification rules
-├── scripts/                       Static checks, browser tests, sync scripts
-├── tests/                         Unit and end-to-end tests
+├── tests/
+│   ├── unit/                     Core, app, UI, release, and runtime-alignment tests
+│   ├── browser/                  Real-Chrome static and functional checks
+│   ├── e2e/                      End-to-end user flows
+│   └── visual/                   Real-KML multi-state screenshot regression
 └── tools/                         Optional helper tools
 ```
 
 ## 🌐 Deployment
 
-For GitHub Pages, select `Deploy from branch -> main / (root)`. Because this is a static single-file app, root-level `index.html` is the complete site.
+The repository includes `.github/workflows/pages.yml`. Select **GitHub Actions** as the Pages source; pushes to `main` run full verification, build `dist/`, and deploy it. Root `index.html` remains available for direct opening or legacy branch/root deployment.
 
 ## 📄 License
 

@@ -35,7 +35,7 @@ user-skills/hiking-trail-mapper/
 └── scripts/                     # 数据抓取/处理脚本（Python）
 ```
 
-两个 HTML 通过 `scripts/sync_release.sh` **单向同步**（skill → release）。
+两个 HTML 通过 `scripts/release/sync_release.sh` 从 `src` **单向生成**。
 
 ## 开始贡献
 

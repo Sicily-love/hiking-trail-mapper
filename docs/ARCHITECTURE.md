@@ -6,19 +6,51 @@
 
 ## 概览
 
-单文件 HTML，无构建流程，无外部依赖。所有资源（Leaflet、fflate、CSS、JS、i18n 字典、CHANGELOG）都塞在同一份 HTML 里。
+发布物仍是可直接打开的单文件 HTML，但根 HTML 已经是生成物。`src/core` 承载无 DOM 计算与渲染模型，`src/app` 和 `src/features` 承载状态与交互 controller，`src/adapters` 隔离 Leaflet/IndexedDB，`src/ui` 管理 Field Console。`scripts/build/generate_release_html.mjs` 将这些源码合成为内联 `HikingTrailCore`、`HikingTrailApp` 和浏览器 runtime。
+
+## 工程化源码树
+
+```text
+src/
+├── template/app.html  单文件发布壳，不包含生成 CSS/runtime
+├── ui/
+│   ├── workbench.css  Field Console 视觉与响应式
+│   └── workbench.ts   命令台、侧栏、海拔坞 DOM controller
+├── app/
+│   ├── state.ts       应用状态与分组主轨迹描述符
+│   ├── index.ts       App runtime 统一导出
+│   └── runtime.js     浏览器事件和 Canvas/Leaflet 编排
+├── features/          测距、分段、Day 与海拔交互 controller
+├── adapters/          Leaflet 与 IndexedDB 副作用边界
+├── core/
+│   ├── types.ts       基础类型
+│   ├── geo.ts         haversine / 累计里程 / 最近点
+│   ├── elevation.ts   平滑、爬升下降、海拔配色、统计
+│   ├── elevationProfile.ts 海拔图布局、绘制数据、标注布局/命令与面板高度模型
+│   ├── kml.ts         KML 坐标、图片 URL、标签和导入模型组装
+│   ├── trail.ts       trail id、waypoint snap、内容哈希
+│   ├── measure.ts     A/B 区间、抽稀线段、测距统计
+│   ├── itinerary.ts   分段点、边界拖动、每日统计、营地编辑归属
+│   ├── render.ts      测距、分段和 Day 预览的 Leaflet 渲染模型
+│   └── index.ts       核心模块统一导出
+├── main.ts            Vite 开发入口，暴露两个 TypeScript runtime
+└── ../dev.html        Vite 开发壳，iframe 加载当前发布 HTML
+```
+
+`src` 是唯一源码入口。根目录 `index.html` 和 `hiking-trail-mapper.html` 由生成器写入，不直接编辑。45 个同名核心 fallback 已删除；对齐测试在 Node 中执行正式 HTML 内嵌 IIFE，并与 `src/core` 的同一组输入输出比较。`tests/unit/trail_core.js` 只是 CommonJS 测试桥。
 
 ## 为什么单文件
 
 - **零部署摩擦**：GitHub Pages / 云盘 / 本地文件夹 / AirDrop 到手机 —— 任何能承载 HTML 的地方都能跑
 - **file:// 协议兼容**：手机断网也能玩本地已存的地图和数据
-- **fork 友好**：git clone 一份，改任何东西都在同一个文件里，diff 一目了然
+- **fork 友好**：源码按职责拆分，发布时仍只交付一个文件
 
-## 为什么不用框架
+## 为什么发布物仍保持单文件
 
-- 单文件应用不适合引入 build tool（Webpack/Vite）
+- 发布物继续保持 `file://` 与 GitHub Pages 简单部署
+- Vite / TypeScript 核心已经进入正式运行时，构建后仍内联为单文件
 - Leaflet 本身够用，不需要 React/Vue 加持
-- 手写原生 DOM + 事件监听 = 极小体积（整包 ~475KB，其中 Leaflet 占 ~140KB，fflate 占 ~32KB）
+- 原生 DOM + 事件监听保持低运行时开销，正式单文件约 630KB（包含 Leaflet、fflate 和两个 TS runtime）
 
 ## 关键文件（在同一份 HTML 里）
 
@@ -37,12 +69,13 @@ hiking-trail-mapper.html
 └── <script>
     ├── Leaflet 1.9.4 UMD (embedded, ~140KB)
     ├── leaflet-polylineDecorator (embedded)
+    ├── HikingTrailCore IIFE（由 src/core 自动生成）
     ├── const APP_VERSION / CHANGELOG (双语)
     ├── i18n 字典 (zh / en)
     ├── state 对象（activeTrails / expandedTrails / primaryTrailId / activeGroup / batchMode / batchSelected 等）
     ├── DATA 对象（trails 数组 + calc_method）
     ├── KML 解析 (parseKML)
-    ├── 计算引擎（haversine / accumulator_ascent / smooth_elev / enrich_waypoints）
+    ├── 核心运行时绑定（测距 / 分段 / KML / 存储 / 海拔模型）
     ├── 渲染层（buildTrailList / buildPrimaryCard / drawElevBar / 各种 draw*）
     ├── 交互层（右键菜单 / 长按 / 双击改名 / 分组切换 / 批量选择）
     ├── 持久化层（loadFromStorage / saveToStorage / IndexedDB 封装）
@@ -231,12 +264,17 @@ drawElevBar (24 行编排)
 tests/
 ├── run_full_check.sh    # 一键 6 阶段
 ├── unit/
-│   ├── trail_core.js    # 纯函数镜像（供 Node 端复用）
+│   ├── trail_core.js    # CommonJS 兼容桥 → src/core/index.ts
 │   ├── test_math.js     # 30 个数学函数断言
 │   ├── test_enrich.js   # 12 个 snap/hash 断言
-│   └── verify_alignment.js  # 13 项 HTML↔trail_core 对齐校准
+│   ├── test_core_contract.js     # 4 个 TS 核心导出契约
+│   ├── test_kml_core.js          # 11 个 KML 导入模型/底层断言
+│   ├── test_storage_core.js      # 12 个 IndexedDB 快照/读写操作/恢复契约断言
+│   ├── test_measure_itinerary.js # 27 个测距/海拔布局绘制标注面板高度/分段/Day 预览/渲染模型断言
+│   ├── test_vite_entry.js        # 3 个 Vite 开发入口断言
+│   └── verify_alignment.js       # 67 项 HTML↔src/core 对齐校准
 └── e2e/
-    └── run_all.py       # 14 场景 · 39 断言（headless Chrome）
+    └── run_all.py       # 16 场景 · 62 断言（headless Chrome）
 ```
 
 ## 状态变更统一入口 applyChange
@@ -253,14 +291,20 @@ applyChange({ save: true, fit: false, tracksOnly: false })
 
 ## 版本发布检查清单
 
-改模板后必跑（v1.19.0+ 版本用 `./tests/run_full_check.sh` 一键完成 6 个阶段）：
+发布前推荐使用固定流程：
 
-1. HTML 顶部注释 `APP_VERSION` + `BUILD_DATE`
-2. `<title>` 版本号
-3. `version-tag` DOM
-4. JS 内 `const APP_VERSION`
-5. `CHANGELOG` 数组追加 zh + en 条目
-6. `./tests/run_full_check.sh` → 6/6 绿
+```bash
+npm run version:bump -- patch --zh "中文更新项" --en "English change"
+npm run release:prepare
+```
+
+`release:prepare` 会依次执行：
+
+1. 生成并校验内联 `HikingTrailCore`
+2. 同步 `hiking-trail-mapper.html` / `index.html` / CHANGELOG / README
+3. 运行六阶段完整验证
+4. Vite 构建 `dist/`
+5. 校验两个静态入口和 `release.json`
 
 ## 常见性能陷阱
 

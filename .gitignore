@@ -8,6 +8,9 @@ private/
 *.bak
 *.log
 .trash/
+dist/
+.vite-build/
+node_modules/
 
 # Python
 __pycache__/

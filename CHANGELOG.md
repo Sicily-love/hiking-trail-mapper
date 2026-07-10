@@ -4,6 +4,48 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v1.32.1 — 2026-07-11
+
+**中文**
+
+- 修复路线工作台副标题越界及左端与地图缩放按钮重叠，并让移动端复位先收起侧栏后重新校准地图视野
+- 整理 scripts/build、scripts/release、scripts/maintenance 与 tests/browser 目录，保持 npm 命令兼容
+- 扩展真实 KML 视觉回归，覆盖 Day 卡片、A/B 测距、两日分段和移动端复位，并记录 GPX/GeoJSON 独立评估
+
+**English**
+
+- Fixed Trail Console subtitle overflow and overlap with map zoom controls, and made mobile reset close the sidebar before recalibrating map bounds
+- Organized scripts/build, scripts/release, scripts/maintenance, and tests/browser while preserving npm command compatibility
+- Expanded real-KML visual regression for Day cards, A/B measurement, two-day segmentation, and mobile reset, and documented a separate GPX/GeoJSON evaluation
+
+## v1.32.0 — 2026-07-10
+
+**中文**
+
+- 完成 src/template、src/app、src/features、src/adapters 与 src/ui 分层，根目录 HTML 改为自动生成物并删除 45 个核心 fallback
+- 上线地图优先的路线工作台 UI、可收起海拔分析坞、桌面命令台、移动端底部操作栏与 bottom sheet
+- 将发布对齐测试升级为内嵌 runtime 行为校验，并接入 TypeScript 状态、Leaflet 与 IndexedDB 适配层
+
+**English**
+
+- Split source ownership across src/template, src/app, src/features, src/adapters, and src/ui; root HTML is now generated and 45 core fallbacks were removed
+- Introduced the map-first field console UI with a collapsible elevation dock, desktop command surface, mobile action bar, and bottom sheets
+- Replaced fallback-source alignment with embedded-runtime behavior checks and added TypeScript state, Leaflet, and IndexedDB adapters
+
+## v1.31.14 — 2026-07-10
+
+**中文**
+
+- 完成测距、分段、Day 预览和海拔标注渲染模型的核心模块化，HTML 只保留浏览器与 Leaflet/Canvas 适配职责
+- 统一工具栏、浮动面板、侧栏、Day 卡片与移动端响应式视觉，并修复无主轨迹空浮动卡遮挡按钮
+- 收口 Vite 静态构建、版本同步、完整测试与 GitHub Pages 自动部署流程
+
+**English**
+
+- Completed core modularization for measurement, itinerary segmentation, Day preview, and elevation annotation render models while keeping browser and Leaflet/Canvas effects at the HTML boundary
+- Unified toolbar, floating panels, sidebar, Day cards, and responsive styling, and fixed the empty primary mini card covering mobile toolbar controls
+- Closed the Vite static build, version synchronization, full validation, and GitHub Pages deployment pipeline
+
 ## v1.31.13 — 2026-07-05
 
 **中文**

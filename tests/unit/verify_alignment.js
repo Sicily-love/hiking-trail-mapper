@@ -1,79 +1,84 @@
-#!/usr/bin/env node
 /**
- * trail_core.js 与 HTML 内实现的一致性校准
- * 
- * 用法：node tests/unit/verify_alignment.js
- *
- * 原理：从 HTML 里 grep 出目标函数源码 → new Function 执行 → 与 trail_core.js 输出对比
+ * Generated release runtime vs src/core behavior alignment.
  */
+const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
+const source = require('../../src/core/index.ts');
 
-const HTML_PATH = path.resolve(__dirname, '../../hiking-trail-mapper.html');
-const CORE = require('./trail_core');
+const root = path.resolve(__dirname, '../..');
+const html = fs.readFileSync(path.join(root, 'hiking-trail-mapper.html'), 'utf8');
+const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const bundle = html.match(/<script data-generated-core-runtime[^>]*>([\s\S]*?)<\/script>/)?.[1];
+if(!bundle) throw new Error('Generated core runtime not found');
+const context = {};
+vm.runInNewContext(bundle, context);
+const embedded = context.HikingTrailCore;
 
-const html = fs.readFileSync(HTML_PATH, 'utf8');
-
-// 从 HTML 提取指定顶层函数的源码（简单版：找 "function NAME(" 到下一个 "^function " 之前）
-function extractFn(name) {
-  const pat = new RegExp(`\\nfunction ${name}\\s*\\([\\s\\S]*?\\n\\}\\n`, 'm');
-  const m = html.match(pat);
-  if(!m) throw new Error(`未找到 function ${name} 的源码`);
-  return m[0].trim();
+let passed = 0;
+let failed = 0;
+function T(name, fn) {
+  try {
+    fn();
+    console.log(`  ✓ ${name}`);
+    passed++;
+  } catch(error) {
+    console.log(`  ✗ ${name}\n    ${error.message}`);
+    failed++;
+  }
 }
+const plain = value => JSON.parse(JSON.stringify(value));
+const same = (name, args) => T(name, () => {
+  assert.deepStrictEqual(plain(embedded[name](...args)), plain(source[name](...args)));
+});
 
-// 组合运行环境：把依赖函数一起 eval
-function makeRunner(names) {
-  const src = names.map(extractFn).join('\n\n') + `\n\nreturn { ${names.join(', ')} };`;
-  return new Function(src)();
-}
+console.log('\n▸ Generated HTML ↔ src/core runtime alignment');
+T('root release entries are identical', () => assert.strictEqual(index, html));
+T('all TypeScript exports exist in embedded runtime', () => {
+  Object.keys(source).forEach(name => assert.strictEqual(typeof embedded[name], typeof source[name], name));
+});
 
-const { haversine, smoothElev, accumulatorAscent, accumulatorDescent, elevRatioColor } =
-  makeRunner(['haversine', 'smoothElev', 'accumulatorAscent', 'accumulatorDescent', 'elevRatioColor']);
+const track = [
+  [30, 100, 1000, 0, 0, 1],
+  [30.001, 100.001, 1080, 0.15, 80, 1],
+  [30.002, 100.002, 1020, 0.30, 80, 2],
+  [30.003, 100.003, 1150, 0.45, 210, 2],
+];
+const points = [source.pointFromTrackIndex(track, 0), source.pointFromTrackIndex(track, 3)];
 
-let ok = 0, bad = 0;
-function eq(name, a, b) {
-  const strA = JSON.stringify(a);
-  const strB = JSON.stringify(b);
-  if(strA === strB) { console.log(`  ✓ ${name}`); ok++; }
-  else { console.log(`  ✗ ${name}\n    HTML:  ${strA}\n    core:  ${strB}`); bad++; }
-}
+same('haversine', [30, 100, 31, 101]);
+same('smoothElev', [[1000, 1010, 1200, 1020], 3]);
+same('accumulatorAscent', [[1000, 1080, 1020, 1150], 10]);
+same('accumulatorDescent', [[1000, 1080, 1020, 1150], 10]);
+same('computeCumulativeDistance', [[{lat: 30, lng: 100}, {lat: 30.1, lng: 100.1}]]);
+same('computeSegmentStats', [track, 0, 3]);
+same('computeMeasureStats', [track, 0, 3]);
+same('buildTrackLatLngs', [track, 0, 3, 3]);
+same('buildMeasureSegmentRenderModel', [track, points[0], points[1], 3]);
+same('buildSegmentLayerModel', [track, points, ['#255C43'], 3]);
+same('buildDayPreviewRenderModel', [track, {iStart: 0, iEnd: 3}, 3]);
+same('normalizeSegmentIndexes', [track, [2]]);
+same('restoreSegmentIndexes', [track, []]);
+same('getDayIndexRange', [{track, day_meta: []}, {d: 2, i_start: 2, i_end: 3}]);
+same('segmentIndexesToPoints', [track, [0, 2, 3]]);
+same('insertSegmentPoint', [[points[0], points[1]], source.pointFromTrackIndex(track, 2)]);
+same('buildKmlParseModel', [{title: 'T', lineStringCoordinateTexts: ['100,30,1000 101,31,1100']}]);
+same('serializeStorageSnapshot', [[{id: '1', group: 'A'}], {activeTrails: new Set(['1']), primaryByGroup: {A: '1'}, activeGroup: 'A', primaryTrailId: '1'}]);
+same('elevRatioColor', [0.55]);
 
-console.log('\n▸ HTML vs trail_core.js — 数值对齐校准');
-
-// haversine
-eq('haversine 北京→上海',
-  haversine(39.9042, 116.4074, 31.2304, 121.4737),
-  CORE.haversine(39.9042, 116.4074, 31.2304, 121.4737));
-
-// smoothElev
-eq('smoothElev 默认 win=7',
-  smoothElev([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]),
-  CORE.smoothElev([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]));
-eq('smoothElev win=3',
-  smoothElev([1000, 1200, 800, 1100, 900, 1300, 1000], 3),
-  CORE.smoothElev([1000, 1200, 800, 1100, 900, 1300, 1000], 3));
-
-// accumulatorAscent
-eq('accumulatorAscent thr=10 混合序列',
-  accumulatorAscent([1000, 1200, 800, 1500, 1100, 1400, 1300, 1600], 10),
-  CORE.accumulatorAscent([1000, 1200, 800, 1500, 1100, 1400, 1300, 1600], 10));
-eq('accumulatorAscent thr=5 噪声',
-  accumulatorAscent([100, 105, 100, 108, 102, 110], 5),
-  CORE.accumulatorAscent([100, 105, 100, 108, 102, 110], 5));
-
-// accumulatorDescent
-eq('accumulatorDescent thr=10',
-  accumulatorDescent([1500, 1200, 800, 1000, 700, 900, 500], 10),
-  CORE.accumulatorDescent([1500, 1200, 800, 1000, 700, 900, 500], 10));
-
-// elevRatioColor
-[0, 0.1, 0.35, 0.5, 0.65, 0.8, 1.0].forEach(r => {
-  eq(`elevRatioColor(${r})`,
-    elevRatioColor(r),
-    CORE.elevRatioColor(r));
+T('elevation layout geometry stays aligned', () => {
+  const a = embedded.computeElevationLayout(track, {width: 360, height: 180, measureMode: true, kmFromZero: true});
+  const b = source.computeElevationLayout(track, {width: 360, height: 180, measureMode: true, kmFromZero: true});
+  assert.deepStrictEqual(plain({W:a.W, H:a.H, minE:a.minE, maxE:a.maxE, x:a.pX(2), y:a.pY(1080)}),
+    plain({W:b.W, H:b.H, minE:b.minE, maxE:b.maxE, x:b.pX(2), y:b.pY(1080)}));
+});
+T('core fallbacks are absent from browser runtime source', () => {
+  const runtime = fs.readFileSync(path.join(root, 'src/app/runtime.js'), 'utf8');
+  ['haversine', 'buildTrackLatLngs', 'buildSegmentLayerModel', 'computeElevationRenderModel']
+    .forEach(name => assert.ok(!new RegExp(`function\\s+${name}\\s*\\(`).test(runtime), name));
 });
 
 console.log('\n══════════════════════════════════════════════════');
-console.log(`结果: ${ok}/${ok+bad} 对齐`);
-process.exit(bad === 0 ? 0 : 1);
+console.log(`结果: ${passed}/${passed + failed} generated-runtime checks`);
+process.exit(failed === 0 ? 0 : 1);
