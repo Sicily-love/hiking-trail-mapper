@@ -69,7 +69,7 @@ npm run check:generated
 | `test_interaction_runtime.js` | 五种地图模式接入统一交互状态机的 runtime 契约 |
 | `test_render_scheduler.js` | dirty mask 合并、固定 flush 顺序、下一帧重入和 fit epoch |
 | `test_render_runtime.js` | 七阶段调度接线、海拔降采样、marker diff 和最后一次复位保护 |
-| `test_command_dialog.js` | 命令注册/状态/dispatch 与原生 dialog 安全、焦点、Escape |
+| `test_command_dialog.js` | 命令注册/状态/dispatch、四类入口接线，以及原生 dialog 安全、焦点、Escape |
 | `test_ui_contract.js` | Workbench 响应式布局、七侧栏/五底栏、侧栏、海拔坞和无障碍 |
 | `test_vite_entry.js` | 小壳、`main.ts`、`bootstrap.ts`、过渡 runtime 与单文件构建 |
 | `test_release_pipeline.js` | 构建重现、release metadata、版本工具和 GitHub Pages workflow |
@@ -108,7 +108,7 @@ npm run check:generated
 - 从 IndexedDB 恢复后只执行一次有效 fit；
 - 测距、分段、标注、下撤、Day 预览互斥；
 - 取消/替换交互后旧回调不生效；
-- 侧栏/底栏命令派发同一行为；
+- 顶部菜单、桌面/移动活动栏、分析栏和 Escape 派发统一语义命令；
 - dialog 的取消、确认、Escape 和焦点恢复；
 - 生成 HTML 在 `file://` 下无运行时错误。
 

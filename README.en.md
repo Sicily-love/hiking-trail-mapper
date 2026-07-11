@@ -80,7 +80,7 @@ index.html
 - `src/app` and `src/features` own state and interaction orchestration; `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench and dialogs.
 - `InteractionManager` makes measure, segment, waypoint, escape, and Day-preview sessions mutually exclusive.
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
-- `CommandRegistry` centralizes command registration, enabled/checked state, and dispatch; `DialogController` centralizes native modal dialogs, focus restoration, and Escape handling.
+- `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, and Escape shortcut. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
 
 `src/app/runtime.ts` remains a **transitional classic-runtime compatibility layer**. It keeps existing browser orchestration working under the new boot chain, but it does not mean the historical runtime has been completely removed. Import/export, map and Canvas effects, persistence, and remaining DOM orchestration will move progressively into typed controllers and managers. New modular behavior must not be copied back into generated HTML.
 

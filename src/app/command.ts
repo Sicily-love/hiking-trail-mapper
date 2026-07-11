@@ -23,6 +23,38 @@ export interface CommandState {
   checked: boolean;
 }
 
+export const STUDIO_COMMANDS = Object.freeze({
+  FILE_IMPORT: 'file.import',
+  FILE_EXPORT: 'file.export',
+  PROJECT_CLEAR: 'project.clear',
+  TRAIL_REVERSE: 'trail.reverse',
+  MEASURE_TOGGLE: 'measure.toggle',
+  SEGMENT_TOGGLE: 'segment.toggle',
+  WAYPOINT_TOGGLE: 'waypoint.toggle',
+  ESCAPE_TOGGLE: 'escape.toggle',
+  MAP_RESET: 'map.reset',
+  HELP_OPEN: 'help.open',
+  LANGUAGE_TOGGLE: 'language.toggle',
+  APP_RENAME: 'app.rename',
+  INTERACTION_CANCEL: 'interaction.cancel',
+  MODE_ELEVATION: 'mode.elevation',
+  MODE_WAYPOINT: 'mode.waypoint',
+  WORKSPACE_PROJECT: 'workspace.project',
+  WORKSPACE_TRAILS: 'workspace.trails',
+  WORKSPACE_ITINERARY: 'workspace.itinerary',
+  WORKSPACE_WAYPOINTS: 'workspace.waypoints',
+  WORKSPACE_ESCAPE: 'workspace.escape',
+  WORKSPACE_STATISTICS: 'workspace.statistics',
+  WORKSPACE_SETTINGS: 'workspace.settings',
+  PANEL_ELEVATION: 'panel.elevation',
+  PANEL_STATISTICS: 'panel.statistics',
+  PANEL_MEASURE: 'panel.measure',
+  PANEL_SEGMENT: 'panel.segment',
+  PANEL_LOG: 'panel.log',
+} as const);
+
+export type StudioCommandId = typeof STUDIO_COMMANDS[keyof typeof STUDIO_COMMANDS];
+
 export type CommandRegistryListener = (event: CommandRegistryEvent) => void;
 
 type ContextArgs<TContext> = [TContext] extends [void]

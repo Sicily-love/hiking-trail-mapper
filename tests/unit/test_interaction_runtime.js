@@ -5,6 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
 const runtime = fs.readFileSync(path.join(root, 'src/app/runtime.ts'), 'utf8');
+const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 let passed = 0;
 let failed = 0;
 
@@ -84,10 +85,13 @@ test('owner revisions are checked before dispatch and render work', () => {
   assert.ok(runtime.includes('markTrailRevision(trail)'));
 });
 
-test('Escape key cancels the current session without closing dialogs', () => {
-  assert.ok(runtime.includes("event.key !== 'Escape'"));
-  assert.ok(runtime.includes("dialog[open], .modal-mask.open, .studio-menu-group.is-open"));
+test('Escape dispatches the cancel command while open dialogs retain priority', () => {
+  assert.ok(workbench.includes("event.key !== 'Escape'"));
+  assert.ok(workbench.includes("document.querySelector('dialog[open]')"));
+  assert.ok(workbench.includes('dispatchCommand(STUDIO_COMMANDS.INTERACTION_CANCEL)'));
+  assert.ok(runtime.includes('function cancelActiveCommand()'));
   assert.ok(runtime.includes("interactionManager.cancel('escape-key')"));
+  assert.strictEqual(runtime.includes("document.addEventListener('keydown'"), false);
 });
 
 test('waypoint quick actions also use transient sessions', () => {

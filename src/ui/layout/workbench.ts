@@ -1,23 +1,32 @@
 import { createWorkbenchIcon } from '../icons.ts';
 import type { WorkbenchIconName } from '../icons.ts';
+import {
+  STUDIO_COMMANDS,
+  type CommandRegistry,
+  type StudioCommandId,
+} from '../../app/command.ts';
 
-interface CommandDefinition {
+interface ControlDefinition {
   icon: WorkbenchIconName;
   label: string;
 }
 
+interface CommandDefinition extends ControlDefinition {
+  commandId: StudioCommandId;
+}
+
 export const COMMAND_DEFINITIONS = {
-  'add-trail-btn': { icon: 'plus', label: 'Add trail' },
-  'reverse-btn': { icon: 'rotate', label: 'Reverse trail' },
-  'clear-btn': { icon: 'trash', label: 'Clear all' },
-  'measure-btn': { icon: 'ruler', label: 'Measure distance' },
-  'segment-btn': { icon: 'calendar', label: 'Plan segments' },
-  'add-escape-btn': { icon: 'shield', label: 'Add escape route' },
-  'add-waypoint-btn': { icon: 'map-pin', label: 'Add waypoint' },
-  'reset-btn': { icon: 'crosshair', label: 'Reset view' },
-  'help-btn': { icon: 'help', label: 'Help' },
-  'lang-btn': { icon: 'language', label: 'Language' },
-  'export-btn': { icon: 'download', label: 'Export' },
+  'add-trail-btn': { icon: 'plus', label: 'Add trail', commandId: STUDIO_COMMANDS.FILE_IMPORT },
+  'reverse-btn': { icon: 'rotate', label: 'Reverse trail', commandId: STUDIO_COMMANDS.TRAIL_REVERSE },
+  'clear-btn': { icon: 'trash', label: 'Clear all', commandId: STUDIO_COMMANDS.PROJECT_CLEAR },
+  'measure-btn': { icon: 'ruler', label: 'Measure distance', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
+  'segment-btn': { icon: 'calendar', label: 'Plan segments', commandId: STUDIO_COMMANDS.SEGMENT_TOGGLE },
+  'add-escape-btn': { icon: 'shield', label: 'Add escape route', commandId: STUDIO_COMMANDS.ESCAPE_TOGGLE },
+  'add-waypoint-btn': { icon: 'map-pin', label: 'Add waypoint', commandId: STUDIO_COMMANDS.WAYPOINT_TOGGLE },
+  'reset-btn': { icon: 'crosshair', label: 'Reset view', commandId: STUDIO_COMMANDS.MAP_RESET },
+  'help-btn': { icon: 'help', label: 'Help', commandId: STUDIO_COMMANDS.HELP_OPEN },
+  'lang-btn': { icon: 'language', label: 'Language', commandId: STUDIO_COMMANDS.LANGUAGE_TOGGLE },
+  'export-btn': { icon: 'download', label: 'Export', commandId: STUDIO_COMMANDS.FILE_EXPORT },
 } as const satisfies Record<string, CommandDefinition>;
 
 export const MENU_DEFINITIONS = [
@@ -36,34 +45,34 @@ export const MENU_DEFINITIONS = [
 }>;
 
 export const ACTIVITY_DEFINITIONS = [
-  { key: 'project', label: 'Project', icon: 'folder', legacyTab: 'trails' },
-  { key: 'trails', label: 'Trails', icon: 'route', legacyTab: 'trails' },
-  { key: 'itinerary', label: 'Itinerary', icon: 'calendar', legacyTab: 'days' },
-  { key: 'waypoints', label: 'Waypoints', icon: 'waypoints', legacyTab: 'trails', mode: 'waypoint' },
-  { key: 'escape', label: 'Escape', icon: 'shield', legacyTab: 'escape' },
-  { key: 'statistics', label: 'Statistics', icon: 'chart', bottomTab: 'statistics' },
-  { key: 'settings', label: 'Settings', icon: 'settings', menu: 'view' },
+  { key: 'project', label: 'Project', icon: 'folder', commandId: STUDIO_COMMANDS.WORKSPACE_PROJECT },
+  { key: 'trails', label: 'Trails', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
+  { key: 'itinerary', label: 'Itinerary', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
+  { key: 'waypoints', label: 'Waypoints', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
+  { key: 'escape', label: 'Escape', icon: 'shield', commandId: STUDIO_COMMANDS.WORKSPACE_ESCAPE },
+  { key: 'statistics', label: 'Statistics', icon: 'chart', commandId: STUDIO_COMMANDS.WORKSPACE_STATISTICS, bottomTab: 'statistics' },
+  { key: 'settings', label: 'Settings', icon: 'settings', commandId: STUDIO_COMMANDS.WORKSPACE_SETTINGS, menu: 'view' },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
   icon: WorkbenchIconName;
-  legacyTab?: string;
-  mode?: string;
+  commandId: StudioCommandId;
   bottomTab?: string;
   menu?: string;
 }>;
 
 export const BOTTOM_TAB_DEFINITIONS = [
-  { key: 'elevation', label: 'Elevation', icon: 'mountain', nodeId: 'elev-bar' },
-  { key: 'statistics', label: 'Statistics', icon: 'chart', nodeId: 'header-stats' },
-  { key: 'measure', label: 'Measure', icon: 'ruler', nodeId: 'measure-panel' },
-  { key: 'segment', label: 'Segment', icon: 'calendar', nodeId: 'segment-panel' },
-  { key: 'log', label: 'Log', icon: 'logs', nodeId: null },
+  { key: 'elevation', label: 'Elevation', icon: 'mountain', nodeId: 'elev-bar', commandId: STUDIO_COMMANDS.PANEL_ELEVATION },
+  { key: 'statistics', label: 'Statistics', icon: 'chart', nodeId: 'header-stats', commandId: STUDIO_COMMANDS.PANEL_STATISTICS },
+  { key: 'measure', label: 'Measure', icon: 'ruler', nodeId: 'measure-panel', commandId: STUDIO_COMMANDS.PANEL_MEASURE },
+  { key: 'segment', label: 'Segment', icon: 'calendar', nodeId: 'segment-panel', commandId: STUDIO_COMMANDS.PANEL_SEGMENT },
+  { key: 'log', label: 'Log', icon: 'logs', nodeId: null, commandId: STUDIO_COMMANDS.PANEL_LOG },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
   icon: WorkbenchIconName;
   nodeId: string | null;
+  commandId: StudioCommandId;
 }>;
 
 export const WORKBENCH_STORAGE_KEYS = {
@@ -86,7 +95,7 @@ const AUXILIARY_CONTROLS = {
   'addescape-exit': { icon: 'x', label: 'Exit escape mode' },
   'sidebar-close': { icon: 'panel-left-close', label: 'Close sidebar' },
   'sidebar-toggle': { icon: 'panel-left-open', label: 'Open sidebar' },
-} as const satisfies Record<string, CommandDefinition>;
+} as const satisfies Record<string, ControlDefinition>;
 
 export type WorkbenchMenuKey = (typeof MENU_DEFINITIONS)[number]['key'];
 export type WorkbenchActivityKey = (typeof ACTIVITY_DEFINITIONS)[number]['key'];
@@ -160,7 +169,7 @@ function normalizedControlLabel(control: HTMLElement, fallback: string): string 
 function decorateControl(
   document: Document,
   control: HTMLElement,
-  definition: CommandDefinition,
+  definition: ControlDefinition,
   kind: 'command' | 'control',
 ): void {
   const label = normalizedControlLabel(control, definition.label);
@@ -227,6 +236,7 @@ function buildBottomDock(document: Document): BottomDockView {
     tab.type = 'button';
     tab.id = tabId;
     tab.dataset.bottomTab = definition.key;
+    tab.dataset.commandId = definition.commandId;
     tab.title = definition.label;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', paneId);
@@ -276,6 +286,7 @@ function buildActivityRail(document: Document): {
     button.type = 'button';
     button.id = `workbench-activity-${definition.key}`;
     button.dataset.activity = definition.key;
+    button.dataset.commandId = definition.commandId;
     button.title = definition.label;
     button.setAttribute('aria-controls', 'sidebar');
     button.setAttribute('aria-pressed', 'false');
@@ -335,7 +346,8 @@ function scheduleDocumentResize(document: Document): void {
 
 export function upgradeWorkbenchLayout(
   document: Document,
-  storage?: WorkbenchStorage | null,
+  storage: WorkbenchStorage | null | undefined,
+  commandRegistry: CommandRegistry<void>,
 ): WorkbenchLayoutController | null {
   const registered = controllers.get(document);
   const main = document.getElementById('main');
@@ -358,7 +370,6 @@ export function upgradeWorkbenchLayout(
   let activeMenu: WorkbenchMenuKey | null = null;
   let activeBottomTab: WorkbenchBottomTabKey = 'elevation';
   let activeActivity: WorkbenchActivityKey = 'project';
-  let suppressLegacyActivitySync = false;
 
   const brandView = prepareBrand(document, header, toolbar);
   if(!brandView) return null;
@@ -372,6 +383,17 @@ export function upgradeWorkbenchLayout(
     entry.textContent = `${time} ${message}`;
     dock.log.appendChild(entry);
     while(dock.log.childElementCount > 50) dock.log.firstElementChild?.remove();
+  };
+
+  const dispatchCommand = (commandId: StudioCommandId): void => {
+    try {
+      const result = commandRegistry.dispatch(commandId);
+      void Promise.resolve(result).catch(error => {
+        console.error(`Command failed: ${commandId}`, error);
+      });
+    } catch(error) {
+      console.error(`Command failed: ${commandId}`, error);
+    }
   };
 
   for(const definition of MENU_DEFINITIONS) {
@@ -403,13 +425,17 @@ export function upgradeWorkbenchLayout(
       if(!command) continue;
       const commandDefinition = COMMAND_DEFINITIONS[commandId];
       command.type = 'button';
+      command.dataset.commandId = commandDefinition.commandId;
       command.setAttribute('role', 'menuitem');
       command.tabIndex = -1;
       decorateControl(document, command, commandDefinition, 'command');
-      command.addEventListener('click', () => {
-        writeLog(command.dataset.workbenchLabel || commandDefinition.label);
+      const onCommandClick = (event: MouseEvent): void => {
+        event.preventDefault();
         closeMenus(false);
-      });
+        dispatchCommand(commandDefinition.commandId);
+      };
+      command.addEventListener('click', onCommandClick);
+      cleanups.push(() => command.removeEventListener('click', onCommandClick));
       panel.appendChild(command);
       commandButtons.set(commandId, command);
     }
@@ -574,10 +600,15 @@ export function upgradeWorkbenchLayout(
     if(event.target && !toolbar.contains(event.target as Node)) closeMenus(false);
   };
   const onDocumentKeydown = (event: KeyboardEvent): void => {
-    if(event.key === 'Escape' && activeMenu) {
+    if(event.key !== 'Escape' || event.defaultPrevented) return;
+    if(activeMenu) {
       event.preventDefault();
       closeMenus(true);
+      return;
     }
+    if(document.querySelector('dialog[open]')) return;
+    event.preventDefault();
+    dispatchCommand(STUDIO_COMMANDS.INTERACTION_CANCEL);
   };
   document.addEventListener('click', onDocumentClick, true);
   document.addEventListener('keydown', onDocumentKeydown);
@@ -603,8 +634,20 @@ export function upgradeWorkbenchLayout(
     scheduleDocumentResize(document);
   }
 
+  for(const definition of BOTTOM_TAB_DEFINITIONS) {
+    if(commandRegistry.has(definition.commandId)) continue;
+    cleanups.push(commandRegistry.register({
+      id: definition.commandId,
+      checked: () => activeBottomTab === definition.key,
+      execute: () => setBottomTab(definition.key),
+    }));
+  }
+
   for(const [key, tab] of dock.tabs) {
-    const onClick = (): void => setBottomTab(key);
+    const definition = BOTTOM_TAB_DEFINITIONS.find(item => item.key === key);
+    const onClick = (): void => {
+      if(definition) dispatchCommand(definition.commandId);
+    };
     const onKeydown = (event: KeyboardEvent): void => {
       let nextIndex = bottomKeys.indexOf(key);
       if(event.key === 'ArrowRight') nextIndex += 1;
@@ -614,7 +657,8 @@ export function upgradeWorkbenchLayout(
       else return;
       event.preventDefault();
       const next = bottomKeys[(nextIndex + bottomKeys.length) % bottomKeys.length];
-      setBottomTab(next);
+      const nextDefinition = BOTTOM_TAB_DEFINITIONS.find(item => item.key === next);
+      if(nextDefinition) dispatchCommand(nextDefinition.commandId);
       dock.tabs.get(next)?.focus();
     };
     tab.addEventListener('click', onClick);
@@ -639,26 +683,12 @@ export function upgradeWorkbenchLayout(
     if(persist) writeStorage(storage, WORKBENCH_STORAGE_KEYS.activity, key);
   }
 
-  function setActivity(key: WorkbenchActivityKey, proxy = true): void {
+  function setActivity(key: WorkbenchActivityKey): void {
     const definition = ACTIVITY_DEFINITIONS.find(activity => activity.key === key);
     if(!definition) return;
     syncActivitySelection(key);
     sidebarElement.classList.remove('collapsed');
     document.getElementById('sidebar-toggle')?.classList.remove('show');
-
-    if(proxy) {
-      suppressLegacyActivitySync = true;
-      try {
-        if('legacyTab' in definition && definition.legacyTab) {
-          document.querySelector<HTMLElement>(`.tab[data-tab="${definition.legacyTab}"]`)?.click();
-        }
-        if('mode' in definition && definition.mode) {
-          document.querySelector<HTMLElement>(`[data-mode="${definition.mode}"]`)?.click();
-        }
-      } finally {
-        suppressLegacyActivitySync = false;
-      }
-    }
 
     if('bottomTab' in definition && isBottomTabKey(definition.bottomTab)) {
       setBottomTab(definition.bottomTab);
@@ -666,11 +696,46 @@ export function upgradeWorkbenchLayout(
     if('menu' in definition && definition.menu) {
       openMenu(definition.menu as WorkbenchMenuKey, true);
     }
-    if(proxy) writeLog(definition.label);
   }
 
+  function syncCommandButtons(commandId?: string): void {
+    for(const [controlId, button] of commandButtons) {
+      const definition = COMMAND_DEFINITIONS[controlId];
+      if(commandId && definition.commandId !== commandId) continue;
+      const commandState = commandRegistry.getState(definition.commandId);
+      button.disabled = !commandState.enabled;
+      button.setAttribute('aria-disabled', String(!commandState.enabled));
+      button.setAttribute('aria-pressed', String(commandState.checked));
+      button.classList.toggle('on', commandState.checked);
+    }
+  }
+
+  function commandLabel(commandId: string): string | null {
+    const command = Object.values(COMMAND_DEFINITIONS)
+      .find(definition => definition.commandId === commandId);
+    if(command) return command.label;
+    const activity = ACTIVITY_DEFINITIONS.find(definition => definition.commandId === commandId);
+    if(activity) return activity.label;
+    const panel = BOTTOM_TAB_DEFINITIONS.find(definition => definition.commandId === commandId);
+    return panel?.label ?? null;
+  }
+
+  const unsubscribeCommands = commandRegistry.subscribe(event => {
+    syncCommandButtons(event.id);
+    if(event.type !== 'dispatched' || !event.id) return;
+    const activity = ACTIVITY_DEFINITIONS.find(definition => definition.commandId === event.id);
+    if(activity) setActivity(activity.key);
+    const label = commandLabel(event.id);
+    if(label) writeLog(label);
+  });
+  cleanups.push(unsubscribeCommands);
+  syncCommandButtons();
+
   for(const [key, button] of activityRail.buttons) {
-    const onClick = (): void => setActivity(key);
+    const definition = ACTIVITY_DEFINITIONS.find(item => item.key === key);
+    const onClick = (): void => {
+      if(definition) dispatchCommand(definition.commandId);
+    };
     const onKeydown = (event: KeyboardEvent): void => {
       let nextIndex = activityKeys.indexOf(key);
       if(event.key === 'ArrowDown' || event.key === 'ArrowRight') nextIndex += 1;
@@ -689,29 +754,6 @@ export function upgradeWorkbenchLayout(
       button.removeEventListener('keydown', onKeydown);
     });
   }
-
-  const legacyActivityByTab: Record<string, WorkbenchActivityKey> = {
-    trails: 'trails',
-    days: 'itinerary',
-    escape: 'escape',
-  };
-  document.querySelectorAll<HTMLElement>('#sidebar .tab[data-tab]').forEach(tab => {
-    const onLegacyTabClick = (): void => {
-      if(suppressLegacyActivitySync) return;
-      const activity = legacyActivityByTab[tab.dataset.tab || ''];
-      if(activity) syncActivitySelection(activity);
-    };
-    tab.addEventListener('click', onLegacyTabClick);
-    cleanups.push(() => tab.removeEventListener('click', onLegacyTabClick));
-  });
-
-  document.querySelectorAll<HTMLElement>('[data-mode="waypoint"]').forEach(modeButton => {
-    const onWaypointModeClick = (): void => {
-      if(!suppressLegacyActivitySync) syncActivitySelection('waypoints');
-    };
-    modeButton.addEventListener('click', onWaypointModeClick);
-    cleanups.push(() => modeButton.removeEventListener('click', onWaypointModeClick));
-  });
 
   const MutationObserverConstructor = document.defaultView?.MutationObserver;
   let commandObserver: MutationObserver | null = null;
@@ -756,10 +798,12 @@ export function upgradeWorkbenchLayout(
 
   const controller: WorkbenchLayoutController = {
     activateActivity(activity): void {
-      setActivity(activity);
+      const definition = ACTIVITY_DEFINITIONS.find(item => item.key === activity);
+      if(definition) dispatchCommand(definition.commandId);
     },
     activateBottomTab(tab): void {
-      setBottomTab(tab);
+      const definition = BOTTOM_TAB_DEFINITIONS.find(item => item.key === tab);
+      if(definition) dispatchCommand(definition.commandId);
     },
     closeMenus(): void {
       closeMenus(false);

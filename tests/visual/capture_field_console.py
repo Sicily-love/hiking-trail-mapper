@@ -252,6 +252,41 @@ try:
     segment_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
     (OUTPUT / "field-console-segment.png").write_bytes(base64.b64decode(segment_shot["result"]["data"]))
 
+    evaluate("""
+      (() => {
+        segmentExit();
+        window.__visualDialogPromise = window.__HTM_DIALOG_CONTROLLER__.prompt({
+          title:'Rename trail',
+          message:'Update the route name used across the workspace.',
+          inputLabel:'Trail name',
+          value:'Genie Ranch + V Route',
+          required:true,
+          selectOnOpen:true,
+          confirmLabel:'Save',
+          cancelLabel:'Cancel',
+        });
+        return true;
+      })()
+    """)
+    time.sleep(0.3)
+    dialog_state = evaluate("""
+      (() => {
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const surface = dialog?.querySelector('.workbench-dialog__surface');
+        const input = dialog?.querySelector('input');
+        const rect = surface?.getBoundingClientRect();
+        return !!dialog && !!surface && !!input
+          && document.activeElement === input
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && surface.scrollWidth <= surface.clientWidth;
+      })()
+    """)
+    dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "field-console-dialog.png").write_bytes(base64.b64decode(dialog_shot["result"]["data"]))
+    evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
+    time.sleep(0.1)
+
     cdp("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
     evaluate("toggleSidebar(true)")
     time.sleep(0.4)
@@ -259,9 +294,42 @@ try:
     wait_for_map_tiles()
     sheet = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
     (OUTPUT / "field-console-390x844-sheet.png").write_bytes(base64.b64decode(sheet["result"]["data"]))
+    evaluate("""
+      (() => {
+        toggleSidebar(false);
+        window.__visualMobileDialogPromise = window.__HTM_DIALOG_CONTROLLER__.confirm({
+          title:'Clear project?',
+          message:'This removes every trail, waypoint, and itinerary from the current workspace.',
+          confirmLabel:'Clear project',
+          cancelLabel:'Keep project',
+          tone:'danger',
+        });
+        return true;
+      })()
+    """)
+    time.sleep(0.3)
+    mobile_dialog_state = evaluate("""
+      (() => {
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const surface = dialog?.querySelector('.workbench-dialog__surface');
+        const actions = dialog?.querySelector('.workbench-dialog__actions');
+        const buttons = [...(dialog?.querySelectorAll('.workbench-dialog__button') || [])];
+        const rect = surface?.getBoundingClientRect();
+        return !!dialog && !!surface && !!actions && buttons.length === 2
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && surface.scrollWidth <= surface.clientWidth
+          && actions.scrollWidth <= actions.clientWidth
+          && buttons.every(button => button.scrollWidth <= button.clientWidth);
+      })()
+    """)
+    mobile_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "field-console-dialog-mobile.png").write_bytes(base64.b64decode(mobile_dialog_shot["result"]["data"]))
+    evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
+    time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"]]
-    if not day_state or not measure_state or not segment_state:
+    if not day_state or not measure_state or not segment_state or not dialog_state or not mobile_dialog_state:
         invalid.append("interaction-states")
     if invalid:
         raise RuntimeError(f"Visual layout contract failed: {', '.join(invalid)}")

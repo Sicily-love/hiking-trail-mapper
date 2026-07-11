@@ -48,11 +48,13 @@ T('bootstrap mounts the shell and activates source modules once', () => {
   assert.ok(bootstrap.includes('mountAppShell(root)'));
   assert.ok(bootstrap.includes('window.HikingTrailCore = core'));
   assert.ok(bootstrap.includes('window.HikingTrailApp = app'));
+  assert.ok(bootstrap.includes('window.__HTM_COMMAND_REGISTRY__ = commands'));
+  assert.ok(bootstrap.includes('window.__HTM_DIALOG_CONTROLLER__ = dialogs'));
   assert.ok(bootstrap.includes("executeClassicScript(document, runtimeSource, 'runtime.js')"));
-  assert.ok(bootstrap.includes('upgradeWorkbenchLayout(document, resolveWorkbenchStorage(document))'));
+  assert.ok(bootstrap.includes('resolveWorkbenchStorage(document),\n    commands,'));
   assert.ok(
     bootstrap.indexOf("executeClassicScript(document, runtimeSource, 'runtime.js')")
-      < bootstrap.indexOf('upgradeWorkbenchLayout(document, resolveWorkbenchStorage(document))'),
+      < bootstrap.indexOf('resolveWorkbenchStorage(document),\n    commands,'),
   );
 });
 

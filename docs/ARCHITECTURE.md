@@ -121,7 +121,7 @@ tracks -> markers -> sidebar -> days -> legend -> chart -> fit
 - 同步与异步 dispatch；
 - registered、changed、dispatched、unregistered 生命周期通知。
 
-侧栏、底栏、菜单和键盘入口应绑定同一个命令，而不是各自复制 listener。
+bootstrap 只创建一个 registry。顶部菜单、桌面活动栏、移动端响应式活动栏、底部分析 Tab、旧侧栏兼容标签和 Escape 快捷键都只分发稳定语义命令，不再代理旧按钮或复制业务 listener。runtime 负责注册实际 handler，Workbench 订阅 dispatched/changed 事件同步 disabled、checked、活动项和操作日志。
 
 ### DialogController
 
@@ -132,9 +132,11 @@ tracks -> markers -> sidebar -> days -> legend -> chart -> fit
 - 统一 Escape、cancel、危险操作样式和默认按钮；
 - 关闭后恢复此前焦点，destroy 时清理挂起状态。
 
+runtime 中的原生 `alert`、`confirm`、`prompt` 已全部迁移到该 controller；输入、危险确认和手动标注点提交均为异步对话框。帮助、更新记录、存储信息和导入面板仍是过渡期自建模态，后续按功能拆分时继续迁移。
+
 ## 管理器采用状态
 
-四个 manager 的 typed API 和单元契约已经建立。`InteractionManager` 已接管五种互斥地图交互，`RenderScheduler` 已接管 runtime 的七类刷新与 fit；`CommandRegistry` 和 `DialogController` 仍在逐步替换分散命令 listener 和旧模态实现。因此兼容层尚未删除，但交互生命周期和主渲染调度已经统一。
+四个 manager 的 typed API 和单元契约已经建立。`InteractionManager` 已接管五种互斥地图交互，`RenderScheduler` 已接管 runtime 的七类刷新与 fit，`CommandRegistry` 已接管四类 Workbench 入口，`DialogController` 已接管全部原生浏览器对话框。因此兼容层尚未删除，但主交互、渲染、命令和原生对话框生命周期已经统一。
 
 每次迁移应遵循：
 
@@ -246,10 +248,10 @@ index.html + src module graph
 
 `runtime.ts` 当前仍包含大量成熟但 classic 的浏览器编排。后续按行为垂直拆分，不做一次性重写：
 
-`RenderScheduler` 对核心 redraw、`rebuildAll` 和 workspace fit 的替换已经完成。剩余步骤是：
+`RenderScheduler` 对核心 redraw、`rebuildAll` 和 workspace fit 的替换、Workbench 主入口命令化以及原生浏览器对话框迁移已经完成。剩余步骤是：
 
-1. 让所有 Workbench 入口只 dispatch `CommandRegistry` 命令。
-2. 用 `DialogController` 替换 alert/confirm/prompt 和自建模态分支。
+1. 将动态轨迹卡、筛选器和辅助面板操作按需迁入带 payload 的命令。
+2. 用 `DialogController` 继续替换帮助、更新记录、存储信息和导入面板等自建模态。
 3. 将导入、导出、i18n、Leaflet/Canvas 与 IndexedDB 编排拆成小 controller/adapter。
 4. 只有当发布物和真实浏览器测试不再依赖 classic globals 时，才删除兼容执行路径。
 
@@ -269,5 +271,5 @@ index.html + src module graph
 
 - 当前只原生导入 KML，不原生解析 GPX、GeoJSON 或 FIT。
 - 单文件发布物不提供离线地图瓦片缓存。
-- `runtime.ts` 仍需渐进拆分；五种地图交互与七类渲染调度已统一，其余命令、对话框和浏览器编排尚未全部模块化。
+- `runtime.ts` 仍需渐进拆分；主 Workbench 命令与原生对话框已统一，动态数据操作、自建模态和其余浏览器编排尚未全部模块化。
 - `file://` 使用生成发布物，不使用根目录 Vite 小壳。

@@ -15,10 +15,14 @@ declare global {
   interface Window {
     HikingTrailCore?: typeof core;
     HikingTrailApp?: typeof app;
+    __HTM_COMMAND_REGISTRY__?: app.CommandRegistry<void>;
+    __HTM_DIALOG_CONTROLLER__?: app.DialogController;
     __HTM_BOOT_READY__?: Promise<{ restored: boolean; resetPerformed: boolean }>;
     __OUTDOOR_ROUTE_STUDIO__?: {
       version: 2;
       ready: Promise<{ restored: boolean; resetPerformed: boolean }>;
+      commands: app.CommandRegistry<void>;
+      dialogs: app.DialogController;
       workbench: WorkbenchLayoutController;
     };
   }
@@ -50,12 +54,20 @@ export async function bootstrapOutdoorRouteStudio(document: Document = window.do
 
   window.HikingTrailCore = core;
   window.HikingTrailApp = app;
+  const commands = new app.CommandRegistry<void>();
+  const dialogs = app.createDialogController(document);
+  window.__HTM_COMMAND_REGISTRY__ = commands;
+  window.__HTM_DIALOG_CONTROLLER__ = dialogs;
   executeClassicScript(document, runtimeSource, 'runtime.js');
 
-  const workbench = upgradeWorkbenchLayout(document, resolveWorkbenchStorage(document));
+  const workbench = upgradeWorkbenchLayout(
+    document,
+    resolveWorkbenchStorage(document),
+    commands,
+  );
   if(!workbench) throw new Error('Outdoor Route Studio could not mount the Workbench layout');
 
   const ready = window.__HTM_BOOT_READY__ || Promise.resolve({ restored: false, resetPerformed: false });
-  window.__OUTDOOR_ROUTE_STUDIO__ = { version: 2, ready, workbench };
+  window.__OUTDOOR_ROUTE_STUDIO__ = { version: 2, ready, commands, dialogs, workbench };
   return ready;
 }

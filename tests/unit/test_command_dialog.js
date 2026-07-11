@@ -4,7 +4,10 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
-const { CommandRegistry } = require(path.join(root, 'src/app/command.ts'));
+const { CommandRegistry, STUDIO_COMMANDS } = require(path.join(root, 'src/app/command.ts'));
+const bootstrapSource = fs.readFileSync(path.join(root, 'src/app/bootstrap.ts'), 'utf8');
+const runtimeSource = fs.readFileSync(path.join(root, 'src/app/runtime.ts'), 'utf8');
+const workbenchSource = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const dialogSource = fs.readFileSync(
   path.join(root, 'src/ui/dialog/controller.ts'),
   'utf8',
@@ -97,6 +100,13 @@ test('rejects duplicate and unknown command ids', () => {
   );
 });
 
+test('Studio command ids are unique semantic identifiers', () => {
+  const ids = Object.values(STUDIO_COMMANDS);
+  assert.strictEqual(new Set(ids).size, ids.length);
+  ids.forEach(id => assert.match(id, /^[a-z]+(?:\.[a-z]+)+$/));
+  assert.strictEqual(ids.some(id => id.endsWith('-btn')), false);
+});
+
 test('notifies subscribers after asynchronous dispatch settles', async () => {
   const registry = new CommandRegistry();
   registry.register({
@@ -155,6 +165,39 @@ test('dialog contract restores focus and handles Escape and danger state', () =>
   assert.ok(dialogSource.includes("dialog.dataset.variant = options.danger ? 'danger' : 'default'"));
   assert.ok(dialogSource.includes("workbench-dialog--danger"));
   assert.ok(dialogSource.includes("normalized.danger ? 'danger' : 'primary'"));
+});
+
+test('bootstrap creates one command and dialog runtime before classic execution', () => {
+  const commandIndex = bootstrapSource.indexOf('new app.CommandRegistry<void>()');
+  const dialogIndex = bootstrapSource.indexOf('app.createDialogController(document)');
+  const runtimeIndex = bootstrapSource.indexOf("executeClassicScript(document, runtimeSource, 'runtime.js')");
+  const workbenchIndex = bootstrapSource.indexOf('resolveWorkbenchStorage(document),\n    commands,');
+  assert.ok(commandIndex >= 0 && commandIndex < runtimeIndex);
+  assert.ok(dialogIndex >= 0 && dialogIndex < runtimeIndex);
+  assert.ok(workbenchIndex > runtimeIndex);
+  assert.ok(bootstrapSource.includes('window.__HTM_COMMAND_REGISTRY__ = commands'));
+  assert.ok(bootstrapSource.includes('window.__HTM_DIALOG_CONTROLLER__ = dialogs'));
+});
+
+test('Workbench command surfaces only dispatch semantic commands', () => {
+  assert.ok(workbenchSource.includes('command.dataset.commandId = commandDefinition.commandId'));
+  assert.ok(workbenchSource.includes('dispatchCommand(commandDefinition.commandId)'));
+  assert.ok(workbenchSource.includes('dispatchCommand(definition.commandId)'));
+  assert.ok(workbenchSource.includes('commandRegistry.subscribe(event =>'));
+  assert.strictEqual(workbenchSource.includes('?.click()'), false);
+});
+
+test('runtime registers primary commands without native dialogs or onclick handlers', () => {
+  [
+    'FILE_IMPORT', 'FILE_EXPORT', 'PROJECT_CLEAR', 'TRAIL_REVERSE',
+    'MEASURE_TOGGLE', 'SEGMENT_TOGGLE', 'WAYPOINT_TOGGLE', 'ESCAPE_TOGGLE',
+    'MAP_RESET', 'HELP_OPEN', 'LANGUAGE_TOGGLE', 'INTERACTION_CANCEL',
+  ].forEach(name => assert.ok(runtimeSource.includes(`register(STUDIO_COMMANDS.${name}`), name));
+  assert.strictEqual(/(^|[^.\w])(alert|confirm|prompt)\s*\(/m.test(runtimeSource), false);
+  assert.strictEqual(runtimeSource.includes('onclick='), false);
+  assert.strictEqual(/\.onclick\s*=/.test(runtimeSource), false);
+  assert.strictEqual(runtimeSource.includes("document.getElementById('export-btn').addEventListener"), false);
+  assert.strictEqual(runtimeSource.includes("document.getElementById('clear-btn').addEventListener"), false);
 });
 
 (async () => {

@@ -172,6 +172,7 @@ Click `☐ Batch group` at top of sidebar to enter batch mode:
 |--------|-----|
 | Map zoom | wheel · double-click · pinch |
 | Browser page zoom | Cmd/Ctrl + / − / 0 (not swallowed by map) |
+| Cancel the active operation or close an overlay | Escape (through the shared `interaction.cancel` command) |
 | Add waypoint | desktop right-click / mobile long-press 600ms |
 | Rename | double-click waypoint or trail card title |
 | Reverse trail | expand card → `↔ Reverse` button |

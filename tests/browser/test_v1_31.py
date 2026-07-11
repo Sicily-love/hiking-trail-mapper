@@ -102,6 +102,8 @@ try:
           evalj("document.documentElement.dataset.workbench === '2' && document.documentElement.dataset.ui === 'studio'"))
     check("Workbench 控制器已挂载",
           evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
+    check("唯一命令与对话框运行时已挂载",
+          evalj("window.__OUTDOOR_ROUTE_STUDIO__?.commands === window.__HTM_COMMAND_REGISTRY__ && window.__OUTDOOR_ROUTE_STUDIO__?.dialogs === window.__HTM_DIALOG_CONTROLLER__"))
     check("顶部 7 个菜单已渲染",
           evalj("document.querySelectorAll('.studio-menu-trigger').length === 7"))
     check("左侧 7 个活动入口已渲染",
@@ -112,6 +114,8 @@ try:
           evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
     check("旧命令节点已无损迁移到 Workbench 菜单",
           evalj("['add-trail-btn','reverse-btn','clear-btn','measure-btn','segment-btn','add-escape-btn','add-waypoint-btn','reset-btn','help-btn','lang-btn','export-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup'))"))
+    check("顶部、活动栏和分析栏均绑定语义命令",
+          evalj("[...document.querySelectorAll('.studio-command,.studio-activity-button,.studio-bottom-tab')].every(node => node.dataset.commandId && window.__HTM_COMMAND_REGISTRY__.has(node.dataset.commandId))"))
     check("TypeScript core runtime 已接管关键函数",
           evalj("!!window.HikingTrailCore && window.__HTM_CORE_RUNTIME__ === window.HikingTrailCore && haversine === window.HikingTrailCore.haversine && buildDayPreviewRenderModel === window.HikingTrailCore.buildDayPreviewRenderModel"))
     check("state.batchMode 已移除",
@@ -533,9 +537,62 @@ try:
     else:
         check("端到端 zip 导入", False, str(e2e)[:200])
 
+    print("\n▸ Command 2.0：四类入口统一分发")
+    command_flow = evalj("""
+      (async () => {
+        const registry = window.__HTM_COMMAND_REGISTRY__;
+        const events = [];
+        const unsubscribe = registry.subscribe(event => {
+          if(event.type === 'dispatched') events.push(event.id);
+        });
+        const measureButton = document.getElementById('measure-btn');
+        measureButton.click();
+        await Promise.resolve();
+        const topMenuEnteredMeasure = interactionManager.current.kind === 'measure';
+
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+        await Promise.resolve();
+        const shortcutCancelled = interactionManager.current.kind === 'idle';
+
+        document.getElementById('workbench-activity-itinerary').click();
+        await Promise.resolve();
+        const activityOpenedItinerary = document.querySelector('.tab[data-tab="days"]').classList.contains('active')
+          && document.getElementById('workbench-activity-itinerary').classList.contains('is-active');
+
+        document.querySelector('[data-bottom-tab="log"]').click();
+        await Promise.resolve();
+        const bottomOpenedLog = document.querySelector('[data-bottom-tab="log"]').getAttribute('aria-selected') === 'true';
+
+        document.getElementById('workbench-activity-trails').click();
+        unsubscribe();
+        return {
+          topMenuEnteredMeasure,
+          shortcutCancelled,
+          activityOpenedItinerary,
+          bottomOpenedLog,
+          events,
+        };
+      })()
+    """)
+    if isinstance(command_flow, dict) and 'events' in command_flow:
+        check("顶部菜单只分发 measure.toggle",
+              command_flow.get('topMenuEnteredMeasure') == True and 'measure.toggle' in command_flow['events'],
+              str(command_flow))
+        check("Escape 快捷键只分发 interaction.cancel",
+              command_flow.get('shortcutCancelled') == True and 'interaction.cancel' in command_flow['events'],
+              str(command_flow))
+        check("桌面/移动活动栏分发 workspace 命令",
+              command_flow.get('activityOpenedItinerary') == True and 'workspace.itinerary' in command_flow['events'],
+              str(command_flow))
+        check("底部分析栏分发 panel 命令",
+              command_flow.get('bottomOpenedLog') == True and 'panel.log' in command_flow['events'],
+              str(command_flow))
+    else:
+        check("Command 2.0 统一分发", False, str(command_flow))
+
     print("\n▸ Interaction 2.0：五模式统一状态机")
     interaction_flow = evalj("""
-      (() => {
+      (async () => {
         const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
         if(!main || !main.track?.length) return {error:'missing-primary'};
         const point = index => ({lat:main.track[index][0], lng:main.track[index][1]});
@@ -600,13 +657,19 @@ try:
 
         enterAddWaypointMode({announce:false});
         const waypointBefore = main.waypoints.length;
-        const originalPrompt = window.prompt;
-        window.prompt = () => '状态机标注';
         dispatchRuntimeInteraction('waypoint', {
           type:'tap', source:'leaflet', latlng:point(Math.floor(main.track.length * 0.25)),
           requireNear:true,
         });
-        window.prompt = originalPrompt;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const waypointDialog = document.querySelector('dialog[open]');
+        const waypointInput = waypointDialog?.querySelector('input');
+        if(waypointInput) {
+          waypointInput.value = '状态机标注';
+          waypointInput.dispatchEvent(new Event('input', {bubbles:true}));
+          waypointDialog.querySelector('form').requestSubmit();
+        }
+        await new Promise(resolve => setTimeout(resolve, 0));
         summary.waypointCommitted = interactionManager.current.kind === 'idle'
           && !addWaypointState.active
           && main.waypoints.length === waypointBefore + 1;

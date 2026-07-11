@@ -121,7 +121,7 @@ The runtime now delegates tracks, markers, sidebar, days, legend, elevation char
 - synchronous and asynchronous dispatch;
 - registered, changed, dispatched, and unregistered lifecycle notifications.
 
-Side rails, bottom bars, menus, and keyboard entrypoints should bind the same command instead of cloning listeners.
+Bootstrap creates one registry. The top menu, desktop activity rail, responsive mobile activity bar, bottom analysis tabs, compatibility sidebar tabs, and Escape shortcut only dispatch stable semantic commands; they no longer proxy old buttons or clone business listeners. Runtime registers the handlers, while Workbench subscribes to dispatched/changed events to synchronize disabled and checked state, active destinations, and the operation log.
 
 ### DialogController
 
@@ -132,9 +132,11 @@ Side rails, bottom bars, menus, and keyboard entrypoints should bind the same co
 - shared Escape, cancel, danger-state, and default-button behavior;
 - focus restoration on close and pending-state cleanup on destroy.
 
+All native runtime `alert`, `confirm`, and `prompt` calls now use this controller. Text entry, dangerous confirmations, and manual-waypoint commits are asynchronous dialogs. Help, changelog, storage information, and import panels remain transitional custom modals for later feature-level migration.
+
 ## Manager Adoption Status
 
-The typed APIs and unit contracts for all four managers are in place. `InteractionManager` owns all five mutually exclusive map interactions, and `RenderScheduler` owns all seven runtime render/fit phases. `CommandRegistry` and `DialogController` are still progressively replacing scattered command listeners and legacy modal paths. The compatibility runtime remains, but interaction lifecycles and primary rendering orchestration are now unified.
+The typed APIs and unit contracts for all four managers are in place. `InteractionManager` owns all five mutually exclusive map interactions, `RenderScheduler` owns all seven runtime render/fit phases, `CommandRegistry` owns all four Workbench entry surfaces, and `DialogController` owns every native browser dialog. The compatibility runtime remains, but the primary interaction, rendering, command, and native-dialog lifecycles are unified.
 
 Each migration should:
 
@@ -246,10 +248,10 @@ Root and build files have different responsibilities:
 
 `runtime.ts` still contains substantial mature but classic browser orchestration. Split it vertically by behavior instead of rewriting everything at once:
 
-The `RenderScheduler` migration for core redraws, `rebuildAll`, and workspace fitting is complete. Remaining steps are:
+The `RenderScheduler` migration for core redraws, `rebuildAll`, and workspace fitting, the Workbench command migration, and native-browser-dialog migration are complete. Remaining steps are:
 
-1. Make every Workbench entrypoint dispatch a `CommandRegistry` command.
-2. Replace alert/confirm/prompt and custom modal branches with `DialogController`.
+1. Move dynamic trail-card, filter, and auxiliary-panel actions into payload commands where useful.
+2. Continue replacing custom help, changelog, storage, and import modals with `DialogController`.
 3. Split import, export, i18n, Leaflet/Canvas, and IndexedDB orchestration into small controllers/adapters.
 4. Delete the classic execution path only after release and real-browser tests no longer depend on its globals.
 
@@ -269,5 +271,5 @@ The `RenderScheduler` migration for core redraws, `rebuildAll`, and workspace fi
 
 - KML is the only native import format; GPX, GeoJSON, and FIT are not parsed directly.
 - The single-file release does not cache map tiles for offline use.
-- `runtime.ts` still needs progressive splitting; all five map interactions and all seven render phases are unified, while command, dialog, and remaining browser orchestration are not fully modular yet.
+- `runtime.ts` still needs progressive splitting; primary Workbench commands and native dialogs are unified, while dynamic data actions, custom modals, and remaining browser orchestration are not fully modular yet.
 - Use the generated release, not the root Vite shell, for `file://`.

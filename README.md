@@ -80,7 +80,7 @@ index.html
 - `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet / IndexedDB；`src/ui` 负责 Workbench 与对话框。
 - `InteractionManager` 保证测距、分段、标注、下撤和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
-- `CommandRegistry` 统一命令注册、可用/选中状态和分发；`DialogController` 统一原生模态对话框、焦点恢复和 Escape 行为。
+- `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
 `src/app/runtime.ts` 仍是 classic runtime 的**过渡兼容层**。它让既有浏览器编排在新启动链路下继续工作，但不代表历史 runtime 已完全删除。后续会把导入导出、地图/Canvas 副作用、持久化和剩余 DOM 编排渐进迁入 typed controller 与 manager；新增模块化代码不应重新复制进生成 HTML。
 

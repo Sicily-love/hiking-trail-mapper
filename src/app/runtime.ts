@@ -10,6 +10,25 @@ window.__HTM_CORE_RUNTIME__ = HTM_CORE;
 const HTM_APP = window.HikingTrailApp;
 if(!HTM_APP) throw new Error('HikingTrailApp runtime is missing');
 window.__HTM_APP_RUNTIME__ = HTM_APP;
+const STUDIO_COMMANDS = HTM_APP.STUDIO_COMMANDS;
+const commandRegistry = window.__HTM_COMMAND_REGISTRY__;
+const studioDialogs = window.__HTM_DIALOG_CONTROLLER__;
+if(!commandRegistry) throw new Error('Studio CommandRegistry runtime is missing');
+if(!studioDialogs) throw new Error('Studio DialogController runtime is missing');
+
+function dispatchStudioCommand(commandId) {
+  try {
+    const result = commandRegistry.dispatch(commandId);
+    if(result && typeof result.then === 'function') {
+      result.catch(error => console.error(`Command failed: ${commandId}`, error));
+    }
+    return result;
+  } catch(error) {
+    console.error(`Command failed: ${commandId}`, error);
+    return undefined;
+  }
+}
+window.__HTM_DISPATCH_COMMAND__ = dispatchStudioCommand;
 HTM_APP.initializeWorkbenchChrome(document, window.localStorage);
 haversine = HTM_CORE.haversine;
 smoothElev = HTM_CORE.smoothElev;
@@ -1641,12 +1660,13 @@ function showChangelog() {
       <div class="modal-card" style="max-width:560px;max-height:80vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <h3 data-i18n="changelog.title" style="margin:0">${t('changelog.title')}</h3>
-          <button class="btn-mini" onclick="document.getElementById('changelog-modal').classList.remove('open')" data-i18n="changelog.close">${t('changelog.close')}</button>
+          <button class="btn-mini" data-modal-close data-i18n="changelog.close">${t('changelog.close')}</button>
         </div>
         <div id="changelog-body"></div>
       </div>
     `;
     document.body.appendChild(modal);
+    modal.querySelector('[data-modal-close]')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('open'); });
   }
   const body = modal.querySelector('#changelog-body');
@@ -1674,12 +1694,13 @@ async function showStorageInfo() {
       <div class="modal-card" style="max-width:480px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <h3 data-i18n="storage.title" style="margin:0">${t('storage.title')}</h3>
-          <button class="btn-mini" onclick="document.getElementById('storage-modal').classList.remove('open')" data-i18n="changelog.close">${t('changelog.close')}</button>
+          <button class="btn-mini" data-modal-close data-i18n="changelog.close">${t('changelog.close')}</button>
         </div>
         <div id="storage-info" style="font-size:12px;line-height:1.8;color:var(--text-base)"></div>
       </div>
     `;
     document.body.appendChild(modal);
+    modal.querySelector('[data-modal-close]')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('open'); });
   }
   const info = modal.querySelector('#storage-info');
@@ -1732,10 +1753,17 @@ async function showStorageInfo() {
           showToast(t('storage.persisted'));
           showStorageInfo();
         } else {
-          alert('请求被拒绝。某些浏览器需要先把站点加为书签或频繁访问后才能持久化。');
+          await studioDialogs.info({
+            title:currentLang === 'zh' ? '无法持久化存储' : 'Persistent storage unavailable',
+            message:'请求被拒绝。某些浏览器需要先把站点加为书签或频繁访问后才能持久化。',
+          });
         }
       } catch(e) {
-        alert('Failed: ' + e.message);
+        await studioDialogs.info({
+          title:currentLang === 'zh' ? '存储请求失败' : 'Storage request failed',
+          message:'Failed: ' + e.message,
+          danger:true,
+        });
       }
     });
   }
@@ -1768,18 +1796,24 @@ function runtimeInteractionOwner(trail) {
 function beginRuntimeInteraction(kind, phase, trail, options = {}) {
   const owner = runtimeInteractionOwner(trail);
   if(!owner) return null;
-  return interactionManager.activate(kind, {
+  const session = interactionManager.activate(kind, {
     phase,
     owner,
     onEvent(event, session) {
       if(typeof options.onEvent === 'function') options.onEvent(event, session);
     },
     onCancel(reason, session) {
-      if(typeof options.onCancel === 'function') {
-        options.onCancel({fromManager:true, reason, session});
+      try {
+        if(typeof options.onCancel === 'function') {
+          options.onCancel({fromManager:true, reason, session});
+        }
+      } finally {
+        commandRegistry.notifyChanged();
       }
     },
   });
+  commandRegistry.notifyChanged();
+  return session;
 }
 
 function cancelRuntimeInteraction(kind, reason = 'cancelled') {
@@ -1825,12 +1859,6 @@ function dispatchRuntimeInteraction(kind, event) {
   if(current.kind !== kind || !revalidateRuntimeInteractionOwner()) return false;
   return current.dispatch(event);
 }
-
-document.addEventListener('keydown', event => {
-  if(event.key !== 'Escape' || interactionManager.current.kind === 'idle') return;
-  if(document.querySelector('dialog[open], .modal-mask.open, .studio-menu-group.is-open')) return;
-  interactionManager.cancel('escape-key');
-});
 
 const renderRuntimeStats = {
   frames: 0,
@@ -1904,6 +1932,7 @@ function applyChange(opts = {}) {
     if(typeof rebuildAll === 'function') rebuildAll({ fit });
   }
   if(save && typeof saveToStorage === 'function') saveToStorage();
+  commandRegistry.notifyChanged();
 }
 
 /**
@@ -2450,12 +2479,13 @@ function showHelp() {
       <div class="modal-card" style="max-width:640px;max-height:85vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <h3 data-i18n="help.title" style="margin:0">${t('help.title')}</h3>
-          <button class="btn-mini" onclick="document.getElementById('help-modal').classList.remove('open')" data-i18n="changelog.close">${t('changelog.close')}</button>
+          <button class="btn-mini" data-modal-close data-i18n="changelog.close">${t('changelog.close')}</button>
         </div>
         <div id="help-body" style="font-size:12px;line-height:1.7;color:var(--text-base)"></div>
       </div>
     `;
     document.body.appendChild(modal);
+    modal.querySelector('[data-modal-close]')?.addEventListener('click', () => modal.classList.remove('open'));
     modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('open'); });
   }
   const body = modal.querySelector('#help-body');
@@ -2640,7 +2670,6 @@ function addWpMarker(trail, wp, isPrimary) {
       </div>`;
       const icon = L.divIcon({ html, className:'', iconSize:[null, 24], iconAnchor:[12,12] });
       const m = L.marker([wp.lat, wp.lng], { icon, zIndexOffset: isPrimary ? 700 : 600, opacity: 1 });
-      const photoHtml = wp.photo ? `<img src="${wp.photo}" loading="lazy" style="max-width:240px;max-height:180px;border-radius:4px;margin-top:6px;display:block;cursor:zoom-in" onerror="this.style.display='none'" onclick="openLightbox('${wp.photo.replace(/'/g, '%27')}', '${(iconText + ' ' + wp.label).replace(/'/g, '%27')}')">` : '';
       // 点击标注点 → 固定显示卡片；卡片中点图片再放大
       m.on('click', e => pinWpCard(e, wp, trail));
       m.addTo(wpLayer);
@@ -2725,13 +2754,13 @@ function pinWpCard(e, wp, trail) {
 
   // 关闭按钮
   const closeBtn = document.getElementById('pin-card-close');
-  if(closeBtn) closeBtn.onclick = (ev) => { ev.stopPropagation(); hideWpPhoto(); };
+  if(closeBtn) closeBtn.addEventListener('click', ev => { ev.stopPropagation(); hideWpPhoto(); });
   // 图片点击放大
   const imgEl = document.getElementById('pin-card-img');
-  if(imgEl) imgEl.onclick = (ev) => {
+  if(imgEl) imgEl.addEventListener('click', ev => {
     ev.stopPropagation();
     openLightbox(photoSrc, `${iconText} ${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`);
-  };
+  });
 
   // 阻止事件冒泡到地图（否则 map click 会立即关掉）
   if(oe) oe.stopPropagation && oe.stopPropagation();
@@ -2848,8 +2877,16 @@ function buildHeaderStats() {
   `;
   // 绑定事件
   const renameEl = document.getElementById('pc-name');
-  if(renameEl) renameEl.addEventListener('click', () => {
-    const newName = prompt('Rename primary trail:', main.name);
+  if(renameEl) renameEl.addEventListener('click', async () => {
+    const newName = await studioDialogs.prompt({
+      title:currentLang === 'zh' ? '重命名主轨迹' : 'Rename primary trail',
+      inputLabel:currentLang === 'zh' ? '轨迹名称' : 'Trail name',
+      value:main.name,
+      required:true,
+      selectOnOpen:true,
+      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
+      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+    });
     if(newName && newName.trim() && newName !== main.name) {
       main.name = newName.trim();
       saveToStorage(); rebuildAll({fit: false});
@@ -2862,9 +2899,16 @@ function buildHeaderStats() {
     else if(typeof downloadTrailKML === 'function') downloadTrailKML(main.id);
   });
   const editLinkBtn = document.getElementById('pc-edit-link');
-  if(editLinkBtn) editLinkBtn.addEventListener('click', e => {
+  if(editLinkBtn) editLinkBtn.addEventListener('click', async e => {
     e.preventDefault();
-    const newLink = prompt('Edit source link:', main.source || '');
+    const newLink = await studioDialogs.prompt({
+      title:currentLang === 'zh' ? '编辑来源链接' : 'Edit source link',
+      inputLabel:'URL',
+      value:main.source || '',
+      selectOnOpen:true,
+      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
+      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+    });
     if(newLink !== null) {
       main.source = newLink.trim();
       saveToStorage(); buildHeaderStats();
@@ -3317,11 +3361,17 @@ function renderBatchToolbar(others) {
   moveSel.innerHTML = '<option value="">移到…</option>'
     + getGroups().filter(g => g !== state.activeGroup).map(g => `<option value="${g}">${g}</option>`).join('')
     + '<option value="__new__">＋ 新建组…</option>';
-  moveSel.addEventListener('change', e => {
+  moveSel.addEventListener('change', async e => {
     let target = e.target.value;
     if(!target) return;
     if(target === '__new__') {
-      const name = prompt('新分组名称：');
+      const name = await studioDialogs.prompt({
+        title:currentLang === 'zh' ? '新建分组' : 'New group',
+        inputLabel:currentLang === 'zh' ? '分组名称' : 'Group name',
+        required:true,
+        confirmLabel:currentLang === 'zh' ? '创建' : 'Create',
+        cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+      });
       if(!name || !name.trim()) { e.target.value = ''; return; }
       target = name.trim();
     }
@@ -3456,29 +3506,71 @@ function handleTrailCardClick(tr, e) {
 }
 
 /** 展开态特有的详情按钮 handler（编辑 ID / 编辑链接 / 删除 / 反向 / 设为主 等） */
+async function editTrailSource(tr) {
+  const newUrl = await studioDialogs.prompt({
+    title:t('trail.editLink'),
+    inputLabel:'URL',
+    value:tr.source || '',
+    selectOnOpen:true,
+    confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
+    cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+  });
+  if(newUrl === null || !DATA.trails.includes(tr)) return false;
+  tr.source = newUrl.trim();
+  applyChange();
+  return true;
+}
+
+async function editTrailId(tr) {
+  const newId = await studioDialogs.prompt({
+    title:t('trail.editId'),
+    inputLabel:'ID',
+    value:tr.id,
+    required:true,
+    selectOnOpen:true,
+    confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
+    cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+    validate:value => {
+      const trimmed = value.trim();
+      return DATA.trails.some(other => other !== tr && other.id === trimmed)
+        ? 'ID 已存在 / ID already exists'
+        : null;
+    },
+  });
+  if(!newId || !newId.trim() || newId === tr.id || !DATA.trails.includes(tr)) return false;
+  const trimmed = newId.trim();
+  const oldId = tr.id;
+  tr.id = trimmed;
+  if(state.activeTrails.has(oldId)) {
+    state.activeTrails.delete(oldId); state.activeTrails.add(trimmed);
+  }
+  if(state.primaryTrailId === oldId) state.primaryTrailId = trimmed;
+  applyChange();
+  return true;
+}
+
+async function confirmDeleteTrail(tr) {
+  const confirmed = await studioDialogs.confirm({
+    title:currentLang === 'zh' ? '删除轨迹' : 'Delete trail',
+    message:currentLang === 'zh' ? `确定删除「${tr.name}」吗？` : `Delete "${tr.name}"?`,
+    danger:true,
+    confirmLabel:currentLang === 'zh' ? '删除' : 'Delete',
+    cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+  });
+  if(!confirmed || !DATA.trails.includes(tr)) return false;
+  deleteTrail(tr.id);
+  return true;
+}
+
 function handleTrailDetailClick(tr, e) {
   if(e.target.classList.contains('trail-edit-link-btn')) {
     e.preventDefault(); e.stopPropagation();
-    const newUrl = prompt(t('trail.editLink') + ':', tr.source || '');
-    if(newUrl !== null) { tr.source = newUrl.trim(); applyChange(); }
+    void editTrailSource(tr);
     return true;
   }
   if(e.target.classList.contains('trail-edit-id-btn')) {
     e.preventDefault(); e.stopPropagation();
-    const newId = prompt(t('trail.editId') + ':', tr.id);
-    if(!newId || !newId.trim() || newId === tr.id) return true;
-    const trimmed = newId.trim();
-    if(DATA.trails.some(other => other !== tr && other.id === trimmed)) {
-      alert('ID 已存在 / ID already exists');
-      return true;
-    }
-    const oldId = tr.id;
-    tr.id = trimmed;
-    if(state.activeTrails.has(oldId)) {
-      state.activeTrails.delete(oldId); state.activeTrails.add(trimmed);
-    }
-    if(state.primaryTrailId === oldId) state.primaryTrailId = trimmed;
-    applyChange();
+    void editTrailId(tr);
     return true;
   }
   if(e.target.classList.contains('trail-dl-kml-btn')) {
@@ -3491,7 +3583,7 @@ function handleTrailDetailClick(tr, e) {
   }
   if(e.target.classList.contains('trail-delete-btn')) {
     e.preventDefault(); e.stopPropagation();
-    if(confirm(`确定删除「${tr.name}」吗？`)) deleteTrail(tr.id);
+    void confirmDeleteTrail(tr);
     return true;
   }
   if(e.target.classList.contains('set-primary-btn')) {
@@ -3507,9 +3599,15 @@ function handleTrailDetailClick(tr, e) {
 }
 
 /** 分组下拉的 change handler（展开态） */
-function handleTrailGroupChange(tr, newGroup, selectEl) {
+async function handleTrailGroupChange(tr, newGroup, selectEl) {
   if(newGroup === '__new__') {
-    const name = prompt('新分组名称：');
+    const name = await studioDialogs.prompt({
+      title:currentLang === 'zh' ? '新建分组' : 'New group',
+      inputLabel:currentLang === 'zh' ? '分组名称' : 'Group name',
+      required:true,
+      confirmLabel:currentLang === 'zh' ? '创建' : 'Create',
+      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+    });
     if(!name || !name.trim()) { selectEl.value = trailGroup(tr); return; }
     newGroup = name.trim();
   }
@@ -3567,7 +3665,7 @@ function renderTrailCard(tr) {
   if(groupSel) {
     groupSel.addEventListener('change', e => {
       e.stopPropagation();
-      handleTrailGroupChange(tr, e.target.value, e.target);
+      void handleTrailGroupChange(tr, e.target.value, e.target);
     });
   }
   return card;
@@ -3930,7 +4028,8 @@ function buildEscapeTab() {
   addBtn.style.cssText = 'width:100%;margin-top:10px;padding:7px;background:rgba(127,29,29,0.3);border:1px dashed #7f1d1d;border-radius:5px;color:#fca5a5;font-size:11px;cursor:pointer';
   addBtn.addEventListener('mouseenter', () => addBtn.style.background = 'rgba(127,29,29,0.5)');
   addBtn.addEventListener('mouseleave', () => addBtn.style.background = 'rgba(127,29,29,0.3)');
-  addBtn.addEventListener('click', () => addEscapeEnter());
+  addBtn.dataset.commandId = STUDIO_COMMANDS.ESCAPE_TOGGLE;
+  addBtn.addEventListener('click', () => dispatchStudioCommand(STUDIO_COMMANDS.ESCAPE_TOGGLE));
   tab.appendChild(addBtn);
 }
 
@@ -3961,21 +4060,36 @@ function buildLegend() {
 /* ============ Wire up controls ============ */
 // tabs
 let lastNonDayMode = state.mode === 'day' ? 'elev' : state.mode;
+const sidebarTabCommands = {
+  trails:STUDIO_COMMANDS.WORKSPACE_TRAILS,
+  days:STUDIO_COMMANDS.WORKSPACE_ITINERARY,
+  escape:STUDIO_COMMANDS.WORKSPACE_ESCAPE,
+};
+
+function activateSidebarTab(tabName) {
+  const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  const pane = document.getElementById('tab-' + tabName);
+  if(!tab || !pane) return false;
+  document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(item => item.classList.remove('active'));
+  tab.classList.add('active');
+  pane.classList.add('active');
+  if(tabName === 'days') {
+    if(state.mode !== 'day') lastNonDayMode = state.mode;
+    setMapMode('day');
+  } else if(state.mode === 'day') {
+    if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
+    setMapMode(lastNonDayMode || 'elev');
+    if(typeof refreshElevBar === 'function') refreshElevBar();
+  }
+  return true;
+}
+
 document.querySelectorAll('.tab').forEach(t => {
+  const commandId = sidebarTabCommands[t.dataset.tab];
+  if(commandId) t.dataset.commandId = commandId;
   t.addEventListener('click', () => {
-    const tabName = t.dataset.tab;
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(x=>x.classList.remove('active'));
-    t.classList.add('active');
-    document.getElementById('tab-'+tabName).classList.add('active');
-    if(tabName === 'days') {
-      if(state.mode !== 'day') lastNonDayMode = state.mode;
-      setMapMode('day');
-    } else if(state.mode === 'day') {
-      if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
-      setMapMode(lastNonDayMode || 'elev');
-      if(typeof refreshElevBar === 'function') refreshElevBar();
-    }
+    if(commandId) dispatchStudioCommand(commandId);
   });
 });
 
@@ -3989,7 +4103,7 @@ document.addEventListener('click', e => {
 // day evac button
 document.addEventListener('click', e => {
   if(e.target.classList && e.target.classList.contains('day-evac-btn')) {
-    document.querySelector('.tab[data-tab="escape"]').click();
+    dispatchStudioCommand(STUDIO_COMMANDS.WORKSPACE_ESCAPE);
   }
 });
 
@@ -4013,6 +4127,7 @@ function setMapMode(mode, opts = {}) {
   if(typeof buildFilterGrid === 'function') buildFilterGrid();
   drawTracks(); drawWaypoints(); buildLegend();
   if(opts.toast) showToast(opts.toast, 'info');
+  commandRegistry.notifyChanged();
 }
 
 function enterInteractionRenderMode(toolName) {
@@ -4023,7 +4138,11 @@ function enterInteractionRenderMode(toolName) {
 
 // mode buttons
 document.querySelectorAll('[data-mode]').forEach(b => {
-  b.addEventListener('click', () => setMapMode(b.dataset.mode));
+  const commandId = b.dataset.mode === 'waypoint'
+    ? STUDIO_COMMANDS.MODE_WAYPOINT
+    : STUDIO_COMMANDS.MODE_ELEVATION;
+  b.dataset.commandId = commandId;
+  b.addEventListener('click', () => dispatchStudioCommand(commandId));
 });
 
 // 标注点模式：tag 选择按钮
@@ -4038,12 +4157,12 @@ function buildWaypointModeTagGrid() {
     btn.className = 'btn-mini' + (on ? ' on' : '');
     btn.style.cssText = 'padding:6px 8px;font-size:11px;display:flex;align-items:center;gap:6px;justify-content:flex-start;text-align:left;width:100%';
     btn.innerHTML = `<span style="color:${color}">${waypointIcon(tag)}</span> ${t('tag.'+tag)}`;
-    btn.onclick = () => {
+    btn.addEventListener('click', () => {
       if(state.waypointModeTags.has(tag)) state.waypointModeTags.delete(tag);
       else state.waypointModeTags.add(tag);
       buildWaypointModeTagGrid();
       if(state.mode === 'waypoint') drawWaypoints();
-    };
+    });
     grid.appendChild(btn);
   });
 }
@@ -4104,9 +4223,6 @@ const kmlDrop = document.getElementById('kml-drop');
 const kmlFile = document.getElementById('kml-file');
 const kmlList = document.getElementById('kml-list');
 
-addBtn.addEventListener('click', () => addModal.classList.add('open'));
-document.getElementById('export-btn').addEventListener('click', exportOffline);
-document.getElementById('clear-btn').addEventListener('click', clearAllTrails);
 function _closeAddModal() {
   addModal.classList.remove('open');
   // 清除上次的解析记录
@@ -4252,7 +4368,11 @@ function bindKmlImportRowEvents(row, trail) {
     if(!tr || newId === cachedTid) return;
     if(!newId) { idInput.value = cachedTid; return; }
     if(DATA.trails.some(other => other !== tr && other.id === newId)) {
-      alert('ID 已存在 / ID exists');
+      void studioDialogs.info({
+        title:currentLang === 'zh' ? '无法修改 ID' : 'Cannot change ID',
+        message:'ID 已存在 / ID already exists',
+        danger:true,
+      });
       idInput.value = cachedTid;
       return;
     }
@@ -4397,8 +4517,6 @@ lightboxEl.addEventListener('click', e => {
   if(lbState.dragging || lbState.pinching) return;
   closeLightbox();
 });
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && lightboxEl.style.display === 'flex') closeLightbox(); });
-
 // 双击图片 → 切换 1x / 2.5x
 // 禁止 lightbox 内容被选中（双击放大时浏览器会选中元素）
 lightboxEl.addEventListener('selectstart', e => e.preventDefault());
@@ -5296,19 +5414,6 @@ function measureCompute() {
   });
 }
 
-// 测距按钮
-const measureBtn = document.getElementById('measure-btn');
-if(measureBtn) measureBtn.addEventListener('click', () => {
-  if(interactionManager.current.kind === 'measure') measureExit();
-  else measureEnter();
-});
-// 反向按钮（反转主轨迹）
-const reverseBtn = document.getElementById('reverse-btn');
-if(reverseBtn) reverseBtn.addEventListener('click', () => {
-  if(!state.primaryTrailId) { alert(t('reverse.noPrimary') || '无主轨迹'); return; }
-  if(typeof reverseTrail === 'function') reverseTrail(state.primaryTrailId);
-});
-
 /* ============ 分段功能（在主轨迹上依次选点，标记每天行程） ============ */
 const segmentState = HTM_APP.createSegmentInteractionState();
 
@@ -5824,11 +5929,6 @@ function segmentApply() {
   segmentExit({reason:'committed'});
 }
 
-const segmentBtn = document.getElementById('segment-btn');
-if(segmentBtn) segmentBtn.addEventListener('click', () => {
-  if(interactionManager.current.kind === 'segment') segmentExit();
-  else segmentEnter();
-});
 const segmentCloseBtn = document.getElementById('segment-close');
 if(segmentCloseBtn) segmentCloseBtn.addEventListener('click', segmentExit);
 const segmentExitBtn = document.getElementById('segment-exit');
@@ -6646,13 +6746,24 @@ function reverseTrail(id) {
 
 async function clearAllTrails() {
   if(!DATA.trails.length) return;
-  if(!confirm(`确定清除全部 ${DATA.trails.length} 条轨迹？此操作不可撤销。`)) return;
+  const confirmed = await studioDialogs.confirm({
+    title:currentLang === 'zh' ? '清空项目' : 'Clear project',
+    message:currentLang === 'zh'
+      ? `确定清除全部 ${DATA.trails.length} 条轨迹？此操作不可撤销。`
+      : `Clear all ${DATA.trails.length} trails? This cannot be undone.`,
+    danger:true,
+    confirmLabel:currentLang === 'zh' ? '全部清除' : 'Clear all',
+    cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+  });
+  if(!confirmed) return false;
   DATA.trails = [];
   state.primaryTrailId = null;
   state.activeTrails = new Set();
   state.activeEscape = null;
   await clearStorage();
   rebuildAll();
+  commandRegistry.notifyChanged();
+  return true;
 }
 
 /* ============ Toast ============ */
@@ -7489,25 +7600,20 @@ async function _boot() {
   // v1.31.0：从 IndexedDB 恢复的场景，rebuildAll 里的 fit 可能被后续绑定/UI 覆盖，
   //         这里显式再做一次 resetView，保证视野贴到主轨迹上
   const resetPerformed = restored ? await schedulePostRestoreReset() : false;
+  commandRegistry.notifyChanged();
   return {restored, resetPerformed};
 }
 window.__HTM_BOOT_READY__ = _boot();
 applyI18n();
 const appTitle = document.getElementById('app-title');
 if(appTitle) {
-  appTitle.addEventListener('dblclick', () => {
-    const n = prompt('修改标题:', appTitle.textContent);
-    if(n && n.trim()) { appTitle.textContent = n.trim(); document.title = n.trim(); try{localStorage.setItem('hiking_title',n.trim())}catch(e){} }
-  });
+  appTitle.dataset.commandId = STUDIO_COMMANDS.APP_RENAME;
+  appTitle.addEventListener('dblclick', () => dispatchStudioCommand(STUDIO_COMMANDS.APP_RENAME));
   try { const s = localStorage.getItem('hiking_title'); if(s) { appTitle.textContent = s; document.title = s; } } catch(e) {}
 }
 const langBtn = document.getElementById('lang-btn');
 if(langBtn) {
   langBtn.textContent = currentLang === 'zh' ? '🌐 EN' : '🌐 中';
-  langBtn.addEventListener('click', () => {
-    setLang(currentLang === 'zh' ? 'en' : 'zh');
-    langBtn.textContent = currentLang === 'zh' ? '🌐 EN' : '🌐 中';
-  });
 }
 const storageBtn = document.getElementById('storage-btn');
 if(storageBtn) storageBtn.addEventListener('click', showStorageInfo);
@@ -7655,15 +7761,6 @@ function fitWorkspaceBounds(bounds, options = {}, meta = {}) {
   return promise;
 }
 
-// 复位按钮：以主轨迹为中心 fitBounds
-const resetBtn = document.getElementById('reset-btn');
-if(resetBtn) resetBtn.addEventListener('click', () => resetView({restoreActive: true}));
-
-// 帮助按钮
-const helpBtn = document.getElementById('help-btn');
-if(helpBtn) helpBtn.addEventListener('click', showHelp);
-
-
 // Sidebar collapse
 const _sidebar = document.getElementById('sidebar');
 const _sbClose = document.getElementById('sidebar-close');
@@ -7719,16 +7816,25 @@ function findWaypointAnchorOnPrimary(latlng, requireNear = false) {
   return { idx: bestI, point: main.track[bestI], dist: bestD, trail: main };
 }
 
-function addManualWaypointAt(latlng, opts = {}) {
-  const { requireNear = false } = opts;
+async function addManualWaypointAt(latlng, opts = {}) {
+  const { requireNear = false, isCurrent = null } = opts;
   const anchor = findWaypointAnchorOnPrimary(latlng, requireNear);
   if(!anchor) {
     showToast('请点击主轨迹附近（200m 内）', 'error');
     return false;
   }
   const main = anchor.trail;
-  const name = prompt('标注点名称（标记 [手动]）:', '');
+  const name = await studioDialogs.prompt({
+    title:currentLang === 'zh' ? '新增标注点' : 'Add waypoint',
+    inputLabel:currentLang === 'zh' ? '标注点名称' : 'Waypoint name',
+    required:true,
+    placeholder:currentLang === 'zh' ? '名称将标记为手动添加' : 'Saved as a manual waypoint',
+    confirmLabel:currentLang === 'zh' ? '添加' : 'Add',
+    cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+  });
   if(!name || !name.trim()) return false;
+  if(typeof isCurrent === 'function' && !isCurrent()) return false;
+  if(!DATA.trails.includes(main) || main.id !== state.primaryTrailId) return false;
   const p = anchor.point;
   const cleanName = name.trim();
   const wp = {
@@ -7760,13 +7866,21 @@ function addManualWaypointAt(latlng, opts = {}) {
 function handleWaypointInteractionEvent(event, session) {
   if(event.type !== 'tap') return;
   if(!session.setPhase('committing')) return;
-  const added = addManualWaypointAt(event.latlng, {requireNear: event.requireNear !== false});
-  if(added) {
-    session.cancel('committed');
-    return;
-  }
-  if(event.transient) session.cancel('cancelled');
-  else session.setPhase('select');
+  void addManualWaypointAt(event.latlng, {
+    requireNear:event.requireNear !== false,
+    isCurrent:() => session.isCurrent() && runtimeInteractionOwnerIsCurrent(session),
+  }).then(added => {
+    if(!session.isCurrent()) return;
+    if(added) {
+      session.cancel('committed');
+      return;
+    }
+    if(event.transient) session.cancel('cancelled');
+    else session.setPhase('select');
+  }).catch(error => {
+    console.error('Failed to add waypoint', error);
+    if(session.isCurrent()) session.setPhase('select');
+  });
 }
 
 function exitAddWaypointMode(opts = {}) {
@@ -7805,17 +7919,6 @@ function dispatchTransientWaypointTap(latlng, source) {
   });
 }
 
-const addWaypointBtn = document.getElementById('add-waypoint-btn');
-if(addWaypointBtn) addWaypointBtn.addEventListener('click', () => {
-  if(interactionManager.current.kind === 'waypoint') exitAddWaypointMode();
-  else enterAddWaypointMode();
-});
-const addEscapeBtn = document.getElementById('add-escape-btn');
-if(addEscapeBtn) addEscapeBtn.addEventListener('click', () => {
-  if(interactionManager.current.kind === 'escape') addEscapeExit();
-  else addEscapeEnter();
-});
-
 // 右键/长按地图添加标注点
 if(map && !window.__wpAddBound) { window.__wpAddBound = true;
   // 桌面端：右键 contextmenu
@@ -7839,6 +7942,141 @@ if(map && !window.__wpAddBound) { window.__wpAddBound = true;
   map.getContainer().addEventListener('touchend', () => { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }, {passive: true});
   map.getContainer().addEventListener('touchmove', () => { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }, {passive: true});
 }
+
+function hasPrimaryTrail() {
+  const trail = DATA.trails.find(item => item.id === state.primaryTrailId);
+  return Boolean(trail && trail.track && trail.track.length);
+}
+
+function toggleMeasureCommand() {
+  if(interactionManager.current.kind === 'measure') measureExit();
+  else measureEnter();
+}
+
+function toggleSegmentCommand() {
+  if(interactionManager.current.kind === 'segment') segmentExit();
+  else segmentEnter();
+}
+
+function toggleWaypointCommand() {
+  if(interactionManager.current.kind === 'waypoint') exitAddWaypointMode();
+  else enterAddWaypointMode();
+}
+
+function toggleEscapeCommand() {
+  if(interactionManager.current.kind === 'escape') addEscapeExit();
+  else addEscapeEnter();
+}
+
+async function reversePrimaryTrailCommand() {
+  if(!state.primaryTrailId) {
+    await studioDialogs.info({
+      title:currentLang === 'zh' ? '无法反向' : 'Cannot reverse',
+      message:t('reverse.noPrimary') || '无主轨迹',
+    });
+    return false;
+  }
+  reverseTrail(state.primaryTrailId);
+  return true;
+}
+
+async function renameApplicationCommand() {
+  const title = document.getElementById('app-title');
+  if(!title) return false;
+  const value = await studioDialogs.prompt({
+    title:currentLang === 'zh' ? '修改标题' : 'Rename workspace',
+    inputLabel:currentLang === 'zh' ? '标题' : 'Title',
+    value:title.textContent || '',
+    required:true,
+    selectOnOpen:true,
+    confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
+    cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+  });
+  const next = value && value.trim();
+  if(!next) return false;
+  title.textContent = next;
+  document.title = next;
+  try { localStorage.setItem('hiking_title', next); } catch(e) {}
+  return true;
+}
+
+function cancelActiveCommand() {
+  if(lightboxEl && lightboxEl.style.display === 'flex') {
+    closeLightbox();
+    return true;
+  }
+  const openModal = document.querySelector('.modal-mask.open');
+  if(openModal) {
+    openModal.classList.remove('open');
+    return true;
+  }
+  const exportPopup = document.getElementById('export-menu-popup');
+  if(exportPopup) {
+    exportPopup.remove();
+    return true;
+  }
+  if(interactionManager.current.kind !== 'idle') {
+    interactionManager.cancel('escape-key');
+    return true;
+  }
+  return false;
+}
+
+function registerRuntimeCommands() {
+  const register = (id, execute, options = {}) => commandRegistry.register({id, execute, ...options});
+  const hasTrails = () => DATA.trails.length > 0;
+  const disposers = [
+    register(STUDIO_COMMANDS.FILE_IMPORT, () => addModal.classList.add('open')),
+    register(STUDIO_COMMANDS.FILE_EXPORT, exportOffline, {enabled:hasTrails}),
+    register(STUDIO_COMMANDS.PROJECT_CLEAR, clearAllTrails, {enabled:hasTrails}),
+    register(STUDIO_COMMANDS.TRAIL_REVERSE, reversePrimaryTrailCommand, {enabled:hasPrimaryTrail}),
+    register(STUDIO_COMMANDS.MEASURE_TOGGLE, toggleMeasureCommand, {
+      enabled:hasPrimaryTrail,
+      checked:() => interactionManager.current.kind === 'measure',
+    }),
+    register(STUDIO_COMMANDS.SEGMENT_TOGGLE, toggleSegmentCommand, {
+      enabled:hasPrimaryTrail,
+      checked:() => interactionManager.current.kind === 'segment',
+    }),
+    register(STUDIO_COMMANDS.WAYPOINT_TOGGLE, toggleWaypointCommand, {
+      enabled:hasPrimaryTrail,
+      checked:() => interactionManager.current.kind === 'waypoint',
+    }),
+    register(STUDIO_COMMANDS.ESCAPE_TOGGLE, toggleEscapeCommand, {
+      enabled:hasPrimaryTrail,
+      checked:() => interactionManager.current.kind === 'escape',
+    }),
+    register(STUDIO_COMMANDS.MAP_RESET, () => resetView({restoreActive:true}), {enabled:hasTrails}),
+    register(STUDIO_COMMANDS.HELP_OPEN, showHelp),
+    register(STUDIO_COMMANDS.LANGUAGE_TOGGLE, () => {
+      setLang(currentLang === 'zh' ? 'en' : 'zh');
+      const button = document.getElementById('lang-btn');
+      if(button) button.textContent = currentLang === 'zh' ? '🌐 EN' : '🌐 中';
+    }),
+    register(STUDIO_COMMANDS.APP_RENAME, renameApplicationCommand),
+    register(STUDIO_COMMANDS.INTERACTION_CANCEL, cancelActiveCommand),
+    register(STUDIO_COMMANDS.MODE_ELEVATION, () => setMapMode('elev'), {
+      checked:() => state.mode === 'elev',
+    }),
+    register(STUDIO_COMMANDS.MODE_WAYPOINT, () => setMapMode('waypoint'), {
+      checked:() => state.mode === 'waypoint',
+    }),
+    register(STUDIO_COMMANDS.WORKSPACE_PROJECT, () => activateSidebarTab('trails')),
+    register(STUDIO_COMMANDS.WORKSPACE_TRAILS, () => activateSidebarTab('trails')),
+    register(STUDIO_COMMANDS.WORKSPACE_ITINERARY, () => activateSidebarTab('days')),
+    register(STUDIO_COMMANDS.WORKSPACE_WAYPOINTS, () => {
+      activateSidebarTab('trails');
+      setMapMode('waypoint');
+    }),
+    register(STUDIO_COMMANDS.WORKSPACE_ESCAPE, () => activateSidebarTab('escape')),
+    register(STUDIO_COMMANDS.WORKSPACE_STATISTICS, () => undefined),
+    register(STUDIO_COMMANDS.WORKSPACE_SETTINGS, () => undefined),
+  ];
+  window.__HTM_RUNTIME_COMMAND_DISPOSERS__ = disposers;
+  commandRegistry.notifyChanged();
+}
+
+registerRuntimeCommands();
 
 initFloatingPanelPositions();
 invalidateRender(

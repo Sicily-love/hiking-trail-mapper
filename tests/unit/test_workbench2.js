@@ -139,10 +139,11 @@ test('layout moves existing ID nodes without cloning or HTML string copies', () 
   assert.strictEqual(workbenchSource.includes('insertAdjacentHTML'), false);
 });
 
-test('legacy tabs are click-proxied and runtime panel visibility stays synchronized', () => {
-  assert.ok(workbenchSource.includes('`.tab[data-tab="${definition.legacyTab}"]`'));
-  assert.ok(workbenchSource.includes('?.click()'));
-  assert.ok(workbenchSource.includes("document.querySelectorAll<HTMLElement>('#sidebar .tab[data-tab]')"));
+test('activity and panel surfaces dispatch commands while runtime visibility stays synchronized', () => {
+  assert.ok(workbenchSource.includes('button.dataset.commandId = definition.commandId'));
+  assert.ok(workbenchSource.includes('tab.dataset.commandId = definition.commandId'));
+  assert.ok(workbenchSource.includes('dispatchCommand(definition.commandId)'));
+  assert.strictEqual(workbenchSource.includes('?.click()'), false);
   assert.ok(workbenchSource.includes("attributeFilter: ['style']"));
   assert.ok(workbenchSource.includes("setBottomTab('elevation')"));
   assert.ok(workbenchSource.includes("if(kind === 'command') control.removeAttribute('style')"));
@@ -171,12 +172,12 @@ test('upgrade is idempotent and persists activity and bottom-tab state', () => {
 test('bootstrap activates Workbench 2.0 after the legacy runtime is bound', () => {
   const runtimeIndex = bootstrapSource.indexOf("executeClassicScript(document, runtimeSource, 'runtime.js')");
   const workbenchIndex = bootstrapSource.indexOf(
-    'upgradeWorkbenchLayout(document, resolveWorkbenchStorage(document))',
+    'resolveWorkbenchStorage(document),\n    commands,',
   );
   assert.ok(runtimeIndex >= 0);
   assert.ok(workbenchIndex > runtimeIndex);
   assert.ok(bootstrapSource.includes("throw new Error('Outdoor Route Studio could not mount the Workbench layout')"));
-  assert.ok(bootstrapSource.includes('{ version: 2, ready, workbench }'));
+  assert.ok(bootstrapSource.includes('{ version: 2, ready, commands, dialogs, workbench }'));
 });
 
 test('Studio stylesheet loads after the legacy component stylesheet', () => {

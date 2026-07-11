@@ -69,7 +69,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_interaction_runtime.js` | Runtime contracts wiring all five map modes to the unified interaction state machine |
 | `test_render_scheduler.js` | Dirty-mask coalescing, fixed flush order, next-frame re-entry, and fit epochs |
 | `test_render_runtime.js` | Seven-phase runtime wiring, elevation downsampling, marker diffs, and final-reset protection |
-| `test_command_dialog.js` | Command registration/state/dispatch and native-dialog safety, focus, and Escape |
+| `test_command_dialog.js` | Command registration/state/dispatch, four-surface wiring, and native-dialog safety, focus, and Escape |
 | `test_ui_contract.js` | Responsive Workbench, seven-side/five-bottom layout, sidebar, elevation dock, and accessibility |
 | `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, transitional runtime, and single-file build |
 | `test_release_pipeline.js` | Reproducible builds, release metadata, version tools, and the GitHub Pages workflow |
@@ -108,7 +108,7 @@ Key coverage:
 - IndexedDB restore performs exactly one valid fit;
 - measure, segment, waypoint, escape, and Day preview are mutually exclusive;
 - stale callbacks do not run after interaction cancellation/replacement;
-- side-rail and bottom-bar entrypoints dispatch the same behavior;
+- top menu, desktop/mobile activity rail, analysis bar, and Escape dispatch shared semantic commands;
 - dialog cancel, confirm, Escape, and focus restoration;
 - generated HTML has no runtime errors over `file://`.
 
