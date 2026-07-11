@@ -2,84 +2,91 @@
 
 <p><a href="README.md">中文</a> | <a href="README.en.md">English</a></p>
 
-<h1>🗺️ Hiking Trail Mapper</h1>
+<h1>Outdoor Route Studio</h1>
 
-**Single-file KML hiking map · import, measure, segment, export**
+**Single-file KML outdoor route workbench · import, compare, measure, segment, and export**
 
 </div>
 
-<!-- [中文](README.md) | [English](README.en.md) -->
+Outdoor Route Studio is a map-first KML route viewer and organizer. Application implementation is maintained only under `src/`: root `index.html` is a small Vite shell that loads `src/main.ts`, and Vite turns the complete module graph into an inlined, offline-capable single-HTML release.
 
-Hiking Trail Mapper is a single-file KML trail viewer and organizer. Maps, overlays, waypoints, elevation charts, grouping, import/export, and local persistence all live in one HTML file. There is no build step and no server requirement; download it and open it in a browser.
+## Quick Start
 
-## 🚀 Quick Start
-
-Open directly:
+Open the generated release checked into the repository:
 
 ```bash
-open index.html
+open hiking-trail-mapper.html
 ```
 
-Or clone the repository:
+`hiking-trail-mapper.html` opens directly over `file://`. Application code, styles, Leaflet, and the compression library are inlined; only online map tiles require a network. Root `index.html` is a source entry shell for Vite, not the offline release file.
+
+Local development:
 
 ```bash
 git clone https://github.com/Sicily-love/hiking-trail-mapper.git
-open hiking-trail-mapper/index.html
+cd hiking-trail-mapper
+npm ci
+npm run dev
 ```
 
-Import trails:
+Import routes:
 
-- Click `Add trail` in the top-right and select one or more `.kml` files.
-- You can also select `.zip` / `.kml.zip`; KML files inside the archive are extracted automatically.
-- Drag-and-drop files onto the browser window is supported.
+- Choose **Add trail** and select one or more `.kml` files.
+- You can also import `.zip` / `.kml.zip`; the app extracts KML files and skips macOS metadata.
+- Files can be dragged directly onto the workbench.
 
-## 🧭 What It Is For
+## Core Capabilities
 
 | Scenario | Capability |
 |----------|------------|
-| Comparing routes | Overlay multiple trails, highlight the primary trail, and dim secondary trails |
-| Planning daily stages | Color by day and use the segment tool to generate distance, ascent, and camp data |
-| Inspecting a section | Pick A/B points on the primary trail and calculate on-trail distance, ascent, descent, and segment elevation |
-| Managing waypoints | Auto-classify 13 waypoint tags such as camp, pass, water, supply, bridge, and river |
-| Moving data between devices | Export the active group as a KML ZIP with individual KML files and a merged import file |
-| Offline trail work | No runtime CDN dependency except map tiles; project data is stored in browser IndexedDB |
+| Compare routes | Overlay multiple routes, emphasize the current group's primary trail, and de-emphasize supporting trails |
+| Plan daily stages | Segment by day and produce daily distance, ascent, descent, elevation, and camp data |
+| Inspect a section | Pick A/B points on the primary trail, calculate along-track distance, ascent, and descent, and inspect section elevation |
+| Manage waypoints | Auto-classify, filter, rename, and manually add camps, passes, water, supplies, and other waypoint types |
+| Plan escapes | Pick A/B points to create an escape route and inspect it on the map and in the itinerary sidebar |
+| Move data | Export the current group as KML ZIP and the primary-trail itinerary as Markdown |
 
-See [docs/FEATURES.en.md](docs/FEATURES.en.md) for full interaction details and [docs/ARCHITECTURE.en.md](docs/ARCHITECTURE.en.md) for design notes.
+See [Features](docs/FEATURES.en.md) for interactions and [Architecture](docs/ARCHITECTURE.en.md) for implementation boundaries.
 
-## ✨ Core Features
+## Workbench
 
-- **KML import**: Supports `LineString`, `gx:Track`, and `Point` placemarks; skips macOS archive metadata.
-- **Groups and primary trail**: Trails can be grouped by route, plan, or date; each group remembers its own primary trail.
-- **Map rendering**: Leaflet is inlined; Esri satellite imagery and shaded terrain layers are available.
-- **Waypoints**: Auto-classification, chip filters, double-click rename, right-click or long-press add; waypoints snap to the nearest track point so the map and elevation chart stay aligned.
-- **Elevation chart**: Custom Canvas rendering for full-trail and measured-section views; clicking the curve locates the point on the map.
-- **Measure and segment tools**: Measure is for temporary section analysis; segment is for committing daily itinerary data.
-- **Export**: Export the active group as KML ZIP; export the primary trail itinerary as Markdown.
-- **Internationalization**: Chinese and English UI are bundled.
+The Workbench adapts one command vocabulary to different screen sizes:
 
-## 🔒 Data and Privacy
+- Desktop presents seven primary actions in a side rail with route context.
+- Mobile keeps five thumb-reachable actions in a bottom bar; lower-frequency actions move into More or a bottom sheet.
+- The responsive sidebar contains the route library, primary-trail summary, itinerary, and escape views; the elevation analysis dock can collapse.
+- Dedicated managers coordinate command state, pointer/keyboard interaction, render invalidation, and modal dialogs so DOM handlers do not each maintain separate state.
 
-All trails, waypoints, and group state are stored in the current browser's IndexedDB. Nothing is uploaded. Clearing browser data, switching browsers, or moving to another device will make local data unavailable; use `Export -> KML ZIP` for transfer.
+## Data and Privacy
 
-## 🔁 GPX / GeoJSON
+Trails, waypoints, and group state are stored in the current browser's IndexedDB and are not uploaded to an application server. Clearing browser data or changing browsers or devices does not migrate local data; use **Export → KML ZIP** first.
 
-This version only parses KML directly. Convert GPX first:
+## Architecture
 
-```bash
-ogr2ogr -f KML output.kml input.gpx
+The current entry chain is:
+
+```text
+index.html
+  -> src/main.ts
+  -> bootstrapOutdoorRouteStudio()
+  -> mountAppShell()
+  -> typed core/app modules
+  -> runtime.ts compatibility bridge
 ```
 
-GeoJSON should also be converted to KML before import.
+- `index.html` contains only metadata, `#app`, and `/src/main.ts`; it contains no business implementation.
+- `src/app/bootstrap.ts` mounts the Workbench DOM, loads inlined vendors, and starts typed modules and the transitional runtime in a deterministic order.
+- `src/core` owns DOM-free calculations, parsing, transformations, and render models.
+- `src/app` and `src/features` own state and interaction orchestration; `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench and dialogs.
+- `InteractionManager` makes measure, segment, waypoint, escape, and Day-preview sessions mutually exclusive.
+- `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
+- `CommandRegistry` centralizes command registration, enabled/checked state, and dispatch; `DialogController` centralizes native modal dialogs, focus restoration, and Escape handling.
 
-## 🧪 Development and Tests
+`src/app/runtime.ts` remains a **transitional classic-runtime compatibility layer**. It keeps existing browser orchestration working under the new boot chain, but it does not mean the historical runtime has been completely removed. Import/export, map and Canvas effects, persistence, and remaining DOM orchestration will move progressively into typed controllers and managers. New modular behavior must not be copied back into generated HTML.
 
-The Vite + TypeScript architecture and browser-layer split are complete while [hiking-trail-mapper.html](hiking-trail-mapper.html) / [index.html](index.html) remain directly openable. Both root files are generated from `src/template`, `src/ui`, `src/core`, and `src/app`, preserving `file://` use without manually maintaining duplicate pages.
-
-Common checks:
+## Development and Tests
 
 ```bash
-npm ci
-npm run dev
 npm run test:unit
 npm run typecheck
 npm run build
@@ -87,93 +94,69 @@ npm run build
 npm run test:visual:capture
 ```
 
-`npm run build` emits `dist/index.html`, `dist/hiking-trail-mapper.html`, and `dist/release.json`. `npm run release:prepare` synchronizes artifacts, runs the complete real-Chrome suite, builds, and verifies `dist/`.
+`npm run build` uses the small `index.html` shell as the Vite entry, inlines JavaScript and CSS into `dist/index.html`, and emits the compatibility alias `dist/hiking-trail-mapper.html` plus `dist/release.json`. The two HTML names contain the same self-contained release; they are not separate sources.
 
-`src/core/*.ts` is the runtime source of truth for calculations and render models. `src/app`, `src/features`, and `src/adapters` own application state, interaction controllers, and Leaflet/IndexedDB boundaries; `src/ui` owns the Field Console design and responsive behavior. Release alignment tests compare the embedded runtime directly with TypeScript behavior, so duplicate core functions are no longer retained.
+`npm run release:prepare` is the release entrypoint: it synchronizes generated artifacts, runs full verification, builds the single-file release, and validates metadata. See [Testing](docs/TESTING.en.md) and [Contributing](docs/CONTRIBUTING.en.md) for the complete workflow.
 
-## 🧱 Current Architecture
+## Milestones
 
-The project uses modular source with a single-file-compatible release:
+| Milestone | Status | Result |
+|-----------|--------|--------|
+| Milestone 1: Test guardrails | Complete | Unit, static, real-Chrome, E2E, visual, and release checks form one verification chain |
+| Milestone 2: Engineering skeleton | Complete | Vite, TypeScript, `src/`, and type checking are part of daily development |
+| Milestone 3: Core modularization | Complete | Core math, KML, storage, measurement, itinerary, and elevation models use TypeScript as their source of truth |
+| Milestone 4: UI systemization | Complete | The Workbench unifies desktop, mobile, sidebar, bottom bar, elevation dock, and bottom sheets |
+| Milestone 5: Release pipeline | Complete | Vite single-file builds, release metadata, full checks, and GitHub Pages deployment are fixed |
+| Milestone 6: Entry and orchestration | Complete | Outdoor Route Studio naming, the small shell, bootstrap, four managers, and seven-side/five-bottom Workbench contracts are in place |
 
-1. `src/core/*.ts` owns deterministic calculations, data transforms, and render models.
-2. `src/app` and `src/features` own application state and interaction controllers.
-3. `src/adapters` isolates Leaflet and IndexedDB effects while `src/ui` owns the workbench DOM and visual system.
-4. `scripts/build/generate_release_html.mjs` composes the template, CSS, both TS runtimes, and browser adapter into root HTML.
-5. Vite builds `dist/`; GitHub Actions verifies pull requests and deploys from `main`.
+Milestone 6 establishes the new entry and orchestration boundaries. It does not claim that `runtime.ts` is empty; progressively splitting that compatibility layer remains the highest-priority architecture work.
 
-## 🧩 Milestone Status
+## GPX / GeoJSON
 
-| Milestone | Status | Done | Next focus |
-|-----------|--------|------|------------|
-| Milestone 1: Test guardrails | ✅ Complete | Unit, core contract, UI/release contract, HTML↔`src/core` alignment, static, real-Chrome functional, and E2E tests are part of the six-phase check | Keep adding focused tests with new behavior |
-| Milestone 2: Engineering skeleton | ✅ Complete | Vite, TypeScript, `src/`, `dev.html`, type checking, and builds work while root HTML remains directly openable | Routine maintenance |
-| Milestone 3: Core feature modularization | ✅ Complete | Core functions, app state, features, and adapters live in `src`; 45 HTML fallbacks were removed and embedded runtime behavior is tested directly | Keep new controllers focused |
-| Milestone 4: UI systemization | ✅ Complete | Field Console unifies the desktop command surface, route library, elevation dock, Day timeline, mobile action bar, and bottom sheets | Continue visual regression with real data |
-| Milestone 5: Release pipeline closure | ✅ Complete | Generated root HTML, production Vite build, dual entries, `release.json`, versioning, release checks, and Pages Actions are fixed | Observe the first remote Actions run |
+The app currently parses KML directly. Convert GPX first:
 
-Maintenance priorities:
+```bash
+ogr2ogr -f KML output.kml input.gpx
+```
 
-1. Core fallbacks are fully removed; deterministic behavior continues to change only in `src/core`.
-2. Real-trail visual regression now covers Day cards, A/B measurement, two-day segmentation, and desktop/mobile workspaces.
-3. Continue splitting the remaining browser runtime by import, export, and map interaction controllers.
+Future native GPX / GeoJSON support should normalize into the existing import model in `src/core`, keeping storage, measurement, segmentation, and rendering independent of source format.
 
-## 🧭 GPX / GeoJSON Evaluation
+## Versioning
 
-These formats should ship as a separate feature release rather than being mixed into this engineering and UI patch:
+Version: v1.32.2
 
-- **GPX**: normalize `trk/trkseg/trkpt`, `rte/rtept`, and `wpt` into the current trail/waypoint model. Elevation and time are well defined; multi-segment joining is the main policy decision.
-- **GeoJSON**: support `LineString`, `MultiLineString`, and `Point` features. A third coordinate can represent elevation, but waypoint type, name, and photo properties require configurable mapping.
-- **Recommended boundary**: add `src/core/gpx.ts` and `src/core/geojson.ts`, both emitting the same import model as KML. The UI only dispatches by file type; storage, measurement, and itinerary remain source-format agnostic.
-- **Test requirement**: cover single-line, multi-part, missing elevation, timestamps, mixed waypoints, and invalid files, then verify imported behavior matches KML.
+- `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
+- `MINOR`: new user-visible capability, data fields, or a major workflow.
+- `MAJOR`: incompatible data migration or export-format change.
 
-## 🔖 Versioning
+Use `npm run version:bump` to update release metadata together instead of editing version stamps manually.
 
-Version: v1.32.1
-
-Single-file size about 630 KB, including Leaflet, fflate, and generated TypeScript core/app runtimes.
-
-The version number represents release cadence, not every small change as a large release:
-
-- `PATCH`: bug fixes, documentation, test scripts, compatibility fixes, and small interaction improvements.
-- `MINOR`: user-visible features, import/export capability, data-model fields, or major workflow changes.
-- `MAJOR`: incompatible data migrations, export format changes, or other breaking adjustments that require user action.
-
-When there is no breaking change or large feature, each user-visible fix, documentation polish, or small interaction improvement should normally ship as a `PATCH` release. Purely internal implementation details can still be grouped into one patch entry. Use `MINOR` or `MAJOR` only when the feature surface, data model, or compatibility boundary clearly changes.
-
-## 📁 Repository Layout
+## Repository Layout
 
 ```text
 hiking-trail-mapper/
-├── hiking-trail-mapper.html      Generated single-file application
-├── index.html                    Generated GitHub Pages entry
-├── dev.html                      Vite development entry
-├── src/                          Template, UI, core, app, features, and adapters
-├── public/                       Vite static asset placeholder
-├── scripts/
-│   ├── build/                    HTML generation, core sync, and Vite production build
-│   ├── release/                  Versioning, metadata, docs sync, and release preparation
-│   └── maintenance/              One-off maintenance and source cleanup tools
-├── .github/workflows/pages.yml   Verification and GitHub Pages deployment
-├── dist/                         Generated production output, not committed
-├── package.json                  Engineering scripts and optional build deps
-├── tsconfig.json                 TypeScript config
-├── vite.config.mts                Vite config
-├── CHANGELOG.md                  Release history
-├── docs/                         Feature, architecture, and testing docs
-├── examples/sample-trails/        Sample KML files
-├── references/tag-rules.md        Waypoint tag classification rules
-├── tests/
-│   ├── unit/                     Core, app, UI, release, and runtime-alignment tests
-│   ├── browser/                  Real-Chrome static and functional checks
-│   ├── e2e/                      End-to-end user flows
-│   └── visual/                   Real-KML multi-state screenshot regression
-└── tools/                         Optional helper tools
+├── index.html                    Small Vite source-entry shell
+├── hiking-trail-mapper.html      Generated offline single-file release
+├── src/
+│   ├── main.ts                   Browser module entry
+│   ├── app/                      Bootstrap, state, commands, interaction and render coordination
+│   ├── core/                     DOM-free calculations and data models
+│   ├── features/                 Feature controllers
+│   ├── adapters/                 Leaflet / IndexedDB boundaries
+│   ├── ui/                       Workbench, layout, and dialogs
+│   ├── styles/                   Global and vendor style entries
+│   └── vendor/                   Browser dependencies inlined at build time
+├── scripts/                      Build, release, and maintenance tools
+├── tests/                        Unit, browser, E2E, and visual checks
+├── docs/                         Chinese and English feature, architecture, testing, and contribution docs
+├── dist/                         Vite-generated Pages artifact
+└── .github/workflows/pages.yml   Verification and GitHub Pages deployment
 ```
 
-## 🌐 Deployment
+## Deployment
 
-The repository includes `.github/workflows/pages.yml`. Select **GitHub Actions** as the Pages source; pushes to `main` run full verification, build `dist/`, and deploy it. Root `index.html` remains available for direct opening or legacy branch/root deployment.
+`.github/workflows/pages.yml` verifies pull requests. On pushes to `main`, it runs `npm run release:prepare`, uploads `dist/`, and deploys GitHub Pages. Pages serves the built, self-contained `dist/index.html`; the root source shell is not deployed directly.
 
-## 📄 License
+## License
 
 [MIT](LICENSE)

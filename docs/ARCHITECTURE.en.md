@@ -1,275 +1,273 @@
-# Architecture & Design Decisions
+# Outdoor Route Studio Architecture
 
-**🌐 [中文](ARCHITECTURE.md) · [English](ARCHITECTURE.en.md)**
+**[中文](ARCHITECTURE.md) · [English](ARCHITECTURE.en.md)**
 
-For contributors and the technically curious.
+This document describes source ownership, the boot chain, Workbench contracts, runtime managers, and single-file delivery after Milestone 6.
 
-## Overview
+## Current State
 
-The release remains a directly openable single-file HTML, but root HTML is generated. `src/core` owns DOM-free calculations and render models; `src/app` and `src/features` own state and interaction controllers; `src/adapters` isolates Leaflet/IndexedDB; and `src/ui` owns the Field Console. `scripts/build/generate_release_html.mjs` composes embedded `HikingTrailCore`, `HikingTrailApp`, and browser runtimes.
+Outdoor Route Studio uses modular TypeScript source with a self-contained single-HTML release:
 
-## Engineering Source Tree
+- `src/` is the only source of truth for application implementation.
+- Root `index.html` is a stable, minimal Vite entry shell containing only page metadata, `#app`, and `src/main.ts`.
+- `src/app/bootstrap.ts` is the browser boot orchestrator.
+- `src/app/runtime.ts` remains a transitional classic-runtime compatibility layer executed in order by bootstrap.
+- Vite builds the module graph, then the release script inlines CSS and JavaScript into one file that works on GitHub Pages and over `file://`.
+
+“`src` is the only source” does not mean every repository file lives under `src`. The entry shell, build configuration, and scripts are engineering metadata; business logic, DOM structure, styles, and runtime behavior must originate under `src/`.
+
+## Source Ownership
 
 ```text
 src/
-├── template/app.html  Single-file release shell without generated CSS/runtime
-├── ui/
-│   ├── workbench.css  Field Console visuals and responsive layout
-│   └── workbench.ts   Command, sidebar, and elevation-dock DOM controller
+├── main.ts                         Imports styles and invokes bootstrap
 ├── app/
-│   ├── state.ts       Application state and per-group primary descriptors
-│   ├── index.ts       App runtime barrel
-│   └── runtime.js     Browser events and Canvas/Leaflet orchestration
-├── features/          Measurement, itinerary, Day, and elevation controllers
-├── adapters/          Leaflet and IndexedDB effect boundaries
-├── core/
-│   ├── types.ts       Base types
-│   ├── geo.ts         haversine / cumulative distance / nearest point
-│   ├── elevation.ts   smoothing, ascent/descent, elevation color, stats
-│   ├── elevationProfile.ts elevation layout, render data, annotation layout/commands, panel height
-│   ├── kml.ts         KML coordinates, image URLs, labels, and import model assembly
-│   ├── trail.ts       trail id, waypoint snap, content hash
-│   ├── measure.ts     A/B range, thinned segment lines, measurement stats
-│   ├── itinerary.ts   segment points, boundary moves, day stats, camp edit ownership
-│   ├── render.ts      Leaflet models for measurement, segmentation, and Day preview
-│   └── index.ts       core module barrel
-├── main.ts            Vite development entry, exposes both TypeScript runtimes
-└── ../dev.html        Vite development shell, iframe-loading current release HTML
+│   ├── bootstrap.ts                Boot order and compatibility bridge
+│   ├── state.ts                    Application state
+│   ├── command.ts                  CommandRegistry
+│   ├── interactions/               InteractionManager
+│   ├── rendering/                  RenderScheduler
+│   ├── runtime.ts                  Transitional classic runtime
+│   └── index.ts                    Typed app public exports
+├── core/                           DOM-free math, parsing, storage, and render models
+│   └── performance/               Large-track segmentation, downsampling, diffs, and revisions
+├── features/                       Measure, segment, Day, elevation, and other controllers
+├── adapters/                       Leaflet and IndexedDB effect boundaries
+├── ui/
+│   ├── layout/app-shell.ts         Workbench DOM shell and mount function
+│   ├── workbench.ts                Responsive Workbench chrome
+│   ├── workbench.css               Workbench visuals and layout
+│   └── dialog/                     DialogController
+├── styles/                         Global/vendor style entries
+└── vendor/                         Browser dependencies inlined by the build
 ```
 
-`src` is the only source entry. Root `index.html` and `hiking-trail-mapper.html` are generated and should not be edited directly. Forty-five duplicate core fallbacks were removed; alignment tests execute the embedded production IIFE in Node and compare it with `src/core` for identical inputs. `tests/unit/trail_core.js` remains only a CommonJS test bridge.
+Ownership rules:
 
-## Why single-file
+| Change | Location |
+|--------|----------|
+| Distance, ascent, KML, itinerary, elevation layout | `src/core` |
+| App state, commands, interaction sessions, render scheduling | `src/app` |
+| Interaction state for one feature | `src/features` |
+| Leaflet / IndexedDB calls | `src/adapters` |
+| DOM shell, responsive layout, dialogs, CSS | `src/ui` / `src/styles` |
+| Legacy browser orchestration migration | From `src/app/runtime.ts` into the owners above |
 
-- **Zero deployment friction**: GitHub Pages / cloud storage / local folder / AirDropped to phone — anywhere HTML runs
-- **`file://` protocol compatible**: works fully offline for previously-loaded map data
-- **Fork-friendly**: source is split by responsibility while release remains one file
+Do not fix behavior in `hiking-trail-mapper.html` or `dist/`; both are generated.
 
-## Why the Published Artifact Stays Single-File
+## Boot Chain
 
-- The release artifact stays simple for `file://` and GitHub Pages deployment
-- The Vite / TypeScript core now powers the production runtime while remaining embedded in one file
-- Leaflet is enough; React/Vue would be overhead
-- Native DOM and event listeners keep runtime overhead low; the complete single file is about 630KB including Leaflet, fflate, and both TS runtimes
-
-## Structure (all inside one HTML)
-
-```
-hiking-trail-mapper.html
-├── <head>
-│   ├── Leaflet CSS (embedded)
-│   ├── App CSS
-│   └── fflate 0.8.2 UMD (embedded, ~32KB)
-│       └── ⚠ MUST be inline. Sync CDN <script> on file:// blocks page render
-├── <body>
-│   ├── #map           ← Leaflet main container
-│   ├── #sidebar       ← Trail list / group tabs / batch toolbar
-│   ├── #elev-bar      ← Bottom elevation chart Canvas
-│   └── Various modals / toasts / popups
-└── <script>
-    ├── Leaflet 1.9.4 UMD (embedded, ~140KB)
-    ├── leaflet-polylineDecorator (embedded)
-    ├── HikingTrailCore IIFE (generated from src/core)
-    ├── const APP_VERSION / CHANGELOG (bilingual)
-    ├── i18n dictionaries (zh / en)
-    ├── state object (activeTrails / expandedTrails / primaryTrailId / activeGroup / batchMode / batchSelected …)
-    ├── DATA object (trails array + calc_method)
-    ├── KML parser (parseKML)
-    ├── Core runtime bindings (measure / itinerary / KML / storage / elevation models)
-    ├── Rendering layer (buildTrailList / buildPrimaryCard / drawElevBar / draw*)
-    ├── Interaction layer (right-click menu / long-press / dblclick rename / group switch / batch select)
-    ├── Persistence layer (loadFromStorage / saveToStorage / IndexedDB wrappers)
-    ├── Export layer (exportGroupKML / exportItineraryMD / showExportMenu)
-    └── i18n layer (setLang / applyI18n / t / refreshAll)
+```text
+index.html
+  └── <script type="module" src="/src/main.ts">
+        ├── styles/leaflet.css
+        ├── ui/workbench.css
+        └── bootstrapOutdoorRouteStudio(document)
+              ├── mountAppShell(#app)
+              ├── execute Leaflet / decorator / fflate vendors
+              ├── expose HikingTrailCore and HikingTrailApp
+              ├── execute the runtime.ts compatibility script
+              └── expose __OUTDOOR_ROUTE_STUDIO__.ready
 ```
 
-## Data model
+`bootstrap.ts` uses raw imports to hand vendors and `runtime.ts` to Vite, then executes compatibility code as a classic script. Typed modules and the Workbench DOM therefore exist before legacy code receives the global scope and execution order it expects.
+
+This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
+
+## Workbench Contract
+
+The Workbench is a map-first interface that changes placement, not command meaning, by viewport:
+
+- Desktop: seven primary actions live in a side rail with scannable route context.
+- Mobile: five primary actions live in a bottom bar; lower-frequency actions move into More or a bottom sheet.
+- The sidebar contains the primary-trail summary, routes, itinerary, and escape views.
+- The elevation analysis dock is independent from the route sidebar and remembers its collapsed state.
+- Responsive layout changes command placement without duplicating command implementation or business state.
+
+Seven-side/five-bottom is a layout contract, not two feature sets. Command IDs, enabled/checked state, and dispatch paths should be shared through `CommandRegistry`; visual tests cover desktop and mobile breakpoints.
+
+## Four Managers
+
+### InteractionManager
+
+`src/app/interactions/` owns mutually exclusive interaction sessions. The current vocabulary is:
+
+```text
+idle | measure | segment | waypoint | escape | day-preview
+```
+
+Each active session carries a `sessionId`, phase, owner, and independent `AbortController`. Starting a session atomically cancels the previous one; an event can be consumed only once by the current kind/session/owner. Animation frames and delays created by a session are cleaned up on cancellation, replacement, or phase change so stale callbacks cannot mutate new state.
+
+Measure, segment, waypoint, escape, and Day preview now all use this lifecycle. Map taps pass through one active-kind dispatcher, and measure/segment drags are Session events as well. Replacing, deleting, or revising a trail invalidates the old owner, while Escape cleans up the current mode through the same cancellation path.
+
+### RenderScheduler
+
+`src/app/rendering/` coalesces invalidations with a dirty mask. Its fixed flush order is:
+
+```text
+tracks -> markers -> sidebar -> days -> legend -> chart -> fit
+```
+
+Multiple invalidations schedule one animation frame. Dirty bits raised during a flush move to the next frame. `fit` uses an epoch and last-request-wins semantics so an older async viewport change cannot override a newer interaction.
+
+The runtime now delegates tracks, markers, sidebar, days, legend, elevation chart, and viewport fitting to one scheduler. Elevation tracks are grouped into at most 40 color bands. The Canvas profile uses pixel-width min/max downsampling while hit testing and annotations retain the full track. Regular waypoint markers use stable keys for add/update/remove/keep diffs, preserving unchanged Leaflet marker instances. Reset requests are guarded by both fit and reset epochs, so only the final reset can commit the viewport.
+
+### CommandRegistry
+
+`src/app/command.ts` is the DOM-free command registration and dispatch layer. It provides:
+
+- unique command IDs with explicit registration and disposal;
+- dynamic `enabled` / `checked` state;
+- synchronous and asynchronous dispatch;
+- registered, changed, dispatched, and unregistered lifecycle notifications.
+
+Side rails, bottom bars, menus, and keyboard entrypoints should bind the same command instead of cloning listeners.
+
+### DialogController
+
+`src/ui/dialog/` centralizes `info`, `confirm`, `prompt`, and custom dialogs:
+
+- native `<dialog>` and `showModal()`;
+- user strings assigned through `textContent`, without HTML injection sinks;
+- shared Escape, cancel, danger-state, and default-button behavior;
+- focus restoration on close and pending-state cleanup on destroy.
+
+## Manager Adoption Status
+
+The typed APIs and unit contracts for all four managers are in place. `InteractionManager` owns all five mutually exclusive map interactions, and `RenderScheduler` owns all seven runtime render/fit phases. `CommandRegistry` and `DialogController` are still progressively replacing scattered command listeners and legacy modal paths. The compatibility runtime remains, but interaction lifecycles and primary rendering orchestration are now unified.
+
+Each migration should:
+
+1. Add a contract or regression test for the old behavior.
+2. Move state and pure calculations into `src/core` / `src/features`.
+3. Connect lifecycle, rendering, commands, or dialogs to the corresponding manager.
+4. Remove the replaced code from `runtime.ts`.
+5. Build the single file and run real-browser workflows.
+
+## State and Data Flow
+
+```text
+File/user event
+  -> CommandRegistry / InteractionManager
+  -> state or feature controller
+  -> core pure function / render model
+  -> RenderScheduler.invalidate(mask)
+  -> adapters + DOM/Canvas renderer
+  -> IndexedDB when persistence is required
+```
+
+Primary state conventions:
+
+- `activeTrails: Set<trailId>`: currently visible routes.
+- `expandedTrails: Set<trailId>`: expanded route cards.
+- `batchSelected: Set<trailId>`: batch selection.
+- `activeGroup: string | null`: current group.
+- `primaryByGroup: Record<group, trailId>`: one primary trail per group.
+- `primaryTrailId`: derived getter/setter for the current group.
+- `modeVisibleTags`: separate visible-waypoint sets per map mode.
+
+`Set` values must become arrays before entering an IndexedDB snapshot and become Sets on restore. New state gets one owner instead of mirrored fields kept “in sync.”
+
+The transitional runtime still exposes `applyChange()` as a compatibility entrypoint. New code should prefer precise dirty masks; as migration proceeds, `applyChange` should only adapt legacy callers and must not keep growing.
+
+## Core Data Model
 
 ```typescript
-type Trail = {
-  id: string;                    // unique ID
-  name: string;                  // display name (editable via dblclick)
-  color: string;                 // primary color
-  group?: string;                // v1.14.0+ group, default "默认"
-  tracks: TrackPoint[];          // GPS points [lat, lon, alt, km, timestamp?]
-  waypoints: Waypoint[];         // annotation points
-  totalKm: number;
-  totalAsc: number;              // via accumulator thr=10
-  maxElev: number;
-  // ...
-};
+type TrackTuple = [
+  lat: number,
+  lng: number,
+  elev?: number,
+  km?: number,
+  ascent_m?: number,
+  dayId?: number | null,
+];
 
-type Waypoint = {
+type EnrichedWaypoint = {
   lat: number;
   lng: number;
   name: string;
-  tag: string;                   // one of 13
-  gps_idx: number;               // projected nearest idx on tracks (for elev alignment)
-  manual?: boolean;              // user-added flag
+  tag?: string;
+  gps_idx: number;
+  label: string;
+  elev: number;
+};
+
+type DayMeta = {
+  d: number;
+  km: number;
+  asc: number;
+  desc: number;
+  max: number;
+  min: number;
+  camp: string;
+  i_start: number;
+  i_end: number;
 };
 ```
 
-## Key algorithms
+`gps_idx` binds a waypoint, map location, and elevation position to one track index. `i_start` / `i_end` are stable ranges for Day and measurement rendering.
 
-### Accumulator ascent (thr=10m)
+## Key Algorithm Boundaries
 
-Naive sum-of-positives inflates ascent 3-5x due to GPS noise (±3-5m). Use a thresholded accumulator:
+- **Accumulated ascent/descent**: smooth elevation first, then use a threshold accumulator so GPS noise is not counted as many tiny climbs.
+- **Snap to track**: find and store the nearest track index as `gps_idx`; map and elevation positions derive from the same index.
+- **Segment thinning**: measurement, segmentation, and Day preview use bounded Leaflet models from `src/core/render.ts`.
+- **Elevation layout**: `src/core/elevationProfile.ts` computes coordinates, paths, label collision avoidance, drawing commands, and adaptive height; Canvas only consumes the model.
+- **Storage restore**: `src/core/storage.ts` normalizes snapshots and migrates legacy `primaryTrailId` into `primaryByGroup`.
 
-```
-running_asc = 0
-peak = alt[0]
-total_asc = 0
-for i in 1..n:
-  d = alt[i] - alt[i-1]
-  if d > 0:
-    running_asc += d
-    if alt[i] > peak: peak = alt[i]
-  else:
-    if running_asc > 10:  # threshold
-      total_asc += peak - trough
-    running_asc = 0
-    peak = alt[i]
-```
+## Build and Release
 
-Measured: vs 2bulu official 2502m → this method gives 2459m (1.7% error). Naive method: 3811m (52% error).
-
-### Snap-to-track (waypoint visual alignment)
-
-Manually added waypoints or KML placemarks may not sit on the track line. Fix:
-
-```
-for each waypoint:
-  min_dist = infinity
-  best_idx = 0
-  for i in 0..track.length:
-    d = haversine(waypoint, track[i])
-    if d < min_dist:
-      min_dist = d; best_idx = i
-  waypoint.gps_idx = best_idx
-  waypoint.lat, lng = track[best_idx][0], track[best_idx][1]  # visually snap to track
+```text
+index.html + src module graph
+  -> Vite
+  -> dist/index.html + temporary assets
+  -> scripts/build/build_release.mjs
+       ├── inline CSS and module JS
+       ├── remove dist/assets
+       ├── write dist/index.html
+       ├── copy identical dist/hiking-trail-mapper.html alias
+       ├── write dist/release.json
+       └── refresh/check root hiking-trail-mapper.html
+  -> GitHub Pages uploads dist/
 ```
 
-Elevation chart uses `gps_idx` to locate corresponding X coordinate.
+“Single HTML” means the final application references no external JavaScript or CSS. The compatibility alias has identical content and is not a second source. Map tiles still come from the network.
 
-### Elevation chart adaptive height (scan-line prediction)
+Root and build files have different responsibilities:
 
-Previous "double-pass" (draw → check overflow → redraw) caused **oscillation** because H changed → pY changed → label positions changed → overflow recomputed → repeat.
+| File | Role | Direct `file://` |
+|------|------|-------------------|
+| `index.html` | Small Vite source-entry shell | No |
+| `hiking-trail-mapper.html` | Generated self-contained release | Yes |
+| `dist/index.html` | GitHub Pages primary entry | Yes |
+| `dist/hiking-trail-mapper.html` | Compatibility download alias | Yes |
 
-New: **scan-line prediction**. Sort all labels by X, sweep once to find max horizontal overlap (stackDepth), compute H in one shot:
+## Progressively Splitting runtime.ts
 
-```
-H = max(140, min(340, 110 + (stackDepth + 1) * (lh + 2) + 16))
-```
+`runtime.ts` still contains substantial mature but classic browser orchestration. Split it vertically by behavior instead of rewriting everything at once:
 
-The `stackDepth + 1` reserves one extra layer for edge cases.
+The `RenderScheduler` migration for core redraws, `rebuildAll`, and workspace fitting is complete. Remaining steps are:
 
-## `file://` protocol compatibility pitfalls
+1. Make every Workbench entrypoint dispatch a `CommandRegistry` command.
+2. Replace alert/confirm/prompt and custom modal branches with `DialogController`.
+3. Split import, export, i18n, Leaflet/Canvas, and IndexedDB orchestration into small controllers/adapters.
+4. Delete the classic execution path only after release and real-browser tests no longer depend on its globals.
 
-Single-file HTML opened via double-click uses `file://` protocol. Many modern browser APIs are restricted:
+## Performance and Reliability Constraints
 
-| API | file:// restriction | Fix |
-|-----|--------------------|-----|
-| `fetch(location.href)` | Safari refuses to load self | Use `document.documentElement.outerHTML` |
-| CDN sync `<script>` | Headless Chrome blocks render | Inline everything |
-| Service Worker | Unavailable | Skip |
-| IndexedDB | ✅ Works | Just use |
-| Web Crypto | Partial | Skip |
+- Do not redraw the elevation chart unconditionally during map pan/zoom.
+- Coalesce repeated invalidations in one frame; only the latest fit request may run.
+- Keep elevation Canvas draw points at or below twice the pixel width while retaining endpoints and bucket extrema; never downsample hit-test data.
+- Limit elevation-gradient tracks to 40 color-layer groups and diff waypoint markers by stable key.
+- During consecutive resets, stale fit epochs, reset epochs, and delayed mobile fits must not override the latest request.
+- After interaction cancellation, timers, RAF callbacks, and async results must not write state.
+- Do not serialize raw `Set` values or persist DOM/Leaflet objects.
+- Keep pure calculations DOM-free and cover boundary inputs with unit tests.
+- The seven-side/five-bottom Workbench must share commands instead of duplicating responsive side effects.
 
-## State management convention
+## Known Limitations
 
-- Each state has **one source of truth** (no getter-reflected multiple Sets)
-- `state.activeTrails` = `Set<trailId>` (overlay checkboxes)
-- `state.expandedTrails` = `Set<trailId>` (expanded detail cards)
-- `state.batchSelected` = `Set<trailId>` (batch-selected; v1.15.0+ replaces the batchMode boolean — size>0 implies batch mode active)
-- `state.activeGroup` = string
-- `state.primaryTrailId` = string
-- `state.visibleTags` = `Set<string>` (currently visible waypoint tag types)
-- `state.mode` = `'day' | 'waypoint'`
-- After state change, **must** call `applyChange()` (v1.17.0+), no longer scattered `rebuildAll + saveToStorage`
-
-## v1.17.0+ function split architecture
-
-Three large functions (703 lines total) refactored into orchestration + 22 semantic helpers (v1.17.0-v1.18.0):
-
-- `buildTrailList` (v1.17.0): 372 → 25 lines
-- `handleFiles` (v1.18.0): 166 → 17 lines
-- `parseAndProcessKml` (v1.18.0): 174 → 36 lines
-- `drawElevBar` (v1.18.0): 363 → 24 lines
-
-See Chinese version for full call graphs.
-
-## v1.19.0 engineering infrastructure
-
-**JSDoc type annotations**: All key functions have `@param` + `@returns`. `@typedef` block centralized at top of file (TrackPoint / TrackTuple / Waypoint / DayMeta / TrailStats / EscapeRoute / Trail / ElevLayout / ElevAnnotation / ImportedFile).
-
-**Complete tests/ directory**:
-
-```
-tests/
-├── run_full_check.sh    # One-command 6 phases
-├── unit/
-│   ├── trail_core.js    # CommonJS bridge → src/core/index.ts
-│   ├── test_math.js     # 30 math assertions
-│   ├── test_enrich.js   # 12 snap/hash assertions
-│   ├── test_core_contract.js     # 4 TS core export contract checks
-│   ├── test_kml_core.js          # 11 KML import model/primitive assertions
-│   ├── test_storage_core.js      # 12 IndexedDB snapshot/read-write-operation/restore contract assertions
-│   ├── test_measure_itinerary.js # 27 measure/elevation-layout-render-annotation-panel-height/itinerary/Day preview/render-model assertions
-│   ├── test_vite_entry.js        # 3 Vite development entry assertions
-│   └── verify_alignment.js       # 67 HTML↔src/core alignment checks
-└── e2e/
-    └── run_all.py       # 16 scenarios / 62 assertions (headless Chrome)
-```
-
-## Unified state mutation entry: applyChange
-
-```javascript
-applyChange({ save: true, fit: false, tracksOnly: false })
-```
-
-- `save`: Trigger IndexedDB save (default true)
-- `fit`: fitBounds to primary trail
-- `tracksOnly`: Only redraw tracks (skip UI panel rebuild)
-
-Call after all state changes, replacing pre-v1.16.0 scattered `rebuildAll + saveToStorage` pattern.
-
-## Release checklist
-
-Use the fixed release flow:
-
-```bash
-npm run version:bump -- patch --zh "中文更新项" --en "English change"
-npm run release:prepare
-```
-
-`release:prepare` performs these steps in order:
-
-1. Generate and verify the embedded `HikingTrailCore`
-2. Synchronize both root HTML files, CHANGELOG, and README versions
-3. Run all six validation phases
-4. Build production `dist/` with Vite
-5. Verify both static entrypoints and `release.json`
-
-## Common performance traps
-
-- **Redundant rebuildAll**: group switch, batch select, rename etc. should call minimal subtree rebuilds (`buildTrailList()`, not full `rebuildAll()`)
-- **Set serialization**: `JSON.stringify(new Set())` = `"{}"`. Convert Sets via `Array.from()` on save and `new Set(arr)` on load
-- **Elev chart repaint**: no repaint needed on map pan/zoom, only when primary trail or data changes
-
-## Adding a new feature
-
-Recommended flow:
-1. Reserve a `vX.Y.Z-dev` entry at top of CHANGELOG
-2. Add fields to `state` object
-3. Find relevant `build*` function, modify UI
-4. Add persistent fields to `_doSave` minimal object
-5. Add/update i18n strings (both zh + en)
-6. Syntax check + dump-dom smoke test
-7. Manual Safari `file://` QA
-
-## Known limitations
-
-- KML import only (no GPX, GeoJSON, FIT)
-- Cannot cache map tiles offline (would need Service Worker, unavailable on `file://`)
-- Esri tiles can be slow in mainland China; fine elsewhere
-- Pre-iOS 15 Safari has partial IndexedDB `getAll` support (fallback manually)
+- KML is the only native import format; GPX, GeoJSON, and FIT are not parsed directly.
+- The single-file release does not cache map tiles for offline use.
+- `runtime.ts` still needs progressive splitting; all five map interactions and all seven render phases are unified, while command, dialog, and remaining browser orchestration are not fully modular yet.
+- Use the generated release, not the root Vite shell, for `file://`.

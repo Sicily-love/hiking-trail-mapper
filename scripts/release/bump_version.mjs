@@ -38,9 +38,7 @@ function shanghaiDate() {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-const templatePath = path.join(root, 'src/template/app.html');
-const runtimePath = path.join(root, 'src/app/runtime.js');
-let template = await readFile(templatePath, 'utf8');
+const runtimePath = path.join(root, 'src/app/runtime.ts');
 let runtime = await readFile(runtimePath, 'utf8');
 const current = runtime.match(/const APP_VERSION = 'v(\d+\.\d+\.\d+)'/)?.[1];
 if(!current) throw new Error('Cannot find current APP_VERSION');
@@ -60,15 +58,10 @@ if(!zhItems.length || !enItems.length) {
 
 const changelogEntry = `  {\n    version: '${nextTag}',\n    date: '${date}',\n    items: {\n      zh: [${zhItems.map(item => `'${escapeJsString(item)}'`).join(', ')}],\n      en: [${enItems.map(item => `'${escapeJsString(item)}'`).join(', ')}],\n    },\n  },\n`;
 
-template = template
-  .replace(/APP_VERSION:\s*v\d+\.\d+\.\d+/, `APP_VERSION: ${nextTag}`)
-  .replace(/BUILD_DATE:\s*\d{4}-\d{2}-\d{2}/, `BUILD_DATE:  ${date}`)
-  .replace(/在线版 v\d+\.\d+\.\d+/, `在线版 ${nextTag}`);
 runtime = runtime
   .replace(/const APP_VERSION = 'v\d+\.\d+\.\d+';/, `const APP_VERSION = '${nextTag}';`)
   .replace('const CHANGELOG = [\n', `const CHANGELOG = [\n${changelogEntry}`)
   .replace(/(<a href="javascript:void\(0\)" id="version-tag-link"[^>]*>)v\d+\.\d+\.\d+(<\/a>)/, `$1${nextTag}$2`);
-await writeFile(templatePath, template);
 await writeFile(runtimePath, runtime);
 
 for(const name of ['package.json', 'package-lock.json']) {

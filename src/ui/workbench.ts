@@ -110,6 +110,10 @@ function localizeWorkbenchChrome(document: Document): void {
 }
 
 export function initializeWorkbenchChrome(document: Document, storage?: Storage): void {
+  if(document.documentElement.dataset.workbench === '2') {
+    document.documentElement.dataset.ui = 'studio';
+    return;
+  }
   decorateCommandButtons(document);
   installToolbarChrome(document);
   installSidebarChrome(document);

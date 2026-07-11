@@ -46,13 +46,15 @@ print(f"  期望版本: {EXPECTED_VER}\n")
 
 print("▸ 版本一致性")
 m1 = re.search(r"APP_VERSION:\s*(v[\d.]+)", HTML)
-m2 = re.search(r"<title>[^<]*(v[\d.]+)[^<]*</title>", HTML)
+m2 = re.search(r"<title>\s*([^<]+?)\s*</title>", HTML)
 m3 = re.search(r"const APP_VERSION\s*=\s*'([^']+)'", HTML)
 m4 = re.search(r"CHANGELOG\s*=\s*\[\s*\{\s*version:\s*'([^']+)'", HTML)
-versions = {'注释': m1 and m1.group(1), 'title': m2 and m2.group(1),
-            'JS APP_VERSION': m3 and m3.group(1), 'CHANGELOG首条': m4 and m4.group(1)}
+versions = {'注释': m1 and m1.group(1), 'JS APP_VERSION': m3 and m3.group(1),
+            'CHANGELOG首条': m4 and m4.group(1)}
 for k, v in versions.items():
     check(f"版本 {k} = {v}", v == EXPECTED_VER)
+title = m2.group(1).strip() if m2 else None
+check(f"产品 title = {title}", title == "Outdoor Route Studio")
 
 print("\n▸ 关键函数")
 required_funcs = [
@@ -117,17 +119,19 @@ try:
 finally:
     os.unlink(tmp.name)
 
-print("\n▸ Chrome headless dump-dom（一次性）")
+print("\n▸ 发布物 DOM 基础结构")
 chrome_proc = None
 udir = f"/tmp/chrome-dump-{os.getpid()}"
 try:
     codex_sandbox = os.environ.get("CODEX_SANDBOX") == "seatbelt"
-    if codex_sandbox:
+    static_only = os.environ.get("HTM_SKIP_STATIC_CHROME") == "1"
+    if codex_sandbox or static_only:
         # 不在 Codex seatbelt 沙箱内启动 /Applications/Google Chrome.app。
         # Chrome 会在 HIServices::_RegisterApplication / TransformProcessType
         # 阶段被 macOS 拦截并 SIGABRT，导致系统弹崩溃通知；真实浏览器验收
         # 统一由 ./tests/run_full_check.sh 在批准的外部执行环境中完成。
-        print("    跳过沙箱内 Chrome 启动，改用静态降级检查（真实浏览器验收走 run_full_check）")
+        reason = "沙箱环境" if codex_sandbox else "全量测试的静态阶段"
+        print(f"    {reason}不重复启动 Chrome；真实浏览器验收由功能与 E2E 阶段完成")
         check(f"DOM 长度 > 100k", len(HTML) > 100_000, f"source {len(HTML):,} chars")
         check("DOM 含 leaflet-container", 'leaflet-container' in HTML)
         check("DOM 含 sidebar", 'sidebar' in HTML.lower())
@@ -205,8 +209,8 @@ if RELEASE.exists():
         p = RELEASE / f
         if p.exists():
             txt = p.read_text(encoding='utf-8')
-            has_zh = '[中文]' in txt
-            has_en = '[English]' in txt
+            has_zh = '[中文]' in txt or re.search(r'<a\s+href="README\.md">中文</a>', txt) is not None
+            has_en = '[English]' in txt or re.search(r'<a\s+href="README\.en\.md">English</a>', txt) is not None
             check(f"{f} 有语言切换头",
                   has_zh and has_en,
                   f"zh={has_zh} en={has_en}")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-清理 src/app/runtime.js 里过时的版本标记注释。
+清理 src/app/runtime.ts 里过时的版本标记注释。
 
 策略：
 - 保留：v1.14.1 / v1.15.0 / v1.16.0（最近 3 版）
@@ -14,10 +14,10 @@ import re, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TMPL = ROOT / "src" / "app" / "runtime.js"
+SOURCE = ROOT / "src" / "app" / "runtime.ts"
 KEEP_VERSIONS = {'v1.14.1', 'v1.15.0', 'v1.16.0'}
 
-html = TMPL.read_text(encoding='utf-8')
+html = SOURCE.read_text(encoding='utf-8')
 lines = html.split('\n')
 
 pattern = re.compile(r'^(\s*)//\s*(v1\.[0-9]+(?:\.[0-9]+)?)[:：]\s*(.*)$')
@@ -45,7 +45,7 @@ for i, line in enumerate(lines):
 
 # 删掉 None
 result = '\n'.join(l for l in lines if l is not None)
-TMPL.write_text(result, encoding='utf-8')
+SOURCE.write_text(result, encoding='utf-8')
 
 # 统计
 new_html = result

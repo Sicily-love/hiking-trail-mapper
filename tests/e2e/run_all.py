@@ -110,6 +110,21 @@ try:
             return {"__error__": v.get("description", "")[:200]}
         return v.get("value")
 
+    def wait_for_render():
+        return evalj("""
+          new Promise(resolve => {
+            const settle = () => {
+              const scheduler = window.__HTM_RENDER_SCHEDULER__;
+              if (!scheduler || (!scheduler.hasScheduledFrame && scheduler.pendingMask === 0)) {
+                resolve(true);
+                return;
+              }
+              requestAnimationFrame(settle);
+            };
+            requestAnimationFrame(settle);
+          })
+        """)
+
     # ═══════════════════════════════════════════════════════════════
     # E1 — 空 workspace 启动，无 JS 报错
     # ═══════════════════════════════════════════════════════════════
@@ -118,14 +133,14 @@ try:
     check("TypeScript core runtime 已内联并激活",
           evalj("!!window.HikingTrailCore && window.__HTM_CORE_RUNTIME__ === window.HikingTrailCore && computeElevationRenderModel === window.HikingTrailCore.computeElevationRenderModel"))
     check("TypeScript app runtime 已内联并激活",
-          evalj("!!window.HikingTrailApp && window.__HTM_APP_RUNTIME__ === window.HikingTrailApp && document.documentElement.dataset.ui === 'field-console'"))
+          evalj("!!window.HikingTrailApp && window.__HTM_APP_RUNTIME__ === window.HikingTrailApp && document.documentElement.dataset.ui === 'studio' && document.documentElement.dataset.workbench === '2' && !!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
     check("state 对象已初始化", evalj("typeof state === 'object' && state !== null"))
     check("DATA 对象已初始化", evalj("typeof DATA === 'object' && Array.isArray(DATA.trails)"))
     check("Leaflet map 已实例化", evalj("typeof map === 'object' && !!map"))
     check("state.activeGroup 默认值", evalj("typeof state.activeGroup === 'string'"))
 
-    # 清空 IndexedDB + trails，保证从零开始
-    evalj("(async () => { DATA.trails = []; state.activeTrails = new Set(); state.primaryTrailId = null; try { indexedDB.deleteDatabase('hiking_trail_db'); } catch(e){} rebuildAll({fit:false}); })()")
+    # 清空 IndexedDB + trails，保证从零开始。使用应用 API 等待事务完成，避免挂起的 deleteDatabase 在后续重载时误删新缓存。
+    evalj("(async () => { await clearStorage(); DATA.trails = []; state.activeTrails = new Set(); state.primaryTrailId = null; rebuildAll({fit:false}); })()")
     time.sleep(0.5)
 
     # ═══════════════════════════════════════════════════════════════
@@ -332,7 +347,7 @@ try:
     check("km 数组与 segPts 等长", r.get("kmRangeOk") == True, f"segLen={r.get('segLen')}")
 
     # ═══════════════════════════════════════════════════════════════
-    # E11 — IndexedDB 持久化（saveToStorage / loadFromStorage 存在）
+    # E11 — IndexedDB 持久化与缓存恢复后的单次自动复位
     # ═══════════════════════════════════════════════════════════════
     print("\n▸ E11 · IndexedDB 持久化")
     check("saveToStorage 函数存在", evalj("typeof saveToStorage === 'function'"))
@@ -340,7 +355,7 @@ try:
     r = evalj("""
       (async () => {
         try {
-          await saveToStorage();
+          await _doSave();
           return {saved: true};
         } catch(e) {
           return {saved: false, err: e.message};
@@ -348,6 +363,28 @@ try:
       })()
     """)
     check("saveToStorage 无异常", r.get("saved") == True, r.get("err", ""))
+    cdp("Page.reload", {"ignoreCache": True})
+    time.sleep(1.0)
+    r = evalj("""
+      (async () => {
+        const boot = await window.__HTM_BOOT_READY__;
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        const bounds = map.getBounds();
+        const first = main?.track?.[0];
+        const last = main?.track?.[main.track.length - 1];
+        return {
+          restored: boot?.restored === true,
+          resetPerformed: boot?.resetPerformed === true,
+          containsEndpoints: !!first && !!last
+            && bounds.contains([first[0], first[1]])
+            && bounds.contains([last[0], last[1]]),
+          primaryId: main?.id || null,
+        };
+      })()
+    """)
+    check("重新打开 HTML 会从 IndexedDB 恢复轨迹", r.get("restored") == True, str(r))
+    check("缓存恢复完成后自动执行一次主轨迹复位", r.get("resetPerformed") == True, str(r))
+    check("自动复位后的地图范围包含主轨迹起终点", r.get("containsEndpoints") == True, str(r))
 
     # ═══════════════════════════════════════════════════════════════
     # E12 — i18n 中英切换
@@ -435,6 +472,7 @@ try:
 
     # 再次点击 tab → switchGroup(null)
     evalj("switchGroup(null)")
+    wait_for_render()
     check("switchGroup(null) 后 activeGroup 为 null",
           evalj("state.activeGroup === null"))
     check("primaryTrailId 被清空",
@@ -453,6 +491,7 @@ try:
 
     # 从 null 切回具体分组恢复
     evalj("switchGroup('甲组')")
+    wait_for_render()
     check("从 null 切回「甲组」后 activeGroup=甲组",
           evalj("state.activeGroup === '甲组'"))
     check("切回后 primaryTrailId 自动恢复到甲组内的 trail",
@@ -542,6 +581,7 @@ try:
 
     # 场景 3：切到 B 组，B 组主轨迹是 B1（不是 A 组污染过来的 A2）
     evalj("switchGroup('B组')")
+    wait_for_render()
     check("切到 B 组，B 组主轨迹 = B1（不是 A2）",
           evalj("state.primaryTrailId === 'B1'"))
     check("A 组的记忆仍是 A2（未被 B 组切换覆盖）",
@@ -549,6 +589,7 @@ try:
 
     # 场景 4：切回 A 组，主轨迹是 A2（保留记忆）
     evalj("switchGroup('A组')")
+    wait_for_render()
     check("切回 A 组，主轨迹恢复为 A2",
           evalj("state.primaryTrailId === 'A2'"))
 

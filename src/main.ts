@@ -1,16 +1,9 @@
-import * as core from './core/index.ts';
-import * as app from './app/index.ts';
+import './styles/leaflet.css';
+import './ui/workbench.css';
+import './styles/studio.css';
+import { bootstrapOutdoorRouteStudio } from './app/bootstrap.ts';
 
-declare global {
-  interface Window {
-    HikingTrailCore?: typeof core;
-    HikingTrailApp?: typeof app;
-  }
-}
-
-// Vite development entrypoint. Release builds embed both modules into the
-// directly-openable root HTML through scripts/build/generate_release_html.mjs.
-if(typeof window !== 'undefined') {
-  window.HikingTrailCore = core;
-  window.HikingTrailApp = app;
-}
+bootstrapOutdoorRouteStudio().catch(error => {
+  console.error('Outdoor Route Studio failed to start', error);
+  document.documentElement.dataset.bootError = 'true';
+});

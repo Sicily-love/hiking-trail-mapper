@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Release metadata consistency checks.
-
-This script keeps the generated Vite/TypeScript source and directly-openable
-single-file release artifacts aligned.
-"""
+"""Release 2.0 source, artifact, and metadata consistency checks."""
 from __future__ import annotations
 
 import json
@@ -48,53 +43,78 @@ def extract(pattern: str, text: str) -> str:
 def main() -> int:
     runner = CheckRunner()
 
-    html_path = ROOT / "hiking-trail-mapper.html"
-    index_path = ROOT / "index.html"
-    readme_path = ROOT / "README.md"
-    readme_en_path = ROOT / "README.en.md"
+    source_html_path = ROOT / "index.html"
+    release_html_path = ROOT / "hiking-trail-mapper.html"
+    runtime_path = ROOT / "src" / "app" / "runtime.ts"
     package_path = ROOT / "package.json"
     lock_path = ROOT / "package-lock.json"
     tsconfig_path = ROOT / "tsconfig.json"
-    vite_mts_path = ROOT / "vite.config.mts"
-    vite_ts_path = ROOT / "vite.config.ts"
-    gitignore_path = ROOT / ".gitignore"
-    core_sync_path = ROOT / "scripts" / "build" / "sync_core_bundle.mjs"
-    html_generator_path = ROOT / "scripts" / "build" / "generate_release_html.mjs"
-    release_build_path = ROOT / "scripts" / "build" / "build_release.mjs"
-    release_prepare_path = ROOT / "scripts" / "release" / "prepare_release.sh"
-    pages_workflow_path = ROOT / ".github" / "workflows" / "pages.yml"
+    vite_path = ROOT / "vite.config.mts"
+    build_path = ROOT / "scripts" / "build" / "build_release.mjs"
+    sync_path = ROOT / "scripts" / "release" / "sync_release.sh"
+    bump_path = ROOT / "scripts" / "release" / "bump_version.mjs"
+    full_check_path = ROOT / "tests" / "run_full_check.sh"
+    workflow_path = ROOT / ".github" / "workflows" / "pages.yml"
 
-    html = read_text(html_path)
-    index_html = read_text(index_path)
+    source_html = read_text(source_html_path)
+    release_html = read_text(release_html_path)
+    runtime = read_text(runtime_path)
     package_json = json.loads(read_text(package_path))
     lock_json = json.loads(read_text(lock_path))
     tsconfig = json.loads(read_text(tsconfig_path))
-    gitignore_entries = set(read_text(gitignore_path).splitlines())
-    vite_config = read_text(vite_mts_path)
-    pages_workflow = read_text(pages_workflow_path) if pages_workflow_path.exists() else ""
+    vite_config = read_text(vite_path)
+    build_script = read_text(build_path)
+    sync_script = read_text(sync_path)
+    bump_script = read_text(bump_path)
+    full_check = read_text(full_check_path)
+    workflow = read_text(workflow_path) if workflow_path.exists() else ""
+    gitignore_entries = set(read_text(ROOT / ".gitignore").splitlines())
 
-    comment_version = extract(r"APP_VERSION:\s*(v[0-9]+\.[0-9]+\.[0-9]+)", html)
-    title_version = extract(r"在线版\s+(v[0-9]+\.[0-9]+\.[0-9]+)", html)
-    js_version = extract(r"const APP_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", html)
-    changelog_version = extract(r"version:\s*'(v[0-9]+\.[0-9]+\.[0-9]+)'", html)
-    version_tag = extract(r"id=\"version-tag-link\"[^>]*>(v[0-9]+\.[0-9]+\.[0-9]+)<", html)
-    readme_version = extract(r"(?m)^版本：\s*(v[0-9]+\.[0-9]+\.[0-9]+)", read_text(readme_path))
-    readme_en_version = extract(r"(?m)^Version:\s*(v[0-9]+\.[0-9]+\.[0-9]+)", read_text(readme_en_path))
+    runtime_version = extract(r"const APP_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", runtime)
+    runtime_changelog_version = extract(
+        r"const CHANGELOG = \[\s*\{\s*version:\s*'(v[0-9]+\.[0-9]+\.[0-9]+)'",
+        runtime,
+    )
+    runtime_build_date = extract(
+        r"const CHANGELOG = \[\s*\{\s*version:\s*'v[0-9]+\.[0-9]+\.[0-9]+',\s*date:\s*'([0-9]{4}-[0-9]{2}-[0-9]{2})'",
+        runtime,
+    )
+    release_comment_version = extract(
+        r"APP_VERSION:\s*(v[0-9]+\.[0-9]+\.[0-9]+)", release_html
+    )
+    release_build_date = extract(
+        r"BUILD_DATE:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", release_html
+    )
+    release_runtime_version = extract(
+        r"const APP_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", release_html
+    )
+    version_tag = extract(
+        r'id="version-tag-link"[^>]*>(v[0-9]+\.[0-9]+\.[0-9]+)<', release_html
+    )
+    readme_version = extract(
+        r"(?m)^版本：\s*(v[0-9]+\.[0-9]+\.[0-9]+)", read_text(ROOT / "README.md")
+    )
+    readme_en_version = extract(
+        r"(?m)^Version:\s*(v[0-9]+\.[0-9]+\.[0-9]+)",
+        read_text(ROOT / "README.en.md"),
+    )
+    changelog_version = extract(
+        r"(?m)^##\s+(v[0-9]+\.[0-9]+\.[0-9]+)\b", read_text(ROOT / "CHANGELOG.md")
+    )
 
-    expected_version = js_version
+    expected_version = runtime_version
     package_version = f"v{package_json.get('version', '')}"
     lock_version = f"v{lock_json.get('version', '')}"
     lock_root_version = f"v{lock_json.get('packages', {}).get('', {}).get('version', '')}"
 
-    print("\n▸ Release metadata")
-    runner.check("APP_VERSION exists", bool(expected_version), expected_version)
-
+    print("\n▸ Release 2.0 metadata")
+    runner.check("runtime.ts APP_VERSION exists", bool(expected_version), expected_version)
     version_sources = {
-        "HTML comment": comment_version,
-        "HTML title": title_version,
-        "JS APP_VERSION": js_version,
-        "CHANGELOG top": changelog_version,
+        "runtime changelog top": runtime_changelog_version,
+        "release comment": release_comment_version,
+        "release runtime": release_runtime_version,
         "floating version tag": version_tag,
+        "CHANGELOG.md": changelog_version,
         "README.md": readme_version,
         "README.en.md": readme_en_version,
         "package.json": package_version,
@@ -103,50 +123,96 @@ def main() -> int:
     }
     for label, version in version_sources.items():
         runner.check(f"{label} = {expected_version}", version == expected_version, version or "missing")
+    runner.check(
+        "release BUILD_DATE matches top changelog entry",
+        bool(runtime_build_date) and release_build_date == runtime_build_date,
+        release_build_date or "missing",
+    )
 
-    build_date = extract(r"BUILD_DATE:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", html)
-    runner.check("BUILD_DATE uses YYYY-MM-DD", bool(build_date), build_date or "missing")
-    runner.check("index.html mirrors hiking-trail-mapper.html", index_html == html)
-    runner.check("package-lock.json exists", lock_path.exists())
+    module_sources = re.findall(
+        r'<script\s+type="module"[^>]*\bsrc="([^"]+)"[^>]*>\s*</script>', source_html
+    )
+    runner.check("index.html is the sole Vite HTML source", source_html_path.exists())
+    runner.check("index.html has one #app mount", source_html.count('id="app"') == 1)
+    runner.check("index.html has one /src/main.ts entry", module_sources == ["/src/main.ts"], str(module_sources))
+    runner.check("index.html is a source shell", "data-studio-bundle" not in source_html)
+    runner.check("release artifact is distinct from source shell", release_html != source_html)
+    runner.check("release JavaScript is inline", release_html.count('<script type="module" data-studio-bundle>') == 1)
+    runner.check("release CSS is inline", release_html.count('<style data-studio-bundle>') == 1)
+    runner.check(
+        "release has no external build assets",
+        not re.search(r'<script\s+type="module"[^>]+\bsrc=', release_html)
+        and not re.search(r'<link\s+rel="stylesheet"[^>]+\bhref=', release_html),
+    )
+    runner.check(
+        "legacy generated IIFE markers are absent",
+        all(marker not in release_html for marker in (
+            "data-generated-core-runtime",
+            "data-generated-app-runtime",
+            "CORE_RUNTIME_START",
+            "APP_MODULE_RUNTIME_START",
+        )),
+    )
 
     scripts = package_json.get("scripts", {})
     for script_name in (
-        "typecheck", "build", "test:unit", "test:visual:capture", "release:check", "sync:release",
-        "sync:core", "check:core-runtime", "generate:html", "check:generated",
-        "release:prepare", "version:bump",
+        "typecheck",
+        "build",
+        "test:unit",
+        "test:visual:capture",
+        "check:release-metadata",
+        "release:check",
+        "sync:release",
+        "check:generated",
+        "release:prepare",
+        "version:bump",
     ):
         runner.check(f"package script {script_name}", script_name in scripts)
+    for retired_script in (
+        "sync:core",
+        "check:core-runtime",
+        "generate:html",
+        "prune:fallbacks",
+    ):
+        runner.check(f"retired package script {retired_script} absent", retired_script not in scripts)
+    runner.check(
+        "check:generated is a read-only .vite-build check",
+        scripts.get("check:generated")
+        == "node scripts/build/build_release.mjs --check --outDir .vite-build",
+    )
+    runner.check("dev opens the sole Vite HTML", "/dev.html" not in scripts.get("dev", ""))
+    for test_name in (
+        "test_performance_core.js",
+        "test_interaction_manager.js",
+        "test_render_scheduler.js",
+        "test_command_dialog.js",
+        "test_ui_contract.js",
+    ):
+        runner.check(f"test:unit includes {test_name}", test_name in scripts.get("test:unit", ""))
 
-    runner.check("vite.config.mts exists", vite_mts_path.exists())
-    runner.check("vite.config.ts absent", not vite_ts_path.exists())
+    runner.check("vite.config.mts exists", vite_path.exists())
+    runner.check("vite.config.ts absent", not (ROOT / "vite.config.ts").exists())
     runner.check("tsconfig includes vite.config.mts", "vite.config.mts" in tsconfig.get("include", []))
     runner.check("Vite production input is index.html", "input: 'index.html'" in vite_config)
     runner.check("Vite uses relative asset base", "base: './'" in vite_config)
-    for label, file_path in (
-        ("core runtime sync script", core_sync_path),
-        ("release HTML generator", html_generator_path),
-        ("release build script", release_build_path),
-        ("release preparation script", release_prepare_path),
-        ("GitHub Pages workflow", pages_workflow_path),
+    runner.check("release build reads runtime.ts", "src/app/runtime.ts" in build_script)
+    runner.check("release build emits release.json", "release.json" in build_script)
+    runner.check("release sync uses the Vite build", "npm run build" in sync_script)
+    runner.check("version bump updates runtime.ts", "src/app/runtime.ts" in bump_script)
+    runner.check("full check exports HTM_RELEASE_HTML", "HTM_RELEASE_HTML" in full_check)
+
+    for retired_path in (
+        ROOT / "scripts" / "build" / "generate_release_html.mjs",
+        ROOT / "scripts" / "build" / "sync_core_bundle.mjs",
+        ROOT / "scripts" / "maintenance" / "prune_runtime_fallbacks.mjs",
+        ROOT / "src" / "app" / "runtime.js",
     ):
-        runner.check(f"{label} exists", file_path.exists())
-    runner.check("embedded core runtime marker", "data-generated-core-runtime" in html)
-    runner.check("embedded app runtime marker", "data-generated-app-runtime" in html)
-    runner.check("HTML binds src/core runtime", "window.__HTM_CORE_RUNTIME__ = HTM_CORE" in html)
-    runner.check("HTML binds src/app runtime", "window.__HTM_APP_RUNTIME__ = HTM_APP" in html)
-    runner.check("canonical release template exists", (ROOT / "src/template/app.html").exists())
-    runner.check("canonical UI stylesheet exists", (ROOT / "src/ui/workbench.css").exists())
-    runner.check("canonical browser runtime exists", (ROOT / "src/app/runtime.js").exists())
-    runner.check("removed core fallback stays absent", "function haversine(" not in read_text(ROOT / "src/app/runtime.js"))
-    runner.check("build scripts are grouped", (ROOT / "scripts/build/generate_release_html.mjs").exists())
-    runner.check("release scripts are grouped", (ROOT / "scripts/release/sync_release.sh").exists())
-    runner.check("maintenance scripts are grouped", (ROOT / "scripts/maintenance/prune_runtime_fallbacks.mjs").exists())
+        runner.check(f"retired path absent: {retired_path.name}", not retired_path.exists())
+    runner.check("runtime.ts exists", runtime_path.exists())
     runner.check("browser tests are grouped", (ROOT / "tests/browser/test_v1_31.py").exists())
-    runner.check("visual regression states exist", all(
-        name in read_text(ROOT / "tests/visual/capture_field_console.py")
-        for name in ("field-console-day-cards.png", "field-console-measure.png", "field-console-segment.png")
-    ))
-    runner.check("access-proxy scripts absent", "accessproxy_statics" not in html)
+    runner.check("release HTML remains tracked", "hiking-trail-mapper.html" not in gitignore_entries)
+    for entry in ("node_modules/", "dist/", ".vite-build/"):
+        runner.check(f".gitignore contains {entry}", entry in gitignore_entries)
     for action in (
         "actions/checkout@v6",
         "actions/setup-node@v6",
@@ -154,9 +220,7 @@ def main() -> int:
         "actions/upload-pages-artifact@v4",
         "actions/deploy-pages@v4",
     ):
-        runner.check(f"workflow uses {action}", action in pages_workflow)
-    for entry in ("node_modules/", "dist/", ".vite-build/"):
-        runner.check(f".gitignore contains {entry}", entry in gitignore_entries)
+        runner.check(f"workflow uses {action}", action in workflow)
 
     return runner.finish()
 

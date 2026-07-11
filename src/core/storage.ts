@@ -42,10 +42,13 @@ export function normalizeActiveTrailIds(
   activeTrails: Iterable<string> | null | undefined,
   trails: StorageTrailLike[],
 ): Set<string> {
+  const validIds = new Set(trails.map(trailId).filter((id): id is string => !!id));
   if(activeTrails == null) {
-    return new Set(trails.map(trailId).filter((id): id is string => !!id));
+    return validIds;
   }
-  return new Set(Array.from(activeTrails).filter((id): id is string => typeof id === 'string' && !!id));
+  return new Set(Array.from(activeTrails).filter(
+    (id): id is string => typeof id === 'string' && validIds.has(id),
+  ));
 }
 
 export function primaryTrailIdForGroup(
@@ -63,7 +66,13 @@ export function ensurePrimaryForActiveGroup<TTrail extends StorageTrailLike>(
   primaryByGroup: Record<string, string | null>,
 ): Record<string, string | null> {
   const next = { ...primaryByGroup };
-  if(activeGroup == null || primaryTrailIdForGroup(activeGroup, next)) return next;
+  if(activeGroup == null) return next;
+  const currentId = primaryTrailIdForGroup(activeGroup, next);
+  const currentIsValid = trails.some(
+    trail => trailId(trail) === currentId && storageTrailGroup(trail) === activeGroup,
+  );
+  if(currentIsValid) return next;
+  delete next[activeGroup];
   const first = trails.find(t => storageTrailGroup(t) === activeGroup);
   const id = trailId(first);
   if(id) next[activeGroup] = id;

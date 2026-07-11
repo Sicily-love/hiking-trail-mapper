@@ -5,17 +5,43 @@ export interface IndexedDbOperation<T = unknown> {
   key: IDBValidKey;
   value?: T;
 }
+
 export function executeIndexedDbOperation<T>(db: IDBDatabase, operation: IndexedDbOperation<T>): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(operation.storeName, operation.mode);
-    const store = transaction.objectStore(operation.storeName);
-    const request = operation.kind === 'read'
-      ? store.get(operation.key)
-      : operation.kind === 'write'
-        ? store.put(operation.value, operation.key)
-        : store.delete(operation.key);
-    request.onsuccess = () => resolve(operation.kind === 'read' ? request.result as T : undefined);
-    request.onerror = () => reject(request.error);
-    transaction.onerror = () => reject(transaction.error);
+    let transaction: IDBTransaction;
+    let request: IDBRequest;
+    let readResult: T | undefined;
+    let settled = false;
+
+    const fail = (error: unknown): void => {
+      if(settled) return;
+      settled = true;
+      reject(error || new Error('IndexedDB transaction failed'));
+    };
+
+    try {
+      transaction = db.transaction(operation.storeName, operation.mode);
+      const store = transaction.objectStore(operation.storeName);
+      request = operation.kind === 'read'
+        ? store.get(operation.key)
+        : operation.kind === 'write'
+          ? store.put(operation.value, operation.key)
+          : store.delete(operation.key);
+    } catch(error) {
+      fail(error);
+      return;
+    }
+
+    request.onsuccess = () => {
+      if(operation.kind === 'read') readResult = request.result as T | undefined;
+    };
+    request.onerror = () => fail(request.error);
+    transaction.onerror = () => fail(transaction.error || request.error);
+    transaction.onabort = () => fail(transaction.error || new Error('IndexedDB transaction aborted'));
+    transaction.oncomplete = () => {
+      if(settled) return;
+      settled = true;
+      resolve(operation.kind === 'read' ? readResult : undefined);
+    };
   });
 }

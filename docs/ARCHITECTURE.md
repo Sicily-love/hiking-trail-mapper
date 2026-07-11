@@ -1,331 +1,273 @@
-# 架构与设计决策 · Architecture
+# Outdoor Route Studio 架构
 
-**🌐 [中文](ARCHITECTURE.md) · [English](ARCHITECTURE.en.md)**
+**[中文](ARCHITECTURE.md) · [English](ARCHITECTURE.en.md)**
 
-给贡献者与技术好奇者。
+本文描述 Milestone 6 之后的源码所有权、启动链路、Workbench 契约、运行时管理器和单文件发布方式。
 
-## 概览
+## 当前状态
 
-发布物仍是可直接打开的单文件 HTML，但根 HTML 已经是生成物。`src/core` 承载无 DOM 计算与渲染模型，`src/app` 和 `src/features` 承载状态与交互 controller，`src/adapters` 隔离 Leaflet/IndexedDB，`src/ui` 管理 Field Console。`scripts/build/generate_release_html.mjs` 将这些源码合成为内联 `HikingTrailCore`、`HikingTrailApp` 和浏览器 runtime。
+Outdoor Route Studio 采用“模块化 TypeScript 源码 + 自包含单 HTML 发布物”：
 
-## 工程化源码树
+- `src/` 是应用实现的唯一真源。
+- 根目录 `index.html` 是稳定、极小的 Vite 入口壳，只声明页面元信息、`#app` 和 `src/main.ts`。
+- `src/app/bootstrap.ts` 是浏览器启动编排入口。
+- `src/app/runtime.ts` 仍是 classic runtime 的过渡兼容层，会被 bootstrap 按顺序执行。
+- Vite 构建模块图，发布脚本再内联 CSS/JavaScript，得到可由 GitHub Pages 托管、也可通过 `file://` 打开的单文件。
+
+“`src` 是唯一源码”不等于仓库根目录只能有 `src`。入口壳、构建配置和脚本是工程元数据；业务逻辑、DOM 结构、样式和运行时行为都必须从 `src/` 产生。
+
+## 源码所有权
 
 ```text
 src/
-├── template/app.html  单文件发布壳，不包含生成 CSS/runtime
-├── ui/
-│   ├── workbench.css  Field Console 视觉与响应式
-│   └── workbench.ts   命令台、侧栏、海拔坞 DOM controller
+├── main.ts                         导入样式并调用 bootstrap
 ├── app/
-│   ├── state.ts       应用状态与分组主轨迹描述符
-│   ├── index.ts       App runtime 统一导出
-│   └── runtime.js     浏览器事件和 Canvas/Leaflet 编排
-├── features/          测距、分段、Day 与海拔交互 controller
-├── adapters/          Leaflet 与 IndexedDB 副作用边界
-├── core/
-│   ├── types.ts       基础类型
-│   ├── geo.ts         haversine / 累计里程 / 最近点
-│   ├── elevation.ts   平滑、爬升下降、海拔配色、统计
-│   ├── elevationProfile.ts 海拔图布局、绘制数据、标注布局/命令与面板高度模型
-│   ├── kml.ts         KML 坐标、图片 URL、标签和导入模型组装
-│   ├── trail.ts       trail id、waypoint snap、内容哈希
-│   ├── measure.ts     A/B 区间、抽稀线段、测距统计
-│   ├── itinerary.ts   分段点、边界拖动、每日统计、营地编辑归属
-│   ├── render.ts      测距、分段和 Day 预览的 Leaflet 渲染模型
-│   └── index.ts       核心模块统一导出
-├── main.ts            Vite 开发入口，暴露两个 TypeScript runtime
-└── ../dev.html        Vite 开发壳，iframe 加载当前发布 HTML
+│   ├── bootstrap.ts                启动顺序与兼容桥
+│   ├── state.ts                    应用状态
+│   ├── command.ts                  CommandRegistry
+│   ├── interactions/               InteractionManager
+│   ├── rendering/                  RenderScheduler
+│   ├── runtime.ts                  过渡 classic runtime
+│   └── index.ts                    typed app 公共出口
+├── core/                           无 DOM 的计算、解析、存储与渲染模型
+│   └── performance/               大轨迹分段、抽稀、diff 与 revision
+├── features/                       测距、分段、Day、海拔等 controller
+├── adapters/                       Leaflet 与 IndexedDB 副作用边界
+├── ui/
+│   ├── layout/app-shell.ts         Workbench DOM 壳与挂载函数
+│   ├── workbench.ts                响应式 Workbench chrome
+│   ├── workbench.css               工作区视觉和布局
+│   └── dialog/                     DialogController
+├── styles/                         全局/vendor 样式入口
+└── vendor/                         由构建内联的浏览器依赖
 ```
 
-`src` 是唯一源码入口。根目录 `index.html` 和 `hiking-trail-mapper.html` 由生成器写入，不直接编辑。45 个同名核心 fallback 已删除；对齐测试在 Node 中执行正式 HTML 内嵌 IIFE，并与 `src/core` 的同一组输入输出比较。`tests/unit/trail_core.js` 只是 CommonJS 测试桥。
+所有权规则：
 
-## 为什么单文件
+| 变化 | 应修改的位置 |
+|------|--------------|
+| 距离、爬升、KML、分段、海拔布局 | `src/core` |
+| 应用状态、命令、交互会话、刷新调度 | `src/app` |
+| 单一功能的交互状态 | `src/features` |
+| Leaflet / IndexedDB 调用 | `src/adapters` |
+| DOM 壳、响应式布局、对话框、CSS | `src/ui` / `src/styles` |
+| 旧浏览器编排迁移 | 从 `src/app/runtime.ts` 移入上述 owner |
 
-- **零部署摩擦**：GitHub Pages / 云盘 / 本地文件夹 / AirDrop 到手机 —— 任何能承载 HTML 的地方都能跑
-- **file:// 协议兼容**：手机断网也能玩本地已存的地图和数据
-- **fork 友好**：源码按职责拆分，发布时仍只交付一个文件
+不要在 `hiking-trail-mapper.html` 或 `dist/` 修复行为；它们是生成物。
 
-## 为什么发布物仍保持单文件
+## 启动链路
 
-- 发布物继续保持 `file://` 与 GitHub Pages 简单部署
-- Vite / TypeScript 核心已经进入正式运行时，构建后仍内联为单文件
-- Leaflet 本身够用，不需要 React/Vue 加持
-- 原生 DOM + 事件监听保持低运行时开销，正式单文件约 630KB（包含 Leaflet、fflate 和两个 TS runtime）
-
-## 关键文件（在同一份 HTML 里）
-
-```
-hiking-trail-mapper.html
-├── <head>
-│   ├── Leaflet CSS (embedded)
-│   ├── App CSS
-│   └── fflate 0.8.2 UMD (embedded, ~32KB)
-│       └── ⚠ 必须 inline，不能 CDN — file:// 下同步 CDN <script> 会阻塞整页
-├── <body>
-│   ├── #map           ← Leaflet 主容器
-│   ├── #sidebar       ← 轨迹列表 / 分组 Tab / 批量工具栏
-│   ├── #elev-bar      ← 底部海拔图 Canvas
-│   └── 各种 modal / toast / popup
-└── <script>
-    ├── Leaflet 1.9.4 UMD (embedded, ~140KB)
-    ├── leaflet-polylineDecorator (embedded)
-    ├── HikingTrailCore IIFE（由 src/core 自动生成）
-    ├── const APP_VERSION / CHANGELOG (双语)
-    ├── i18n 字典 (zh / en)
-    ├── state 对象（activeTrails / expandedTrails / primaryTrailId / activeGroup / batchMode / batchSelected 等）
-    ├── DATA 对象（trails 数组 + calc_method）
-    ├── KML 解析 (parseKML)
-    ├── 核心运行时绑定（测距 / 分段 / KML / 存储 / 海拔模型）
-    ├── 渲染层（buildTrailList / buildPrimaryCard / drawElevBar / 各种 draw*）
-    ├── 交互层（右键菜单 / 长按 / 双击改名 / 分组切换 / 批量选择）
-    ├── 持久化层（loadFromStorage / saveToStorage / IndexedDB 封装）
-    ├── 导出层（exportGroupKML / exportItineraryMD / showExportMenu）
-    └── i18n 层（setLang / applyI18n / t / refreshAll）
+```text
+index.html
+  └── <script type="module" src="/src/main.ts">
+        ├── styles/leaflet.css
+        ├── ui/workbench.css
+        └── bootstrapOutdoorRouteStudio(document)
+              ├── mountAppShell(#app)
+              ├── 执行 Leaflet / decorator / fflate vendor
+              ├── 暴露 HikingTrailCore 与 HikingTrailApp
+              ├── 执行 runtime.ts 兼容脚本
+              └── 暴露 __OUTDOOR_ROUTE_STUDIO__.ready
 ```
 
-## 数据模型
+`bootstrap.ts` 通过 raw import 把 vendor 和 `runtime.ts` 交给 Vite，再以 classic script 执行兼容代码。这样可以先建立 typed module 与 Workbench DOM，再满足旧代码对全局作用域和执行顺序的依赖。
+
+这个桥是迁移机制，不是长期模块边界。typed 代码不能依赖脚本碰巧创建的隐式全局；迁出一段行为时，应给它明确输入、输出、生命周期和测试。
+
+## Workbench 契约
+
+Workbench 是地图优先的操作界面，同一命令语义按视口改变摆放方式：
+
+- 桌面：七项主操作位于侧栏/侧轨，路线库和上下文保持可扫描。
+- 移动：五项主操作位于底栏，低频操作进入 More 或 bottom sheet。
+- 侧栏承载主轨迹摘要、路线、行程和下撤视图。
+- 海拔分析坞独立于路线侧栏，可展开、折叠并记忆状态。
+- 响应式变化只改变命令 placement，不复制命令实现或业务状态。
+
+七侧栏/五底栏是布局契约，不是两套功能。命令 ID、enabled/checked 状态和 dispatch 路径应由 `CommandRegistry` 共享；视觉测试同时覆盖桌面与移动断点。
+
+## 四个管理器
+
+### InteractionManager
+
+`src/app/interactions/` 维护互斥交互会话。当前交互词表为：
+
+```text
+idle | measure | segment | waypoint | escape | day-preview
+```
+
+每个激活会话带有 `sessionId`、phase、owner 和独立 `AbortController`。启动新会话会原子取消前一个会话；事件只能被当前 kind/session/owner 消费一次。会话创建的 animation frame 和 delay 在取消、替换或 phase 变化时一起清理，从而阻止过期回调修改新状态。
+
+测距、分段、标注、下撤和 Day 预览已经全部接入该生命周期。地图点击只经过一个 active-kind 分发器；测距与分段拖动也作为 Session 事件处理。轨迹被替换、删除或修订后 owner 校验会取消旧会话，Escape 键通过同一取消路径清理当前模式。
+
+### RenderScheduler
+
+`src/app/rendering/` 用 dirty mask 合并一帧内的刷新请求，固定 flush 顺序为：
+
+```text
+tracks -> markers -> sidebar -> days -> legend -> chart -> fit
+```
+
+多次 invalidate 只安排一个 animation frame。flush 期间新增的 dirty 位进入下一帧；`fit` 使用 epoch 和“最后一次请求胜出”语义，避免较旧的异步视野调整覆盖新交互。
+
+当前 runtime 已把轨迹、标注、侧栏、行程、图例、海拔图和视野调整全部交给同一个 scheduler。海拔轨迹最多合并为 40 个颜色 band；Canvas 海拔曲线按像素宽度做 min/max 降采样，但命中测试和标注仍使用完整轨迹。普通 waypoint marker 使用稳定 key 做 add/update/remove/keep 差异更新，未变化的 Leaflet marker 不重建。复位请求同时受 fit epoch 和 reset epoch 保护，连续复位只有最后一次可以提交视野。
+
+### CommandRegistry
+
+`src/app/command.ts` 是不依赖 DOM 的命令注册与分发层，提供：
+
+- 唯一命令 ID 和显式注册/释放；
+- 动态 `enabled` / `checked` 状态；
+- 同步与异步 dispatch；
+- registered、changed、dispatched、unregistered 生命周期通知。
+
+侧栏、底栏、菜单和键盘入口应绑定同一个命令，而不是各自复制 listener。
+
+### DialogController
+
+`src/ui/dialog/` 统一 `info`、`confirm`、`prompt` 和 custom dialog：
+
+- 使用原生 `<dialog>` 与 `showModal()`；
+- 用户字符串写入 `textContent`，不使用 HTML 注入 sink；
+- 统一 Escape、cancel、危险操作样式和默认按钮；
+- 关闭后恢复此前焦点，destroy 时清理挂起状态。
+
+## 管理器采用状态
+
+四个 manager 的 typed API 和单元契约已经建立。`InteractionManager` 已接管五种互斥地图交互，`RenderScheduler` 已接管 runtime 的七类刷新与 fit；`CommandRegistry` 和 `DialogController` 仍在逐步替换分散命令 listener 和旧模态实现。因此兼容层尚未删除，但交互生命周期和主渲染调度已经统一。
+
+每次迁移应遵循：
+
+1. 先给旧行为补契约或回归测试。
+2. 将状态和纯计算移入 `src/core` / `src/features`。
+3. 将互斥生命周期、刷新、命令或对话框接入对应 manager。
+4. 从 `runtime.ts` 删除被替代代码。
+5. 构建单文件并跑真实浏览器流程。
+
+## 状态与数据流
+
+```text
+文件/用户事件
+  -> CommandRegistry / InteractionManager
+  -> state 或 feature controller
+  -> core 纯函数 / render model
+  -> RenderScheduler.invalidate(mask)
+  -> adapters + DOM/Canvas renderer
+  -> IndexedDB（需要持久化时）
+```
+
+主要状态约定：
+
+- `activeTrails: Set<trailId>`：当前显示的路线。
+- `expandedTrails: Set<trailId>`：已展开的路线卡。
+- `batchSelected: Set<trailId>`：批量选择。
+- `activeGroup: string | null`：当前分组。
+- `primaryByGroup: Record<group, trailId>`：每组主轨迹。
+- `primaryTrailId`：当前组主轨迹的派生 getter/setter。
+- `modeVisibleTags`：各地图模式独立的标注可见集合。
+
+`Set` 写入 IndexedDB 快照前必须转换为数组，恢复时再转换回来。新状态应只有一个 owner，不再通过多个镜像字段保持“同步”。
+
+过渡 runtime 仍提供 `applyChange()` 兼容入口。新代码应尽量发出精确 dirty mask；随着迁移推进，`applyChange` 只负责适配旧调用，不应继续膨胀。
+
+## 核心数据模型
 
 ```typescript
-type Trail = {
-  id: string;                    // 唯一 ID
-  name: string;                  // 显示名（可双击改）
-  color: string;                 // 主色
-  group?: string;                // v1.14.0+ 分组，默认 "默认"
-  tracks: TrackPoint[];          // GPS 序列 [lat, lon, alt, km, timestamp?]
-  waypoints: Waypoint[];         // 标注点
-  totalKm: number;
-  totalAsc: number;              // 使用 accumulator thr=10
-  maxElev: number;
-  // ...
-};
+type TrackTuple = [
+  lat: number,
+  lng: number,
+  elev?: number,
+  km?: number,
+  ascent_m?: number,
+  dayId?: number | null,
+];
 
-type Waypoint = {
+type EnrichedWaypoint = {
   lat: number;
   lng: number;
   name: string;
-  tag: string;                   // 13 类之一
-  gps_idx: number;               // 投影到 tracks 数组的最近 idx（用于海拔图对齐）
-  manual?: boolean;              // 用户手动添加标记
+  tag?: string;
+  gps_idx: number;
+  label: string;
+  elev: number;
+};
+
+type DayMeta = {
+  d: number;
+  km: number;
+  asc: number;
+  desc: number;
+  max: number;
+  min: number;
+  camp: string;
+  i_start: number;
+  i_end: number;
 };
 ```
 
-## 关键算法
+`gps_idx` 把标注点、地图和海拔图绑定到同一轨迹索引；`i_start` / `i_end` 是 Day 与测距渲染的稳定范围。
 
-### 累计爬升（accumulator, thr=10m）
+## 关键算法边界
 
-朴素累加会因为 GPS 噪声（±3~5m）虚增几倍。改用带阈值的累加器：
+- **累计爬升/下降**：先平滑海拔，再使用阈值 accumulator，避免 GPS 噪声把每个微小上升都计入。
+- **snap-to-track**：为标注点寻找最近轨迹索引并保存 `gps_idx`，地图位置和海拔位置由同一索引派生。
+- **路段抽稀**：测距、分段和 Day 预览由 `src/core/render.ts` 产生受上限约束的 Leaflet model。
+- **海拔布局**：`src/core/elevationProfile.ts` 计算坐标、路径、标注避让、绘制命令和自适应高度；Canvas 只消费模型。
+- **存储恢复**：`src/core/storage.ts` 规范化 snapshot，并兼容旧 `primaryTrailId` 到 `primaryByGroup` 的迁移。
 
-```
-running_asc = 0
-peak = alt[0]
-total_asc = 0
-for i in 1..n:
-  d = alt[i] - alt[i-1]
-  if d > 0:
-    running_asc += d
-    if alt[i] > peak: peak = alt[i]
-  else:
-    if running_asc > 10:  # 阈值
-      total_asc += peak - trough
-    running_asc = 0
-    peak = alt[i]
-```
+## 构建与发布
 
-实测对比 2bulu 官方 2502m → 我们算 2459m（误差 1.7%）。朴素方法给 3811m（误差 52%）。
-
-### snap-to-track（标注点视觉对齐）
-
-手动添加的标注点或来自 KML 的 Placemark 可能不在轨迹线上。处理：
-
-```
-for each waypoint:
-  min_dist = infinity
-  best_idx = 0
-  for i in 0..track.length:
-    d = haversine(waypoint, track[i])
-    if d < min_dist:
-      min_dist = d; best_idx = i
-  waypoint.gps_idx = best_idx
-  waypoint.lat, lng = track[best_idx][0], track[best_idx][1]  # 视觉上贴到轨迹
+```text
+index.html + src module graph
+  -> Vite
+  -> dist/index.html + temporary assets
+  -> scripts/build/build_release.mjs
+       ├── inline CSS and module JS
+       ├── remove dist/assets
+       ├── write dist/index.html
+       ├── copy identical dist/hiking-trail-mapper.html alias
+       ├── write dist/release.json
+       └── refresh/check root hiking-trail-mapper.html
+  -> GitHub Pages uploads dist/
 ```
 
-海拔图上用 `gps_idx` 定位对应 X 坐标。
+“单 HTML”指最终应用不引用外部 JavaScript 或 CSS。兼容别名与 `index.html` 内容相同，不构成第二份源码。地图瓦片仍来自网络。
 
-### 海拔图高度自适应（扫描线预测）
+根目录文件职责不同：
 
-之前用「双 pass」（画一遍 → 检查溢出 → 重画），会因 H 变化反推 pY 反推标签位置而**震荡**。
+| 文件 | 职责 | 可直接 `file://` |
+|------|------|-------------------|
+| `index.html` | 小型 Vite 源码入口壳 | 否 |
+| `hiking-trail-mapper.html` | 自动生成的自包含发布物 | 是 |
+| `dist/index.html` | GitHub Pages 主入口 | 是 |
+| `dist/hiking-trail-mapper.html` | 兼容下载别名 | 是 |
 
-改用**扫描线预测**：先按 X 排序所有标签，扫描一遍找出最大水平重叠数（stackDepth），一次算出 H：
+## 渐进拆分 runtime.ts
 
-```
-H = max(140, min(340, 110 + (stackDepth + 1) * (lh + 2) + 16))
-```
+`runtime.ts` 当前仍包含大量成熟但 classic 的浏览器编排。后续按行为垂直拆分，不做一次性重写：
 
-`stackDepth + 1` 是预留一层，避免边界情况。
+`RenderScheduler` 对核心 redraw、`rebuildAll` 和 workspace fit 的替换已经完成。剩余步骤是：
 
-## file:// 协议兼容坑
+1. 让所有 Workbench 入口只 dispatch `CommandRegistry` 命令。
+2. 用 `DialogController` 替换 alert/confirm/prompt 和自建模态分支。
+3. 将导入、导出、i18n、Leaflet/Canvas 与 IndexedDB 编排拆成小 controller/adapter。
+4. 只有当发布物和真实浏览器测试不再依赖 classic globals 时，才删除兼容执行路径。
 
-单文件 HTML 直接双击打开时是 `file://` 协议，很多现代浏览器 API 会限制：
+## 性能与可靠性约束
 
-| API | file:// 限制 | 应对 |
-|-----|-------------|------|
-| `fetch(location.href)` | Safari 拒绝加载自身 | 用 `document.documentElement.outerHTML` |
-| CDN 同步 `<script>` | headless Chrome 阻塞整页渲染 | 全部 inline |
-| Service Worker | 不可用 | 不用 |
-| IndexedDB | ✅ 可用 | 直接用 |
-| Web Crypto | 部分可用 | 不用 |
-
-## 状态管理约定
-
-- 每个状态只有**一个真源**（不搞 getter 反射多个 Set）
-- `state.activeTrails` = `Set<trailId>`（勾选叠加的）
-- `state.expandedTrails` = `Set<trailId>`（展开详情的）
-- `state.batchSelected` = `Set<trailId>`（批量选中的；v1.15.0 起替代 batchMode 布尔，size>0 即视为进入批量模式）
-- `state.activeGroup` = string
-- `state.primaryTrailId` = string
-- `state.visibleTags` = `Set<string>`（当前显示的标签类型）
-- `state.mode` = `'day' | 'waypoint'`（分天视图 vs 标注点视图）
-- 改状态后**必须**统一走 `applyChange()`（v1.17.0 起），不再散落调用 `rebuildAll + saveToStorage`
-
-## v1.17.0+ 函数拆分架构
-
-三个大函数（合计 703 行）拆成编排层 + 22 个语义辅助（v1.17.0-v1.18.0）：
-
-### buildTrailList（v1.17.0）
-```
-buildTrailList (25 行编排)
-├── renderGroupTabs()
-├── renderBatchToolbar(others)
-├── renderTrailCard(tr)
-│   ├── trailCardHeaderHtml(tr, ...)
-│   ├── trailCardExpandedHtml(tr)
-│   ├── handleTrailCardClick(tr, e)
-│   │   └── isDetailButtonTarget(el)
-│   ├── handleTrailDetailClick(tr, e)
-│   └── handleTrailGroupChange(tr, newGroup, sel)
-└── moveBatchToGroup(target)
-```
-
-### handleFiles（v1.18.0）
-```
-handleFiles (17 行编排)
-├── expandZipFiles(files)          → 展开 .zip → File-like 数组
-├── for each file:
-│   └── importSingleKml(f)
-│       ├── parseAndProcessKml(text, name)
-│       ├── findDuplicateTrail(trail) → 去重
-│       ├── ensureUniqueTrailId(trail)
-│       ├── renderKmlImportRow(label, trail)
-│       └── bindKmlImportRowEvents(row, trail)
-└── postImportFinalize(addedCount)
-```
-
-### parseAndProcessKml（v1.18.0）
-```
-parseAndProcessKml (36 行编排)
-├── parseKml(xmlText)                    → 原始 IO
-├── processTrack(trackPoints)
-├── enrichWaypoints(waypoints, trackPoints)
-├── computeCumulativeDistance(pts)
-├── buildDayMeta(pts, track, wps, cumD)
-├── computeTrailStats(elevs, cumD, smoothE)
-└── generateNextTrailId(DATA.trails)
-```
-
-### drawElevBar（v1.18.0）
-```
-drawElevBar (24 行编排)
-├── computeElevLayout(pts, opts)        → 坐标系 + km 数组
-├── updateElevBadges(alts)              → 顶部 ↑↓ 徽章
-├── drawElevBackground(layout)          → 米色卡纸 + 噪点
-├── drawElevGridLines(layout)           → 25/50/75% 虚线
-├── drawElevFill(pts, layout)           → 分段海拔色填充
-│   └── elevRatioColor(ratio)
-├── drawElevCurve(pts, layout)          → 曲线 + 底线
-├── collectElevAnnotations(pts, layout, opts) → 峰/谷/营地
-├── layoutElevLabels(annos, layout, pts)      → 避让 + 引线布局
-├── renderElevLabels(annos, layout)     → 绘制文字 + 黑点
-└── drawElevAxes(layout)                → Y 轴 + X 轴刻度
-```
-
-## v1.19.0 工程化基建
-
-**JSDoc 类型注解**：所有关键函数带 `@param` + `@returns`。`@typedef` 集中定义在文件顶部：
-
-- `TrackPoint / TrackTuple` — GPS 原始点与紧凑元组
-- `Waypoint / DayMeta / TrailStats / EscapeRoute` — 数据模型
-- `Trail` — 完整轨迹对象
-- `ElevLayout / ElevAnnotation` — 海拔图内部结构
-- `ImportedFile` — handleFiles 的 File-like
-
-**tests/ 完整目录**：
-
-```
-tests/
-├── run_full_check.sh    # 一键 6 阶段
-├── unit/
-│   ├── trail_core.js    # CommonJS 兼容桥 → src/core/index.ts
-│   ├── test_math.js     # 30 个数学函数断言
-│   ├── test_enrich.js   # 12 个 snap/hash 断言
-│   ├── test_core_contract.js     # 4 个 TS 核心导出契约
-│   ├── test_kml_core.js          # 11 个 KML 导入模型/底层断言
-│   ├── test_storage_core.js      # 12 个 IndexedDB 快照/读写操作/恢复契约断言
-│   ├── test_measure_itinerary.js # 27 个测距/海拔布局绘制标注面板高度/分段/Day 预览/渲染模型断言
-│   ├── test_vite_entry.js        # 3 个 Vite 开发入口断言
-│   └── verify_alignment.js       # 67 项 HTML↔src/core 对齐校准
-└── e2e/
-    └── run_all.py       # 16 场景 · 62 断言（headless Chrome）
-```
-
-## 状态变更统一入口 applyChange
-
-```javascript
-applyChange({ save: true, fit: false, tracksOnly: false })
-```
-
-- `save`：是否触发 IndexedDB 保存（默认 true）
-- `fit`：是否 fitBounds 到主轨迹
-- `tracksOnly`：只重绘轨迹（跳过 UI 面板重建）
-
-所有 state 变更后调此函数，替代 v1.16.0 前散落的 `rebuildAll + saveToStorage` 模式。
-
-## 版本发布检查清单
-
-发布前推荐使用固定流程：
-
-```bash
-npm run version:bump -- patch --zh "中文更新项" --en "English change"
-npm run release:prepare
-```
-
-`release:prepare` 会依次执行：
-
-1. 生成并校验内联 `HikingTrailCore`
-2. 同步 `hiking-trail-mapper.html` / `index.html` / CHANGELOG / README
-3. 运行六阶段完整验证
-4. Vite 构建 `dist/`
-5. 校验两个静态入口和 `release.json`
-
-## 常见性能陷阱
-
-- **重复 rebuildAll**：切组、批量选择、改名等 UI 操作要精准调用最小子树重建（`buildTrailList()` 而不是 `rebuildAll()`）
-- **Set 序列化**：`JSON.stringify(new Set())` → `"{}"`。所有 Set 字段在存/读时用 `Array.from()` / `new Set(arr)` 转换
-- **海拔图重绘**：地图 pan/zoom 时不需要重绘海拔图；只有 primaryTrail 或数据变化时才需要
-
-## 想加新功能？
-
-推荐流程：
-1. 在 CHANGELOG 顶部占坑一个 `vX.Y.Z-dev` 条目
-2. 在 `state` 对象里加字段
-3. 找到最相关的 `build*` 函数改 UI
-4. 需要持久化的字段加到 `_doSave` 的 minimal 对象
-5. 加/改 i18n 词条（zh + en 都要）
-6. 语法检查 + dump-dom smoke test
-7. Safari file:// 手动 QA
+- 不在 map pan/zoom 时无条件重绘海拔图。
+- 一帧内的重复刷新必须合并，fit 只执行最新请求。
+- 海拔 Canvas 的绘制点数不超过像素宽度的两倍，首尾点与各桶极值必须保留；命中数据不得降采样。
+- 海拔渐变轨迹最多创建 40 个颜色图层组；waypoint marker 必须按稳定 key 差异更新。
+- 连续复位时，旧 fit epoch、旧 reset epoch 和移动端延迟 fit 都不得覆盖最后一次请求。
+- 交互取消后，不允许 timer、RAF 或异步结果继续写状态。
+- 不序列化原始 `Set`，不把 DOM/Leaflet 对象放入持久化 snapshot。
+- 纯计算保持 DOM-free，并为边界输入添加单元测试。
+- Workbench 的七侧栏/五底栏必须共享命令，不因响应式布局重复副作用。
 
 ## 已知限制
 
-- 只支持 KML 导入（不支持 GPX、GeoJSON、FIT）
-- 单文件 HTML 无法做地图瓦片离线缓存（需要 Service Worker）
-- 中国大陆访问 Esri 底图有时会慢；国外用户没问题
-- iOS 15 以前的 Safari 不完全支持 IndexedDB `getAll`（自行 fallback）
+- 当前只原生导入 KML，不原生解析 GPX、GeoJSON 或 FIT。
+- 单文件发布物不提供离线地图瓦片缓存。
+- `runtime.ts` 仍需渐进拆分；五种地图交互与七类渲染调度已统一，其余命令、对话框和浏览器编排尚未全部模块化。
+- `file://` 使用生成发布物，不使用根目录 Vite 小壳。

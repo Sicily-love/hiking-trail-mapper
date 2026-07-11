@@ -3,22 +3,26 @@ import { applyMeasureEndpointState, reverseMeasureEndpoints } from '../../core/m
 
 export interface MeasureInteractionState {
   active: boolean;
+  trailId: string | null;
   ptA: TrackIndexPoint | null;
   ptB: TrackIndexPoint | null;
   layer: unknown;
   segmentLine: unknown;
   _justDragged: boolean;
+  _fastTapUntil: number;
   _computeSeq: number;
-  _liveFrame: number;
+  _liveFrame: unknown;
 }
 export function createMeasureInteractionState(): MeasureInteractionState {
   return {
     active: false,
+    trailId: null,
     ptA: null,
     ptB: null,
     layer: null,
     segmentLine: null,
     _justDragged: false,
+    _fastTapUntil: 0,
     _computeSeq: 0,
     _liveFrame: 0,
   };

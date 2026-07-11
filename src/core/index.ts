@@ -146,3 +146,18 @@ export {
   serializeStorageSnapshot,
   storageTrailGroup,
 } from './storage.ts';
+
+export {
+  DEFAULT_ELEVATION_BAND_COUNT,
+  buildElevationPolylineSegments,
+  createTrackRevision,
+  createTrackSignature,
+  downsampleForCanvas,
+  downsampleMinMaxIndices,
+  downsampleTrackForCanvas,
+  elevationBandRatio,
+  nextTrackRevision,
+  planKeyedWaypointDiff,
+  planWaypointDiff,
+  quantizeElevationBand,
+} from './performance/index.ts';

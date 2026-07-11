@@ -1,11 +1,11 @@
 {
   "name": "hiking-trail-mapper",
-  "version": "1.32.1",
+  "version": "1.32.2",
   "private": true,
   "description": "Static KML hiking trail mapper with a modular TypeScript core and single-file-compatible release.",
   "scripts": {
     "test": "npm run test:unit",
-    "test:unit": "node tests/unit/test_math.js && node tests/unit/test_enrich.js && node tests/unit/test_core_contract.js && node tests/unit/test_kml_core.js && node tests/unit/test_storage_core.js && node tests/unit/test_measure_itinerary.js && node tests/unit/test_app_architecture.js && node tests/unit/test_vite_entry.js && node tests/unit/test_ui_contract.js && node tests/unit/test_release_pipeline.js && node tests/unit/verify_alignment.js",
+    "test:unit": "node tests/unit/test_math.js && node tests/unit/test_enrich.js && node tests/unit/test_core_contract.js && node tests/unit/test_kml_core.js && node tests/unit/test_storage_core.js && node tests/unit/test_indexeddb_adapter.js && node tests/unit/test_measure_itinerary.js && node tests/unit/test_performance_core.js && node tests/unit/test_app_architecture.js && node tests/unit/test_interaction_manager.js && node tests/unit/test_interaction_runtime.js && node tests/unit/test_render_scheduler.js && node tests/unit/test_render_runtime.js && node tests/unit/test_command_dialog.js && node tests/unit/test_vite_entry.js && node tests/unit/test_ui_contract.js && node tests/unit/test_workbench2.js && node tests/unit/test_release_pipeline.js && node tests/unit/verify_alignment.js",
     "test:full": "./tests/run_full_check.sh",
     "test:visual:capture": "./tests/visual/run_capture.sh",
     "typecheck": "tsc --noEmit",
@@ -14,12 +14,8 @@
     "release:check": "./tests/run_full_check.sh",
     "sync:release": "./scripts/release/sync_release.sh",
     "sync:docs": "node scripts/release/sync_release_docs.mjs",
-    "sync:core": "node scripts/build/sync_core_bundle.mjs",
-    "check:core-runtime": "node scripts/build/sync_core_bundle.mjs --check",
-    "generate:html": "node scripts/build/generate_release_html.mjs",
-    "check:generated": "node scripts/build/generate_release_html.mjs --check",
-    "prune:fallbacks": "node scripts/maintenance/prune_runtime_fallbacks.mjs",
-    "dev": "vite --host 127.0.0.1 --open /dev.html",
+    "check:generated": "node scripts/build/build_release.mjs --check --outDir .vite-build",
+    "dev": "vite --host 127.0.0.1 --open /",
     "build": "node scripts/build/build_release.mjs",
     "release:prepare": "./scripts/release/prepare_release.sh",
     "version:bump": "node scripts/release/bump_version.mjs"
@@ -27,5 +23,8 @@
   "devDependencies": {
     "typescript": "^5.5.0",
     "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "lucide": "^1.24.0"
   }
 }

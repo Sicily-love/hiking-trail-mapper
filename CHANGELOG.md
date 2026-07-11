@@ -4,6 +4,16 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v1.32.2 — 2026-07-11
+
+**中文**
+
+- 修复打开 HTML 从浏览器缓存恢复轨迹后未可靠自动复位的问题：清理失效缓存引用，等待地图布局完成后仅执行一次主轨迹复位
+
+**English**
+
+- Fixed unreliable automatic reset after restoring trails from browser cache when opening the HTML by cleaning stale cache references and fitting the primary trail exactly once after map layout
+
 ## v1.32.1 — 2026-07-11
 
 **中文**

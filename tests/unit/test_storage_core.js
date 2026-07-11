@@ -35,7 +35,7 @@ T('storageTrailGroup defaults blank or missing groups', () => {
 T('normalizeActiveTrailIds defaults to all trail ids only when field is missing', () => {
   assert.deepStrictEqual([...core.normalizeActiveTrailIds(null, trails)], ['a1', 'a2', 'b1']);
   assert.deepStrictEqual([...core.normalizeActiveTrailIds([], trails)], []);
-  assert.deepStrictEqual([...core.normalizeActiveTrailIds(new Set(['a2', 'ghost']), trails)], ['a2', 'ghost']);
+  assert.deepStrictEqual([...core.normalizeActiveTrailIds(new Set(['a2', 'ghost']), trails)], ['a2']);
 });
 
 T('normalizePrimaryByGroup keeps string ids and null sentinels', () => {
@@ -142,6 +142,8 @@ T('restoreStorageSnapshot migrates legacy primaryTrailId into active group', () 
 
 T('ensurePrimaryForActiveGroup fills the first trail in that group', () => {
   assert.deepStrictEqual(core.ensurePrimaryForActiveGroup(trails, 'A', {}), { A: 'a1' });
+  assert.deepStrictEqual(core.ensurePrimaryForActiveGroup(trails, 'A', { A: 'ghost', B: 'b1' }), { A: 'a1', B: 'b1' });
+  assert.deepStrictEqual(core.ensurePrimaryForActiveGroup(trails, 'A', { A: 'b1' }), { A: 'a1' });
   assert.deepStrictEqual(core.ensurePrimaryForActiveGroup(trails, null, {}), {});
 });
 

@@ -98,6 +98,20 @@ try:
 
     print(f"\n▸ 需求 4/1（{EXPECTED_VERSION}）：分组交互 + 复选框合并")
     check(f"APP_VERSION = {EXPECTED_VERSION}", evalj("APP_VERSION") == EXPECTED_VERSION)
+    check("Workbench 2.0 已成为活动布局",
+          evalj("document.documentElement.dataset.workbench === '2' && document.documentElement.dataset.ui === 'studio'"))
+    check("Workbench 控制器已挂载",
+          evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
+    check("顶部 7 个菜单已渲染",
+          evalj("document.querySelectorAll('.studio-menu-trigger').length === 7"))
+    check("左侧 7 个活动入口已渲染",
+          evalj("document.querySelectorAll('.studio-activity-button').length === 7"))
+    check("底部 5 个分析 Tab 已渲染",
+          evalj("document.querySelectorAll('.studio-bottom-tab').length === 5"))
+    check("Studio 主题变量已生效",
+          evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
+    check("旧命令节点已无损迁移到 Workbench 菜单",
+          evalj("['add-trail-btn','reverse-btn','clear-btn','measure-btn','segment-btn','add-escape-btn','add-waypoint-btn','reset-btn','help-btn','lang-btn','export-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup'))"))
     check("TypeScript core runtime 已接管关键函数",
           evalj("!!window.HikingTrailCore && window.__HTM_CORE_RUNTIME__ === window.HikingTrailCore && haversine === window.HikingTrailCore.haversine && buildDayPreviewRenderModel === window.HikingTrailCore.buildDayPreviewRenderModel"))
     check("state.batchMode 已移除",
@@ -275,7 +289,7 @@ try:
     check("测距统计使用缓存而非整段遍历",
           evalj("computeMeasureStats.toString().includes('getMeasureStatsCache') && !measureCompute.toString().includes('for(let i=i1+1')"))
     check("测距拖动中实时更新线段和面板",
-          evalj("bindMeasureEndpointDrag.toString().includes('queueMeasureLiveUpdate') && createPrimaryTrackDragSnapper.toString().includes('opts.onSnap')"))
+          evalj("handleMeasureInteractionEvent.toString().includes('queueMeasureLiveUpdate') && bindMeasureEndpointDrag.toString().includes(\"type:'drag-snap'\") && createPrimaryTrackDragSnapper.toString().includes('opts.onSnap')"))
     check("测距拖动吸附优先局部近邻搜索",
           evalj("createPrimaryTrackDragSnapper.toString().includes('nearestTrackIdxNearPrimary')"))
     check("测距复位会重新补画 A/B 黄线",
@@ -299,8 +313,10 @@ try:
                 && redrawSegmentLayer.toString().includes('buildSegmentLayerModel');
             })()
           """))
-    check("缓存恢复使用延迟双阶段复位",
-          evalj("schedulePostRestoreReset.toString().includes('setTimeout') && _boot.toString().includes('schedulePostRestoreReset')"))
+    check("缓存恢复等待布局后只执行一次复位",
+          evalj("schedulePostRestoreReset.toString().includes('completed') && schedulePostRestoreReset.toString().includes('map.whenReady') && _boot.toString().includes('await schedulePostRestoreReset')"))
+    check("缓存恢复跳过全轨迹预定位并暴露可等待启动状态",
+          evalj("_boot.toString().includes('rebuildAll({fit: !restored})') && window.__HTM_BOOT_READY__ instanceof Promise"))
     check("主轨迹浮动小卡支持拖动并记忆位置",
           evalj("bindPrimaryMiniDrag.toString().includes('pointerdown') && bindPrimaryMiniDrag.toString().includes('localStorage') || (bindPrimaryMiniDrag.toString().includes('pointerdown') && savePrimaryMiniPosition.toString().includes('localStorage'))"))
     check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
@@ -309,20 +325,23 @@ try:
           evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('main.days = day_meta.length')"))
     check("标注点图标按 tag 统一渲染",
           evalj("waypointIcon('supply') === '🏪' && addWpMarker.toString().includes('waypointIcon(wp)') && buildFilterGrid.toString().includes('waypointIcon(tag)') && buildDaysTab.toString().includes('waypointIcon(wp)')"))
-    check("Field Console 工具栏含品牌、两组命令和移动端更多菜单",
+    check("Workbench 顶栏含品牌和完整菜单命令",
           evalj("""
             (() => {
               const toolbar = document.getElementById('map-toolbar');
-              const commandIds = ['help-btn','reset-btn','measure-btn','segment-btn','add-waypoint-btn',
+              const commandIds = ['help-btn','reset-btn','measure-btn','segment-btn','add-waypoint-btn','lang-btn',
                 'add-escape-btn','reverse-btn','add-trail-btn','export-btn','clear-btn'];
-              return document.documentElement.dataset.ui === 'field-console'
+              return document.documentElement.dataset.ui === 'studio'
                 && !!window.HikingTrailApp
                 && window.__HTM_APP_RUNTIME__ === window.HikingTrailApp
-                && !!toolbar.querySelector('.toolbar-brand')
-                && !!toolbar.querySelector('#toolbar-more')
+                && !!toolbar.querySelector('.studio-brand')
+                && !toolbar.querySelector('#toolbar-more:not([hidden])')
                 && commandIds.every(id => {
                   const button = document.getElementById(id);
-                  return !!button && !!button.querySelector('.tb-icon') && !!button.querySelector('.tb-label');
+                  return !!button
+                    && !!button.closest('.studio-menu-popup')
+                    && !!button.querySelector('.studio-command-icon')
+                    && !!button.querySelector('.studio-command-label');
                 });
             })()
           """))
@@ -331,7 +350,7 @@ try:
     check("测距/分段进入时自动切换到标注点模式",
           evalj("measureEnter.toString().includes('enterInteractionRenderMode') && segmentEnter.toString().includes('enterInteractionRenderMode') && setMapMode.toString().includes('state.mode = mode')"))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
-          evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('min: stats.minE') && segmentApply.toString().includes('i_start') && refreshElevBar.toString().includes('dayPreviewState.active')"))
+          evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('min: stats.minE') && segmentApply.toString().includes('i_start') && renderElevationChartNow.toString().includes('dayPreviewState.active')"))
     check("地图 +/- 缩放步进已调大",
           evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.5"))
     check("海拔图与测距浮动栏支持拖动记忆和双击复位",
@@ -369,7 +388,7 @@ try:
                 && !collectElevAnnotations.toString().includes(\"'低 '\")
                 && !drawElevAxes.toString().includes('fillText(Math.round(maxE)')
                 && !drawElevAxes.toString().includes('fillText(Math.round(minE)')
-                && refreshElevBar.toString().includes('measureMode: true');
+                && renderElevationChartNow.toString().includes('measureMode: true');
             })()
           """))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
@@ -377,7 +396,7 @@ try:
             getDayIndexRange.toString().indexOf("dm.i_start") < getDayIndexRange.toString().indexOf("trail.track[i][5]")
             && showDaySegmentPreview.toString().includes("computeDayRangeStats")
             && showDaySegmentPreview.toString().includes("m-dist")
-            && showDaySegmentPreview.toString().includes("fitBounds")
+            && showDaySegmentPreview.toString().includes("fitWorkspaceBounds")
           """))
     check("行程分段可恢复/默认起终点/插入边界/指定删除",
           evalj("""
@@ -513,6 +532,281 @@ try:
               f"added={e2e['added']}, names={e2e['trailNames']}")
     else:
         check("端到端 zip 导入", False, str(e2e)[:200])
+
+    print("\n▸ Interaction 2.0：五模式统一状态机")
+    interaction_flow = evalj("""
+      (() => {
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        if(!main || !main.track?.length) return {error:'missing-primary'};
+        const point = index => ({lat:main.track[index][0], lng:main.track[index][1]});
+        const summary = {};
+
+        measureEnter();
+        summary.measureEntered = interactionManager.current.kind === 'measure'
+          && interactionManager.current.phase === 'select-a'
+          && measureState.active;
+        dispatchRuntimeInteraction('measure', {type:'tap', source:'leaflet', latlng:point(0)});
+        summary.measureA = interactionManager.current.phase === 'select-b' && !!measureState.ptA;
+        dispatchRuntimeInteraction('measure', {
+          type:'tap', source:'leaflet', latlng:point(main.track.length - 1),
+        });
+        summary.measureReady = interactionManager.current.phase === 'ready'
+          && !!measureState.ptA && !!measureState.ptB;
+        const measureDragIndex = Math.max(1, Math.floor(main.track.length * 0.12));
+        const measureDragHit = {
+          idx:measureDragIndex,
+          point:main.track[measureDragIndex],
+          trail:main,
+          dist:0,
+        };
+        dispatchRuntimeInteraction('measure', {type:'drag-start', endpoint:'A'});
+        const measureDragging = interactionManager.current.phase === 'dragging';
+        dispatchRuntimeInteraction('measure', {type:'drag-snap', endpoint:'A', hit:measureDragHit});
+        dispatchRuntimeInteraction('measure', {type:'drag-end', endpoint:'A', hit:measureDragHit});
+        summary.measureDrag = measureDragging
+          && interactionManager.current.phase === 'ready'
+          && measureState.ptA.idx === measureDragIndex;
+
+        segmentEnter();
+        const beforeSegmentPoints = segmentState.points.length;
+        const occupied = new Set(segmentState.points.map(item => item.idx));
+        let insertIndex = Math.floor(main.track.length / 2);
+        while(occupied.has(insertIndex) && insertIndex < main.track.length - 1) insertIndex += 1;
+        dispatchRuntimeInteraction('segment', {
+          type:'tap', source:'leaflet', latlng:point(insertIndex),
+        });
+        summary.segmentReplacedMeasure = interactionManager.current.kind === 'segment'
+          && interactionManager.current.phase === 'editing'
+          && segmentState.active && !measureState.active;
+        summary.segmentTap = segmentState.points.length === beforeSegmentPoints + 1;
+        const boundaryIndex = Math.min(1, segmentState.points.length - 2);
+        const previousIndex = segmentState.points[boundaryIndex - 1].idx;
+        const nextIndex = segmentState.points[boundaryIndex + 1].idx;
+        let segmentDragIndex = Math.floor((previousIndex + nextIndex) / 2);
+        if(segmentDragIndex === segmentState.points[boundaryIndex].idx) segmentDragIndex += 1;
+        if(segmentDragIndex >= nextIndex) segmentDragIndex = nextIndex - 1;
+        const segmentDragHit = {
+          idx:segmentDragIndex,
+          point:main.track[segmentDragIndex],
+          trail:main,
+          dist:0,
+        };
+        dispatchRuntimeInteraction('segment', {type:'drag-start', boundaryIndex});
+        const segmentDragging = interactionManager.current.phase === 'dragging';
+        dispatchRuntimeInteraction('segment', {type:'drag-end', boundaryIndex, hit:segmentDragHit});
+        summary.segmentDrag = segmentDragging
+          && interactionManager.current.phase === 'editing'
+          && segmentState.points[boundaryIndex].idx === segmentDragIndex;
+
+        enterAddWaypointMode({announce:false});
+        const waypointBefore = main.waypoints.length;
+        const originalPrompt = window.prompt;
+        window.prompt = () => '状态机标注';
+        dispatchRuntimeInteraction('waypoint', {
+          type:'tap', source:'leaflet', latlng:point(Math.floor(main.track.length * 0.25)),
+          requireNear:true,
+        });
+        window.prompt = originalPrompt;
+        summary.waypointCommitted = interactionManager.current.kind === 'idle'
+          && !addWaypointState.active
+          && main.waypoints.length === waypointBefore + 1;
+
+        addEscapeEnter();
+        dispatchRuntimeInteraction('escape', {
+          type:'tap', source:'leaflet', latlng:point(Math.floor(main.track.length * 0.2)),
+        });
+        const escapeSelectedA = interactionManager.current.phase === 'select-b' && !!addEscapeState.ptA;
+        dispatchRuntimeInteraction('escape', {
+          type:'tap', source:'leaflet', latlng:point(Math.floor(main.track.length * 0.8)),
+        });
+        summary.escapePreview = escapeSelectedA
+          && interactionManager.current.kind === 'escape'
+          && interactionManager.current.phase === 'preview'
+          && !!addEscapeState._pending;
+
+        const day = main.day_meta?.[0] || {
+          d:1, km:main.stats.distance_km, i_start:0, i_end:main.track.length - 1,
+        };
+        showDaySegmentPreview(main, day);
+        summary.dayReplacedEscape = interactionManager.current.kind === 'day-preview'
+          && interactionManager.current.phase === 'preview'
+          && dayPreviewState.active && !addEscapeState.active;
+        showDaySegmentPreview(main, day);
+        summary.dayToggleExit = interactionManager.current.kind === 'idle' && !dayPreviewState.active;
+
+        segmentEnter();
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+        summary.escapeKey = interactionManager.current.kind === 'idle' && !segmentState.active;
+
+        measureEnter();
+        markTrailRevision(main);
+        summary.ownerInvalidated = !revalidateRuntimeInteractionOwner()
+          && interactionManager.current.kind === 'idle'
+          && !measureState.active;
+        return summary;
+      })()
+    """)
+    if isinstance(interaction_flow, dict) and 'error' not in interaction_flow:
+        for key, label in [
+            ('measureEntered', '测距进入 select-a'),
+            ('measureA', '测距点击 A 后进入 select-b'),
+            ('measureReady', '测距点击 B 后进入 ready'),
+            ('measureDrag', '测距拖动经过 dragging 并回到 ready'),
+            ('segmentReplacedMeasure', '分段替换测距并进入 editing'),
+            ('segmentTap', '分段地图事件插入边界'),
+            ('segmentDrag', '分段边界拖动经过 dragging 并回到 editing'),
+            ('waypointCommitted', '标注提交后自动回到 idle'),
+            ('escapePreview', '下撤 A/B 选择进入 preview'),
+            ('dayReplacedEscape', 'Day 预览替换下撤'),
+            ('dayToggleExit', '再次点击 Day 退出预览'),
+            ('escapeKey', 'Escape 键统一取消当前模式'),
+            ('ownerInvalidated', '轨迹修订后 Session 自动失效'),
+        ]:
+            check(label, interaction_flow.get(key) is True, str(interaction_flow))
+    else:
+        check("五模式统一状态机", False, str(interaction_flow))
+
+    print("\n▸ Performance 2.0：调度、降采样、Marker diff 与最后复位")
+    performance_flow = evalj("""
+      (async () => {
+        const waitFrames = (count = 2) => new Promise(resolve => {
+          const step = () => count-- <= 0 ? resolve() : requestAnimationFrame(step);
+          requestAnimationFrame(step);
+        });
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        if(!main || !main.track?.length) return {error:'missing-primary'};
+
+        state.showLabel = true;
+        main.waypoints.forEach(waypoint => state.visibleTags.add(waypoint.tag));
+        setMapMode('waypoint');
+        await waitFrames();
+
+        const phaseBefore = {...window.__HTM_RENDER_STATS__.phases};
+        const framesBefore = window.__HTM_RENDER_STATS__.frames;
+        drawTracks(); drawTracks(); drawTracks();
+        drawWaypoints(); drawWaypoints(); drawWaypoints();
+        refreshElevBar(); refreshElevBar(); refreshElevBar();
+        await waitFrames();
+        const phaseAfter = window.__HTM_RENDER_STATS__.phases;
+        const coalesced = {
+          frames:window.__HTM_RENDER_STATS__.frames - framesBefore,
+          tracks:phaseAfter.tracks - phaseBefore.tracks,
+          markers:phaseAfter.markers - phaseBefore.markers,
+          chart:phaseAfter.chart - phaseBefore.chart,
+        };
+
+        const markerKeys = Object.keys(wpMarkers);
+        const retainedKey = markerKeys[0];
+        const retainedMarker = retainedKey ? wpMarkers[retainedKey] : null;
+        drawWaypoints();
+        await waitFrames();
+        const keepDiff = {...window.__HTM_RENDER_STATS__.markers};
+        const markerKept = !!retainedKey
+          && retainedMarker === wpMarkers[retainedKey]
+          && keepDiff.add === 0 && keepDiff.update === 0 && keepDiff.remove === 0
+          && keepDiff.keep > 0;
+
+        const anchorIndex = Math.floor(main.track.length * 0.35);
+        const anchor = main.track[anchorIndex];
+        const testWaypoint = {
+          id:`perf-${Date.now()}`,
+          name:'Render diff probe', label:'Render diff probe', tag:'other', icon:'',
+          lat:anchor[0], lng:anchor[1], elev:anchor[2], km:anchor[3], gps_idx:anchorIndex,
+          day:anchor[5] || null, photo:'',
+        };
+        state.visibleTags.add('other');
+        main.waypoints.push(testWaypoint);
+        drawWaypoints();
+        await waitFrames();
+        const addDiff = {...window.__HTM_RENDER_STATS__.markers};
+        const testKey = `${main.id}#${testWaypoint.id}`;
+        const markerAdded = addDiff.add === 1 && !!wpMarkers[testKey]
+          && (!retainedKey || retainedMarker === wpMarkers[retainedKey]);
+
+        main.waypoints = main.waypoints.filter(waypoint => waypoint !== testWaypoint);
+        drawWaypoints();
+        await waitFrames();
+        const removeDiff = {...window.__HTM_RENDER_STATS__.markers};
+        const markerRemoved = removeDiff.remove === 1 && !wpMarkers[testKey]
+          && (!retainedKey || retainedMarker === wpMarkers[retainedKey]);
+
+        refreshElevBar();
+        drawTracks();
+        await waitFrames();
+        const elevation = {...window.__HTM_RENDER_STATS__.elevation};
+        const activeTrailCount = DATA.trails.filter(isTrailActive).length;
+        const elevationBands = window.__HTM_RENDER_STATS__.elevationBands;
+        const canvasLimit = Math.max(2, Math.floor(elevCanvas.offsetWidth || 340)) * 2;
+
+        const fitBefore = {...window.__HTM_RENDER_STATS__.fit};
+        const firstReset = resetView({restoreActive:true});
+        const secondReset = resetView({restoreActive:true});
+        const resetResults = await Promise.all([firstReset, secondReset]);
+        await waitFrames();
+        const fitAfter = window.__HTM_RENDER_STATS__.fit;
+        const bounds = map.getBounds();
+        const firstPoint = main.track[0];
+        const lastPoint = main.track[main.track.length - 1];
+
+        return {
+          coalesced,
+          markerKept,
+          markerAdded,
+          markerRemoved,
+          keepDiff,
+          addDiff,
+          removeDiff,
+          elevation,
+          canvasLimit,
+          elevationBands,
+          activeTrailCount,
+          resetResults,
+          resetSuperseded:fitAfter.superseded - fitBefore.superseded,
+          resetApplied:fitAfter.applied - fitBefore.applied,
+          resetRequested:fitAfter.requested - fitBefore.requested,
+          latestResetEpoch:fitAfter.lastResetEpoch,
+          boundsContainEndpoints:bounds.contains([firstPoint[0], firstPoint[1]])
+            && bounds.contains([lastPoint[0], lastPoint[1]]),
+          schedulerIdle:window.__HTM_RENDER_SCHEDULER__.pendingMask === 0
+            && !window.__HTM_RENDER_SCHEDULER__.hasScheduledFrame,
+        };
+      })()
+    """)
+    if isinstance(performance_flow, dict) and 'error' not in performance_flow:
+        coalesced = performance_flow.get('coalesced', {})
+        check("同帧重复重绘仅 flush 一次",
+              coalesced.get('frames') == 1
+              and coalesced.get('tracks') == 1
+              and coalesced.get('markers') == 1
+              and coalesced.get('chart') == 1,
+              str(coalesced))
+        check("未变化 Marker 保持实例", performance_flow.get('markerKept') is True,
+              str(performance_flow.get('keepDiff')))
+        check("新增 waypoint 只添加一个 Marker", performance_flow.get('markerAdded') is True,
+              str(performance_flow.get('addDiff')))
+        check("删除 waypoint 只移除一个 Marker", performance_flow.get('markerRemoved') is True,
+              str(performance_flow.get('removeDiff')))
+        elevation = performance_flow.get('elevation', {})
+        check("海拔 Canvas 点数受像素宽度限制",
+              elevation.get('sourcePoints', 0) > elevation.get('renderedPoints', 0)
+              and elevation.get('renderedPoints', 0) <= performance_flow.get('canvasLimit', 0),
+              f"{elevation}, limit={performance_flow.get('canvasLimit')}")
+        check("地图海拔渐变不超过每轨 40 band",
+              performance_flow.get('elevationBands', 0) > 0
+              and performance_flow.get('elevationBands', 0)
+                  <= performance_flow.get('activeTrailCount', 0) * 40,
+              f"bands={performance_flow.get('elevationBands')}, trails={performance_flow.get('activeTrailCount')}")
+        check("连续复位只有最后一次生效",
+              performance_flow.get('resetResults') == [False, True]
+              and performance_flow.get('resetSuperseded', 0) >= 1
+              and performance_flow.get('resetApplied') == 1
+              and performance_flow.get('resetRequested') == 2,
+              str(performance_flow))
+        check("最终复位范围包含主轨迹端点",
+              performance_flow.get('boundsContainEndpoints') is True)
+        check("渲染队列最终归零", performance_flow.get('schedulerIdle') is True)
+    else:
+        check("Performance 2.0 真实运行时", False, str(performance_flow))
 
     ws.close()
 
