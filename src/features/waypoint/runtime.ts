@@ -49,20 +49,14 @@ const tagLabels = {
 };
 
 const wpMarkers = {};
-const waypointMarkerEntries = new Map();
-let waypointMarkerModels = [];
 
-function waypointMarkerSignature(trail, wp, isPrimary) {
-  const photo = String(wp.photo || '');
-  const photoSignature = photo
-    ? `${photo.length}:${photo.slice(0, 24)}:${photo.slice(-24)}`
-    : '';
-  return JSON.stringify([
-    trail.name, trail.color, state.mode, isPrimary,
-    wp.lat, wp.lng, wp.tag, wp.day, wp.km, wp.elev,
-    wp.icon, wp.label, wp.name, photoSignature,
-  ]);
-}
+const leafletMarkerRenderer = HTM_APP.createLeafletMarkerRenderer({
+  leaflet:L,
+  waypointLayer:wpLayer,
+  highPointLayer,
+  waypointRegistry:wpMarkers,
+  onWaypointClick:(event, model) => pinWpCard(event, model.waypoint, model.trail),
+});
 
 function collectWaypointMarkerModels() {
   if(!state.showLabel) return [];
@@ -74,59 +68,14 @@ function collectWaypointMarkerModels() {
     if(!isWpMode && !isPrimary) return;
     (trail.waypoints || []).forEach(wp => {
       if(!state.visibleTags.has(wp.tag)) return;
-      const key = `${trail.id}#${wp.id}`;
-      models.push({
-        key,
-        trail,
-        wp,
-        isPrimary,
-        signature:waypointMarkerSignature(trail, wp, isPrimary),
-      });
+      models.push(addWpMarker(trail, wp, isPrimary));
     });
   });
   return models;
 }
 
-function removeWaypointMarkerEntry(key) {
-  const entry = waypointMarkerEntries.get(key);
-  if(!entry) return;
-  wpLayer.removeLayer(entry.marker);
-  waypointMarkerEntries.delete(key);
-  delete wpMarkers[key];
-}
-
-function mountWaypointMarkerModel(model) {
-  const marker = addWpMarker(model.trail, model.wp, model.isPrimary);
-  waypointMarkerEntries.set(model.key, {marker, model});
-  wpMarkers[model.key] = marker;
-}
-
 function renderWaypointsNow() {
-  const nextModels = collectWaypointMarkerModels();
-  const diff = planKeyedWaypointDiff(
-    waypointMarkerModels,
-    nextModels,
-    model => model.key,
-    (previous, next) => previous.signature === next.signature,
-  );
-
-  diff.remove.forEach(item => removeWaypointMarkerEntry(item.key));
-  diff.update.forEach(item => {
-    removeWaypointMarkerEntry(item.key);
-    mountWaypointMarkerModel(item.next);
-  });
-  diff.add.forEach(item => mountWaypointMarkerModel(item.next));
-  diff.keep.forEach(item => {
-    const entry = waypointMarkerEntries.get(item.key);
-    if(entry) entry.model = item.next;
-  });
-  waypointMarkerModels = nextModels;
-  renderRuntimeStats.markers = {
-    add:diff.add.length,
-    update:diff.update.length,
-    remove:diff.remove.length,
-    keep:diff.keep.length,
-  };
+  renderRuntimeStats.markers = leafletMarkerRenderer.renderWaypoints(collectWaypointMarkerModels());
   drawHighPoints();
 }
 
@@ -138,73 +87,24 @@ function drawWaypoints() {
 function addWpMarker(trail, wp, isPrimary) {
       const color = tagColors[wp.tag] || '#aaa';
       const isWpMode = state.mode === 'waypoint';
-      // waypoint 模式 + 非主轨迹：只显示 emoji 图标（无 km·elev label），但颜色和主轨迹一样深
-      const onlyEmoji = isWpMode && !isPrimary;
-      // waypoint 模式下所有显示中轨迹的标注点都是全色（用户要求）
-      const labelOpacity = isWpMode ? 1 : (isPrimary ? 1 : 0.7);
-      const labelBorder = color;
       const iconText = waypointIcon(wp);
-      const dayBadge = wp.day != null ? `<span class="wp-day-badge">D${wp.day}</span>` : '';
-      const label = onlyEmoji ? '' : `<div class="wp-marker-label" style="color:${color};border-color:${labelBorder};opacity:${labelOpacity}">${dayBadge}${wp.km}km · ${wp.elev}m</div>`;
-      const emojiSize = onlyEmoji ? 'font-size:16px;' : '';
-      const emojiShadow = onlyEmoji ? 'filter:drop-shadow(0 1px 2px rgba(0,0,0,0.7));' : '';
-      const html = `<div style="display:flex;align-items:center;gap:4px">
-        <span class="wp-marker-emoji" style="opacity:${labelOpacity};${emojiSize}${emojiShadow}">${iconText}</span>
-        ${label}
-      </div>`;
-      const icon = L.divIcon({ html, className:'', iconSize:[null, 24], iconAnchor:[12,12] });
-      const m = L.marker([wp.lat, wp.lng], { icon, zIndexOffset: isPrimary ? 700 : 600, opacity: 1 });
-      // 点击标注点 → 固定显示卡片；卡片中点图片再放大
-      m.on('click', e => pinWpCard(e, wp, trail));
-      m.addTo(wpLayer);
-      wpMarkers[`${trail.id}#${wp.id}`] = m;
-      return m;
+      const dayBadge = wp.day != null ? '<span class="wp-day-badge">D'+wp.day+'</span>' : '';
+      void dayBadge;
+      return HTM_APP.buildWaypointMarkerModel({trail, waypoint:wp, isPrimary, waypointMode:isWpMode, color, iconText});
 }
 
 function drawHighPoints() {
-  highPointLayer.clearLayers();
-  // 根据当前模式决定是否显示
   const isWpMode = state.mode === 'waypoint';
-  // v1.14.1：统一走 state.visibleTags（getter 自动反射 modeVisibleTags[当前模式]）
   const showInThisMode = state.visibleTags.has('highpoint');
-
+  const models = [];
   DATA.trails.forEach(trail => {
-    // 标注点模式忽略 activeTrails
     if(!isWpMode && !isTrailActive(trail)) return;
     if(!showInThisMode) return;
-    // waypoint 模式下，非主轨迹也显示，但要标识
-    const isMainCheck = trail.id === state.primaryTrailId;
-    if(!isWpMode && !isMainCheck) {
-      // 普通模式下只画主轨迹（保持原逻辑）
-      // 不过这里允许所有显示中轨迹都画——保持原行为，每条都画
-    }
-    const track = trail.track;
-    if(!track || track.length === 0) return;
-    let maxIdx = 0, maxE = -Infinity;
-    for(let i=0; i<track.length; i++) {
-      const e = track[i][2];
-      if(typeof e === 'number' && isFinite(e) && e > maxE) { maxE = e; maxIdx = i; }
-    }
-    if(maxE === -Infinity) return;  // 整条轨迹无有效海拔
-    const p = track[maxIdx];
     const isMain = trail.id === state.primaryTrailId;
-    const html = `
-      <div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto">
-        <div style="font-size:18px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6))">⛰</div>
-        <div style="background:${trail.color};color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;margin-top:2px;white-space:nowrap;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.3)">${maxE} m</div>
-      </div>
-    `;
-    const icon = L.divIcon({ html, className:'', iconSize:[null, 36], iconAnchor:[12, 30] });
-    const m = L.marker([p[0], p[1]], { icon, zIndexOffset: isMain ? 800 : 750, opacity: isMain ? 1 : 0.85 });
-    m.bindPopup(`
-      <div class="popup-content">
-        <h4>⛰ ${trail.name} 最高点</h4>
-        <div class="pmeta">海拔 <b>${maxE}</b> m</div>
-        <div class="pmeta">里程 <b>${p[3]}</b> km</div>
-      </div>
-    `, { maxWidth: 260 });
-    m.addTo(highPointLayer);
+    const model = HTM_APP.buildHighPointMarkerModel(trail, isMain);
+    if(model) models.push(model);
   });
+  leafletMarkerRenderer.renderHighPoints(models);
 }
 
 /* ============ Tooltip ============ */

@@ -4,230 +4,43 @@
 export {};
 
 /* @runtime-fragment map.tracks */
-/* ============ Computed: all elev range ============ */
-let minE = 0, maxE = 5000;
-function recomputeElevRange() {
-  let nextMin = Infinity;
-  let nextMax = -Infinity;
-  DATA.trails.forEach(t => {
-    if(state.activeTrails && !isTrailActive(t)) return;
-    t.track.forEach(p => {
-      const elevation = Number(p[2]);
-      if(!Number.isFinite(elevation)) return;
-      if(elevation < nextMin) nextMin = elevation;
-      if(elevation > nextMax) nextMax = elevation;
-    });
-  });
-  if(nextMin !== Infinity) {
-    minE = nextMin;
-    maxE = nextMax;
-  } else {
-    minE = 0; maxE = 5000;
-  }
-}
-
 /* ============ Color helpers ============ */
 // 天数分色：柔和但有区分度，适合卫星图与米色面板上的连续天数阅读
 const dayPalette = ['#2F6B5F','#D96C4A','#E1A93B','#5577B8','#8A6BBE','#C45D83','#5E9F65','#C58B54'];
 
-function elevColor(e) {
-  const t = Math.max(0, Math.min(1, (e - minE) / (maxE - minE || 1)));
-  // 6-stop gradient
-  const stops = [
-    [0.00, [59,130,246]],   // blue
-    [0.20, [6,182,212]],    // cyan
-    [0.40, [132,204,22]],   // lime
-    [0.60, [250,204,21]],   // yellow
-    [0.80, [249,115,22]],   // orange
-    [1.00, [239,68,68]],    // red
-  ];
-  for(let i=0;i<stops.length-1;i++){
-    if(t>=stops[i][0] && t<=stops[i+1][0]){
-      const r=(t-stops[i][0])/(stops[i+1][0]-stops[i][0]);
-      const c1=stops[i][1], c2=stops[i+1][1];
-      return `rgb(${Math.round(c1[0]+(c2[0]-c1[0])*r)},${Math.round(c1[1]+(c2[1]-c1[1])*r)},${Math.round(c1[2]+(c2[2]-c1[2])*r)})`;
-    }
-  }
-  return 'rgb(239,68,68)';
-}
-
 /* ============ Draw Track ============ */
+const leafletTrackRenderer = HTM_APP.createLeafletTrackRenderer({
+  leaflet:L,
+  trackLayer,
+  networkLayer,
+  requestFrame:callback => requestAnimationFrame(callback),
+  cancelFrame:handle => cancelAnimationFrame(handle),
+  interactionBlocked:() => measureState.active || (typeof segmentState !== 'undefined' && segmentState.active),
+  onHover:(event, model) => {
+    const track = model.trail.track;
+    const i = nearestTrackIdx(track, event.latlng.lat, event.latlng.lng);
+    showTooltip(event, track[i], track[Math.min(i + 1, track.length - 1)], model.trail);
+  },
+  onHoverEnd:() => hideTooltip(),
+  onSelectTrail:trailId => {
+    dispatchState({type:'primary-trail.set', trailId});
+    rebuildAll({fit:false});
+    saveToStorage();
+  },
+});
+
 function renderTracksNow() {
-  trackLayer.clearLayers();
-  networkLayer.clearLayers();
-  if(!state.showTrack) return;
-  recomputeElevRange();
-  renderRuntimeStats.elevationBands = 0;
-
-  const isWaypointMode = state.mode === 'waypoint';
-
-  // 按trail绘制：先非主，后主（主轨迹在上层）
-  const ordered = [
-    ...DATA.trails.filter(t => t.id !== state.primaryTrailId),
-    ...DATA.trails.filter(t => t.id === state.primaryTrailId)
-  ];
-
-  ordered.forEach(trail => {
-    if(!isTrailActive(trail)) return;
-    const track = trail.track;
-    if(track.length < 2) return;
-    const isMain = (trail.id === state.primaryTrailId);
-
-    // 标注点对比模式：非主轨迹画浅色虚线
-    if(isWaypointMode && !isMain) {
-      const latlngs = track.map(p => [p[0], p[1]]);
-      const line = L.polyline(latlngs, {
-        color: trail.color || '#888',
-        weight: 1.8,
-        opacity: 0.45,
-        dashArray: '4,6',
-      });
-      line.bindTooltip(trail.name, {sticky: true});
-      line.on('click', () => {
-        if(measureState.active) return;  // 测距模式下不切换主轨迹
-        if(typeof segmentState !== 'undefined' && segmentState.active) return; // 分段模式下不切换
-        dispatchState({type:'primary-trail.set', trailId:trail.id});
-        rebuildAll({fit: false});
-        saveToStorage();
-      });
-      line.addTo(trackLayer);
-      return;
-    }
-
-    const baseOpacity = isMain ? 0.95 : 0.4;
-    const baseWeight = isMain ? 4.5 : 2.5;
-    const opacity = state.activeEscape ? baseOpacity * 0.35 : baseOpacity;
-    const weight = state.activeEscape ? Math.max(1, baseWeight - 1.5) : baseWeight;
-
-    // 标注点对比模式下的主轨迹：强制走海拔渐变
-    const renderMode = (isWaypointMode && isMain) ? 'elev' : state.mode;
-
-    if(renderMode === 'day' && !isMain) {
-      // 非主轨迹：单 polyline 一种颜色，性能最好
-      const latlngs = track.map(p => [p[0], p[1]]);
-      const line = L.polyline(latlngs, {
-        color: trail.color, weight, opacity, smoothFactor: 1, lineCap:'round',
-      });
-      line.__trail = trail;
-      // v1.29.0：mousemove 用 rAF 节流；测距/分段模式下完全禁用（避免 pointer 事件阻塞）
-      let _rafId = null;
-      line.on('mouseover mousemove', e => {
-        if(measureState.active || (typeof segmentState !== 'undefined' && segmentState.active)) return;
-        if(_rafId) return;
-        _rafId = requestAnimationFrame(() => {
-          _rafId = null;
-          const ll = e.latlng;
-          const i = nearestTrackIdx(track, ll.lat, ll.lng);
-          showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
-        });
-      });
-      line.on('mouseout', () => {
-        if(_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
-        hideTooltip();
-      });
-      trackLayer.addLayer(line);
-      return;
-    }
-
-    // 主轨迹（按天分色）或海拔渐变模式：按颜色分组成多个 polyline
-    // 主轨迹海拔渐变 / 天数模式下加 Bloom 外发光（保持杂志风的暖色辉光）
-    const isElevMain = isMain && renderMode === 'elev';
-    const isDayMain = isMain && renderMode === 'day';
-    if((isElevMain || isDayMain) && !state.activeEscape) {
-      const allLatLngs = track.map(p => [p[0], p[1]]);
-      // 暖色辉光：白光 + 米黄
-      const bloomOuter = L.polyline(allLatLngs, {
-        color: '#ffffff', weight: weight + 5, opacity: 0.32,
-        smoothFactor: 1, lineCap:'round', lineJoin:'round', interactive: false,
-      });
-      const bloomInner = L.polyline(allLatLngs, {
-        color: '#FAF6EA', weight: weight + 2.5, opacity: 0.42,
-        smoothFactor: 1, lineCap:'round', lineJoin:'round', interactive: false,
-      });
-      trackLayer.addLayer(bloomOuter);
-      trackLayer.addLayer(bloomInner);
-    }
-
-    if(renderMode === 'elev') {
-      const groups = buildElevationPolylineSegments(track, {
-        bandCount:40,
-        minElevation:minE,
-        maxElevation:maxE,
-      });
-      renderRuntimeStats.elevationBands += groups.length;
-      groups.forEach(group => {
-        const line = L.polyline(group.paths.map(path => path.latLngs), {
-          color:elevColor(minE + group.ratio * (maxE - minE)),
-          weight,
-          opacity,
-          smoothFactor:1,
-          lineCap:'round',
-        });
-        line.__trail = trail;
-        let _rafId = null;
-        line.on('mouseover mousemove', e => {
-          if(measureState.active || (typeof segmentState !== 'undefined' && segmentState.active)) return;
-          if(_rafId) return;
-          _rafId = requestAnimationFrame(() => {
-            _rafId = null;
-            const ll = e.latlng;
-            const i = nearestTrackIdx(track, ll.lat, ll.lng);
-            showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
-          });
-        });
-        line.on('mouseout', () => {
-          if(_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
-          hideTooltip();
-        });
-        trackLayer.addLayer(line);
-      });
-      return;
-    }
-
-    let curColor = null, curPath = [];
-    const flush = () => {
-      if(curPath.length < 2) return;
-      const line = L.polyline(curPath, {
-        color: curColor, weight, opacity, smoothFactor: 1, lineCap:'round',
-      });
-      line.__trail = trail;
-      // v1.29.0：mousemove 用 rAF 节流；测距/分段模式下完全禁用（避免 pointer 事件阻塞）
-      let _rafId = null;
-      line.on('mouseover mousemove', e => {
-        if(measureState.active || (typeof segmentState !== 'undefined' && segmentState.active)) return;
-        if(_rafId) return;
-        _rafId = requestAnimationFrame(() => {
-          _rafId = null;
-          const ll = e.latlng;
-          const i = nearestTrackIdx(track, ll.lat, ll.lng);
-          showTooltip(e, track[i], track[Math.min(i+1, track.length-1)], trail);
-        });
-      });
-      line.on('mouseout', () => {
-        if(_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
-        hideTooltip();
-      });
-      trackLayer.addLayer(line);
-    };
-    for(let i=0; i<track.length; i++) {
-      const a = track[i];
-      const b = track[Math.min(i+1, track.length-1)];
-      let color;
-      if(renderMode === 'day') {
-        color = dayPalette[(a[5]-1) % dayPalette.length];
-      } else {
-        color = elevColor((a[2]+b[2])/2);
-      }
-      if(color !== curColor) {
-        flush();
-        curColor = color;
-        curPath = i > 0 ? [[track[i-1][0], track[i-1][1]], [a[0], a[1]]] : [[a[0], a[1]]];
-      } else {
-        curPath.push([a[0], a[1]]);
-      }
-    }
-    flush();
+  const model = HTM_APP.buildTrackRenderModel({
+    trails:DATA.trails.map(trail => ({...trail, active:isTrailActive(trail)})),
+    primaryTrailId:state.primaryTrailId,
+    mode:state.mode,
+    showTrack:state.showTrack,
+    activeEscape:state.activeEscape,
+    dayPalette,
+    elevationBandCount:40,
   });
+  leafletTrackRenderer.render(model);
+  renderRuntimeStats.elevationBands = model.elevationBands;
 }
 
 function drawTracks() {

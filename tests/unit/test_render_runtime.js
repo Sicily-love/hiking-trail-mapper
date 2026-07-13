@@ -54,12 +54,14 @@ test('rebuildAll schedules the complete ordered render set', () => {
   assert.ok(source.includes("{source:'rebuild'}"));
 });
 
-test('map elevation gradients use bounded 40-band polyline groups', () => {
+test('track runtime delegates bounded elevation rendering to the typed model and Leaflet adapter', () => {
   const source = functionSource('renderTracksNow', 'drawTracks');
-  assert.ok(source.includes('buildElevationPolylineSegments(track'));
-  assert.ok(source.includes('bandCount:40'));
-  assert.ok(source.includes('group.paths.map(path => path.latLngs)'));
-  assert.ok(source.includes('renderRuntimeStats.elevationBands += groups.length'));
+  assert.ok(source.includes('HTM_APP.buildTrackRenderModel'));
+  assert.ok(source.includes('elevationBandCount:40'));
+  assert.ok(source.includes('leafletTrackRenderer.render(model)'));
+  assert.ok(source.includes('renderRuntimeStats.elevationBands = model.elevationBands'));
+  assert.strictEqual(source.includes('L.polyline'), false);
+  assert.ok(runtime.includes('HTM_APP.createLeafletTrackRenderer'));
 });
 
 test('Canvas elevation rendering downsamples without replacing full hit data', () => {
@@ -73,15 +75,13 @@ test('Canvas elevation rendering downsamples without replacing full hit data', (
   assert.ok(draw.includes('pts, minE: layout.minE'));
 });
 
-test('waypoint markers use keyed diff and preserve unchanged instances', () => {
+test('waypoint runtime delegates keyed Marker ownership to the Leaflet adapter', () => {
   const source = functionSource('renderWaypointsNow', 'drawWaypoints');
-  assert.ok(source.includes('planKeyedWaypointDiff'));
-  assert.ok(source.includes('diff.remove.forEach'));
-  assert.ok(source.includes('diff.update.forEach'));
-  assert.ok(source.includes('diff.add.forEach'));
-  assert.ok(source.includes('diff.keep.forEach'));
+  assert.ok(source.includes('leafletMarkerRenderer.renderWaypoints'));
   assert.strictEqual(source.includes('wpLayer.clearLayers'), false);
-  assert.ok(runtime.includes('const waypointMarkerEntries = new Map()'));
+  assert.strictEqual(source.includes('L.marker'), false);
+  assert.ok(runtime.includes('HTM_APP.createLeafletMarkerRenderer'));
+  assert.ok(runtime.includes('waypointRegistry:wpMarkers'));
 });
 
 test('FIT is last-request-wins and reset is epoch guarded', () => {

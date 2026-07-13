@@ -73,9 +73,7 @@ buildKmlParseModel = HTM_CORE.buildKmlParseModel;
 enrichWaypoints = HTM_CORE.enrichWaypoints;
 computeCumulativeDistance = HTM_CORE.computeCumulativeDistance;
 computeTrailStats = HTM_CORE.computeTrailStats;
-buildElevationPolylineSegments = HTM_CORE.buildElevationPolylineSegments;
 downsampleMinMaxIndices = HTM_CORE.downsampleMinMaxIndices;
-planKeyedWaypointDiff = HTM_CORE.planKeyedWaypointDiff;
 
 
 const APP_VERSION = 'v1.32.2';

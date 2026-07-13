@@ -60,7 +60,29 @@ export {
   type EscapeTrail,
 } from '../features/escape/controller.ts';
 export { createElevationDockState, toggleElevationDock } from '../features/elevation/controller.ts';
-export { upsertLeafletPolyline } from '../adapters/leaflet.ts';
+export {
+  createLeafletMarkerRenderer,
+  createLeafletTrackRenderer,
+  upsertLeafletPolyline,
+  type LeafletMarkerDiffStats,
+  type LeafletMarkerRenderer,
+  type LeafletTrackRenderer,
+} from '../adapters/leaflet.ts';
+export {
+  buildTrackRenderModel,
+  elevationTrackColor,
+  type BuildTrackRenderModelOptions,
+  type TrackPolylineRenderModel,
+  type TrackRenderModel,
+  type TrackRenderTrail,
+} from '../features/map/render-model.ts';
+export {
+  buildHighPointMarkerModel,
+  buildWaypointMarkerModel,
+  type LeafletMarkerRenderModel,
+  type WaypointRenderRecord,
+  type WaypointRenderTrail,
+} from '../features/waypoint/render-model.ts';
 export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';
 export { openIndexedDbDatabase } from '../adapters/indexedDb.ts';
 export {
