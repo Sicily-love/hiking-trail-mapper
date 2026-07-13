@@ -12,3 +12,12 @@ export type {
   InfoDialogOptions,
   PromptDialogOptions,
 } from './controller.ts';
+export type {
+  ContentDialogAction,
+  ContentDialogOptions,
+  ContentDialogProgress,
+  ContentDialogRow,
+  ContentDialogSection,
+  ContentDialogSize,
+  ContentTone,
+} from './content-model.ts';

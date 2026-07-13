@@ -5,90 +5,44 @@ export {};
 
 /* @runtime-fragment storage.info */
 async function showStorageInfo() {
-  let modal = document.getElementById('storage-modal');
-  if(!modal) {
-    modal = document.createElement('div');
-    modal.id = 'storage-modal';
-    modal.className = 'modal-mask';
-    modal.innerHTML = `
-      <div class="modal-card" style="max-width:480px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 data-i18n="storage.title" style="margin:0">${t('storage.title')}</h3>
-          <button class="btn-mini" data-modal-close data-i18n="changelog.close">${t('changelog.close')}</button>
-        </div>
-        <div id="storage-info" style="font-size:12px;line-height:1.8;color:var(--text-base)"></div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    modal.querySelector('[data-modal-close]')?.addEventListener('click', () => modal.classList.remove('open'));
-    modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('open'); });
-  }
-  const info = modal.querySelector('#storage-info');
-  let html = '';
+  const storageApi = navigator.storage;
+  let snapshot = {
+    trailCount:DATA.trails.length,
+    estimateSupported:Boolean(storageApi && storageApi.estimate),
+    persistSupported:Boolean(storageApi && storageApi.persist),
+    persisted:false,
+  };
   try {
-    if(navigator.storage && navigator.storage.estimate) {
-      const est = await navigator.storage.estimate();
-      const usedMB = (est.usage / 1024 / 1024).toFixed(2);
-      const quotaMB = (est.quota / 1024 / 1024).toFixed(0);
-      const pct = ((est.usage / est.quota) * 100).toFixed(1);
-      html += `<div style="margin-bottom:6px"><b>${t('storage.used')}:</b> ${usedMB} MB</div>`;
-      html += `<div style="margin-bottom:6px"><b>${t('storage.total')}:</b> ${quotaMB} MB (${pct}%)</div>`;
-      html += `<div style="background:var(--bg-2);border-radius:4px;overflow:hidden;height:8px;margin:8px 0"><div style="height:100%;background:linear-gradient(90deg,#10b981,#facc15,#ef4444);width:${pct}%"></div></div>`;
-      html += `<div style="margin-top:10px;font-size:11px;color:var(--text-muted)">轨迹数: <b>${DATA.trails.length}</b></div>`;
-    } else {
-      html += `<div style="color:var(--text-muted)">浏览器不支持 storage.estimate API</div>`;
+    if(storageApi && storageApi.estimate) {
+      const estimate = await storageApi.estimate();
+      snapshot = {...snapshot, usedBytes:estimate.usage || 0, quotaBytes:estimate.quota || 0};
     }
-
-    let persisted = false;
-    if(navigator.storage && navigator.storage.persisted) {
-      persisted = await navigator.storage.persisted();
-    }
-
-    if(persisted) {
-      html += `<div style="margin-top:14px;color:#10b981;font-weight:600">${t('storage.persisted')}</div>`;
-      html += `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">数据不会被浏览器自动清理</div>`;
-    } else {
-      html += `<button class="btn-mini" id="persist-btn" style="margin-top:14px;background:var(--accent);color:#000;padding:6px 14px">${t('storage.persist')}</button>`;
-      html += `<div style="font-size:11px;color:var(--text-muted);margin-top:6px">默认浏览器在存储不足时可能清理本站数据。点击"持久化"请求保留</div>`;
-    }
-
-    html += `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);line-height:1.7">
-      <b>关于浏览器存储配额：</b><br>
-      • 配额由浏览器自动管理（一般为可用磁盘 60%）<br>
-      • 无法手动设置容量上限<br>
-      • 推荐：定期点击「📤 导出」备份重要轨迹<br>
-      • 配额不够时可在浏览器"设置 → 隐私 → 站点设置"清理其他网站数据
-    </div>`;
-  } catch(e) {
-    html = '<div style="color:#ef4444">' + e.message + '</div>';
+    if(storageApi && storageApi.persisted) snapshot.persisted = await storageApi.persisted();
+  } catch(error) {
+    snapshot = {...snapshot, error:error instanceof Error ? error.message : String(error)};
   }
-  info.innerHTML = html;
 
-  const persistBtn = info.querySelector('#persist-btn');
-  if(persistBtn) {
-    persistBtn.addEventListener('click', async () => {
-      try {
-        const ok = await navigator.storage.persist();
-        if(ok) {
-          showToast(t('storage.persisted'));
-          showStorageInfo();
-        } else {
-          await studioDialogs.info({
-            title:currentLang === 'zh' ? '无法持久化存储' : 'Persistent storage unavailable',
-            message:'请求被拒绝。某些浏览器需要先把站点加为书签或频繁访问后才能持久化。',
-          });
-        }
-      } catch(e) {
-        await studioDialogs.info({
-          title:currentLang === 'zh' ? '存储请求失败' : 'Storage request failed',
-          message:'Failed: ' + e.message,
-          danger:true,
-        });
-      }
+  const action = await studioDialogs.content(HTM_APP.buildStorageDialogModel(currentLang, snapshot));
+  if(action !== 'persist' || !storageApi || !storageApi.persist) return;
+  try {
+    const persisted = await storageApi.persist();
+    if(persisted) {
+      showToast(t('storage.persisted'));
+      return showStorageInfo();
+    }
+    await studioDialogs.info({
+      title:currentLang === 'zh' ? '无法持久化存储' : 'Persistent storage unavailable',
+      message:currentLang === 'zh'
+        ? '请求被拒绝。部分浏览器需要先将站点加入书签或提高访问频率。'
+        : 'The request was denied. Some browsers require bookmarking or repeated site use first.',
+    });
+  } catch(error) {
+    await studioDialogs.info({
+      title:currentLang === 'zh' ? '存储请求失败' : 'Storage request failed',
+      message:error instanceof Error ? error.message : String(error),
+      danger:true,
     });
   }
-
-  modal.classList.add('open');
 }
 
 

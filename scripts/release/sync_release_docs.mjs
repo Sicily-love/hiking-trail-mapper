@@ -5,16 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const html = await readFile(path.join(root, 'hiking-trail-mapper.html'), 'utf8');
-const localizationRuntime = await readFile(
-  path.join(root, 'src/features/localization/runtime.ts'),
+const changelogSource = await readFile(
+  path.join(root, 'src/features/localization/changelog.ts'),
   'utf8',
 );
 const check = process.argv.includes('--check');
 const version = html.match(/const APP_VERSION = '(v\d+\.\d+\.\d+)'/)?.[1];
 if(!version) throw new Error('Generated HTML is missing APP_VERSION');
 
-const changelogBlock = localizationRuntime.match(/const CHANGELOG = (\[[\s\S]*?\n\]);/)?.[1];
-if(!changelogBlock) throw new Error('Localization runtime is missing CHANGELOG');
+const changelogBlock = changelogSource.match(
+  /export const CHANGELOG = (\[[\s\S]*?\n\]) satisfies readonly ChangelogEntry\[\];/,
+)?.[1];
+if(!changelogBlock) throw new Error('Localization changelog module is missing CHANGELOG');
 const entryPattern = /\{\s*version:\s*'([^']+)',\s*date:\s*'([^']+)',\s*items:\s*\{\s*zh:\s*\[([\s\S]*?)\],\s*en:\s*\[([\s\S]*?)\],?\s*\},?\s*\},?/g;
 const stringValues = block => [...block.matchAll(/'((?:\\.|[^'\\])*)'/g)]
   .map(match => match[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'));
@@ -39,7 +41,7 @@ entries.forEach(entry => {
   entry.en.forEach(item => changelog.push(`- ${item}`));
   changelog.push('');
 });
-if(!entries.length) throw new Error('Localization runtime CHANGELOG has no entries');
+if(!entries.length) throw new Error('Localization changelog module has no entries');
 
 const stale = [];
 async function syncFile(filePath, next) {

@@ -1,8 +1,15 @@
+import type {
+  ContentDialogOptions,
+  ContentDialogSection,
+  ContentTone,
+} from './content-model.ts';
+
 export interface DialogBaseOptions {
   title?: string;
   message?: string;
   danger?: boolean;
   initialFocus?: string | HTMLElement;
+  size?: 'default' | 'wide';
 }
 
 export interface InfoDialogOptions extends DialogBaseOptions {
@@ -115,6 +122,32 @@ export class DialogController {
         });
         const ok = this.createButton(normalized.okLabel ?? 'OK', 'primary', true, true);
         context.actions.append(ok);
+      },
+    ));
+  }
+
+  content(options: ContentDialogOptions): Promise<string | null> {
+    return this.enqueue(() => this.open<string | null>(
+      options,
+      null,
+      context => {
+        for(const section of options.sections) this.renderContentSection(context.body, section);
+        for(const action of options.actions || []) {
+          const button = this.createButton(action.label, action.kind || 'secondary');
+          button.addEventListener('click', () => context.close(action.id));
+          context.actions.append(button);
+        }
+        const close = this.createButton(
+          options.closeLabel,
+          options.actions?.length ? 'secondary' : 'primary',
+          !options.actions?.length,
+          true,
+        );
+        context.form.addEventListener('submit', event => {
+          event.preventDefault();
+          context.close(null);
+        });
+        context.actions.append(close);
       },
     ));
   }
@@ -356,6 +389,7 @@ export class DialogController {
     this.nextId += 1;
     const dialog = this.document.createElement('dialog');
     dialog.className = 'workbench-dialog';
+    dialog.classList.toggle('workbench-dialog--wide', options.size === 'wide');
     dialog.dataset.variant = options.danger ? 'danger' : 'default';
     dialog.classList.toggle('workbench-dialog--danger', Boolean(options.danger));
     dialog.setAttribute('aria-modal', 'true');
@@ -402,6 +436,63 @@ export class DialogController {
     button.textContent = label;
     button.autofocus = autofocus;
     return button;
+  }
+
+  private renderContentSection(parent: HTMLElement, section: ContentDialogSection): void {
+    const container = this.document.createElement('section');
+    container.className = 'workbench-dialog__section';
+    const tone: ContentTone = section.tone || 'default';
+    container.dataset.tone = tone;
+    if(section.heading || section.meta) {
+      const header = this.document.createElement('header');
+      header.className = 'workbench-dialog__section-header';
+      if(section.heading) {
+        const heading = this.document.createElement('h3');
+        heading.textContent = section.heading;
+        header.append(heading);
+      }
+      if(section.meta) {
+        const meta = this.document.createElement('span');
+        meta.textContent = section.meta;
+        header.append(meta);
+      }
+      container.append(header);
+    }
+    for(const text of section.paragraphs || []) {
+      const paragraph = this.document.createElement('p');
+      paragraph.textContent = text;
+      container.append(paragraph);
+    }
+    if(section.rows?.length) {
+      const rows = this.document.createElement('dl');
+      rows.className = 'workbench-dialog__metrics';
+      for(const row of section.rows) {
+        const term = this.document.createElement('dt');
+        term.textContent = row.label;
+        const value = this.document.createElement('dd');
+        value.textContent = row.value;
+        rows.append(term, value);
+      }
+      container.append(rows);
+    }
+    if(section.progress) {
+      const progress = this.document.createElement('progress');
+      progress.className = 'workbench-dialog__progress';
+      progress.max = 100;
+      progress.value = Math.max(0, Math.min(100, section.progress.value));
+      progress.setAttribute('aria-label', section.progress.label);
+      container.append(progress);
+    }
+    if(section.items?.length) {
+      const list = this.document.createElement(section.ordered ? 'ol' : 'ul');
+      for(const text of section.items) {
+        const item = this.document.createElement('li');
+        item.textContent = text;
+        list.append(item);
+      }
+      container.append(list);
+    }
+    parent.append(container);
   }
 
   private getActiveElement(): HTMLElement | null {

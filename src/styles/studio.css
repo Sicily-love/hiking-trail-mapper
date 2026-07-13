@@ -923,6 +923,10 @@ html[data-workbench='2'] .workbench-dialog__surface {
   animation:studio-dialog-enter 140ms ease-out;
 }
 
+html[data-workbench='2'] .workbench-dialog--wide .workbench-dialog__surface {
+  width:min(720px,calc(100vw - 32px));
+}
+
 html[data-workbench='2'] .workbench-dialog__title {
   margin:0;
   padding:20px 22px 0;
@@ -949,6 +953,118 @@ html[data-workbench='2'] .workbench-dialog__body {
 
 html[data-workbench='2'] .workbench-dialog__body:empty {
   display:none;
+}
+
+html[data-workbench='2'] .workbench-dialog__section {
+  display:grid;
+  gap:8px;
+  padding:0;
+  color:var(--studio-ink);
+}
+
+html[data-workbench='2'] .workbench-dialog__section + .workbench-dialog__section {
+  padding-top:14px;
+  border-top:1px solid var(--studio-line);
+}
+
+html[data-workbench='2'] .workbench-dialog__section[data-tone]:not([data-tone='default']) {
+  padding:12px 14px;
+  border:1px solid var(--studio-line);
+  border-radius:6px;
+  background:var(--studio-surface-muted);
+}
+
+html[data-workbench='2'] .workbench-dialog__section[data-tone='success'] {
+  color:var(--studio-forest-hover);
+  background:rgba(30,111,80,.08);
+  border-color:rgba(30,111,80,.24);
+}
+
+html[data-workbench='2'] .workbench-dialog__section[data-tone='warning'] {
+  background:rgba(245,158,11,.10);
+  border-color:rgba(245,158,11,.30);
+}
+
+html[data-workbench='2'] .workbench-dialog__section[data-tone='danger'] {
+  color:var(--studio-danger);
+  background:rgba(220,38,38,.07);
+  border-color:rgba(220,38,38,.22);
+}
+
+html[data-workbench='2'] .workbench-dialog__section-header {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+}
+
+html[data-workbench='2'] .workbench-dialog__section h3,
+html[data-workbench='2'] .workbench-dialog__section p,
+html[data-workbench='2'] .workbench-dialog__section ul,
+html[data-workbench='2'] .workbench-dialog__section ol,
+html[data-workbench='2'] .workbench-dialog__section dl {
+  margin:0;
+}
+
+html[data-workbench='2'] .workbench-dialog__section h3 {
+  font-size:14px;
+  line-height:1.35;
+}
+
+html[data-workbench='2'] .workbench-dialog__section-header span {
+  flex:0 0 auto;
+  color:var(--studio-muted);
+  font-size:11px;
+}
+
+html[data-workbench='2'] .workbench-dialog__section p,
+html[data-workbench='2'] .workbench-dialog__section li {
+  color:inherit;
+  font-size:12px;
+  line-height:1.65;
+}
+
+html[data-workbench='2'] .workbench-dialog__section ul,
+html[data-workbench='2'] .workbench-dialog__section ol {
+  display:grid;
+  gap:4px;
+  padding-left:20px;
+}
+
+html[data-workbench='2'] .workbench-dialog__metrics {
+  display:grid;
+  grid-template-columns:minmax(90px,.7fr) minmax(0,1fr);
+  gap:6px 16px;
+  padding:10px 12px;
+  background:var(--studio-surface-muted);
+  border:1px solid var(--studio-line);
+  border-radius:6px;
+}
+
+html[data-workbench='2'] .workbench-dialog__metrics dt,
+html[data-workbench='2'] .workbench-dialog__metrics dd {
+  min-width:0;
+  font-size:12px;
+  line-height:1.45;
+}
+
+html[data-workbench='2'] .workbench-dialog__metrics dt {
+  color:var(--studio-muted);
+}
+
+html[data-workbench='2'] .workbench-dialog__metrics dd {
+  color:var(--studio-ink);
+  font-weight:700;
+  overflow-wrap:anywhere;
+}
+
+html[data-workbench='2'] .workbench-dialog__progress {
+  width:100%;
+  height:8px;
+  overflow:hidden;
+  accent-color:var(--studio-forest);
+  border:0;
+  border-radius:4px;
 }
 
 html[data-workbench='2'] .workbench-dialog__field {

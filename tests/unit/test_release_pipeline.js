@@ -52,11 +52,11 @@ T('release sync and version bump use Vite plus the runtime owners', () => {
   assert.ok(sync.includes('npm run build'));
   assert.ok(!sync.includes('generate_release_html'));
   assert.ok(!sync.includes('runtime.js'));
-  assert.ok(syncDocs.includes("src/features/localization/runtime.ts"));
+  assert.ok(syncDocs.includes("src/features/localization/changelog.ts"));
   assert.ok(syncDocs.includes("process.argv.includes('--check')"));
   assert.ok(!syncDocs.includes('const changelogBlock = html.match'));
   assert.ok(bump.includes("src/app/runtime.ts"));
-  assert.ok(bump.includes("src/features/localization/runtime.ts"));
+  assert.ok(bump.includes("src/features/localization/changelog.ts"));
   assert.ok(!bump.includes("src/template/app.html"));
   assert.ok(!bump.includes("src/app/runtime.js"));
 });

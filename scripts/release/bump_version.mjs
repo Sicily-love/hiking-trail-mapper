@@ -39,9 +39,9 @@ function shanghaiDate() {
 }
 
 const runtimePath = path.join(root, 'src/app/runtime.ts');
-const localizationRuntimePath = path.join(root, 'src/features/localization/runtime.ts');
+const changelogPath = path.join(root, 'src/features/localization/changelog.ts');
 let runtime = await readFile(runtimePath, 'utf8');
-let localizationRuntime = await readFile(localizationRuntimePath, 'utf8');
+let changelogSource = await readFile(changelogPath, 'utf8');
 const current = runtime.match(/const APP_VERSION = 'v(\d+\.\d+\.\d+)'/)?.[1];
 if(!current) throw new Error('Cannot find current APP_VERSION');
 const next = nextVersion(current, bump);
@@ -63,12 +63,12 @@ const changelogEntry = `  {\n    version: '${nextTag}',\n    date: '${date}',\n 
 runtime = runtime
   .replace(/const APP_VERSION = 'v\d+\.\d+\.\d+';/, `const APP_VERSION = '${nextTag}';`)
   .replace(/(<a href="javascript:void\(0\)" id="version-tag-link"[^>]*>)v\d+\.\d+\.\d+(<\/a>)/, `$1${nextTag}$2`);
-localizationRuntime = localizationRuntime.replace(
-  'const CHANGELOG = [\n',
-  `const CHANGELOG = [\n${changelogEntry}`,
+changelogSource = changelogSource.replace(
+  'export const CHANGELOG = [\n',
+  `export const CHANGELOG = [\n${changelogEntry}`,
 );
 await writeFile(runtimePath, runtime);
-await writeFile(localizationRuntimePath, localizationRuntime);
+await writeFile(changelogPath, changelogSource);
 
 for(const name of ['package.json', 'package-lock.json']) {
   const filePath = path.join(root, name);

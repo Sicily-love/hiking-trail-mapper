@@ -152,7 +152,34 @@ export {
 } from './command.ts';
 export * from './interactions/index.ts';
 export * from './rendering/index.ts';
-export { createDialogController, DialogController } from '../ui/dialog/index.ts';
+export {
+  createDialogController,
+  DialogController,
+  type ContentDialogAction,
+  type ContentDialogOptions,
+  type ContentDialogProgress,
+  type ContentDialogRow,
+  type ContentDialogSection,
+  type ContentDialogSize,
+  type ContentTone,
+} from '../ui/dialog/index.ts';
+export {
+  TRANSLATIONS,
+  resolveLocalizationLanguage,
+  translateMessage,
+  type LocalizationLanguage,
+  type TranslationCatalog,
+} from '../features/localization/translations.ts';
+export {
+  CHANGELOG,
+  buildChangelogDialogModel,
+  type ChangelogEntry,
+} from '../features/localization/changelog.ts';
+export { buildHelpDialogModel } from '../features/localization/help.ts';
+export {
+  buildStorageDialogModel,
+  type StorageInfoSnapshot,
+} from '../features/localization/storage-content.ts';
 export {
   COMMANDS,
   ELEVATION_COLLAPSED_KEY,

@@ -8,7 +8,7 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const sourceHtml = read('index.html');
 const releaseHtml = read('hiking-trail-mapper.html');
 const runtime = read('src/app/runtime.ts');
-const localizationRuntime = read('src/features/localization/runtime.ts');
+const changelogSource = read('src/features/localization/changelog.ts');
 const packageJson = JSON.parse(read('package.json'));
 
 let passed = 0;
@@ -34,9 +34,9 @@ T('package, runtime, and release versions match', () => {
   assert.strictEqual(releaseVersion, expected);
 });
 
-T('release date comes from the localization changelog owner', () => {
-  const runtimeDate = localizationRuntime.match(
-    /const CHANGELOG = \[\s*\{\s*version:\s*'v\d+\.\d+\.\d+',\s*date:\s*'(\d{4}-\d{2}-\d{2})'/,
+T('release date comes from the localization changelog module', () => {
+  const runtimeDate = changelogSource.match(
+    /export const CHANGELOG = \[\s*\{\s*version:\s*'v\d+\.\d+\.\d+',\s*date:\s*'(\d{4}-\d{2}-\d{2})'/,
   )?.[1];
   const releaseDate = releaseHtml.match(/BUILD_DATE:\s*(\d{4}-\d{2}-\d{2})/)?.[1];
   assert.ok(runtimeDate);

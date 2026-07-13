@@ -16,6 +16,7 @@ const dialogIndex = fs.readFileSync(
   path.join(root, 'src/ui/dialog/index.ts'),
   'utf8',
 );
+const studioCss = fs.readFileSync(path.join(root, 'src/styles/studio.css'), 'utf8');
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -143,11 +144,24 @@ test('dialog controller exposes one native modal API surface', () => {
   assert.ok(dialogSource.includes('info(options:'));
   assert.ok(dialogSource.includes('confirm(options:'));
   assert.ok(dialogSource.includes('prompt(options:'));
+  assert.ok(dialogSource.includes('content(options:'));
   assert.ok(dialogSource.includes('openCustom<TResult>'));
   assert.ok(dialogSource.includes("createElement('dialog')"));
   assert.ok(dialogSource.includes('.showModal()'));
   assert.ok(dialogSource.includes("createButton(normalized.okLabel ?? 'OK', 'primary', true, true)"));
   assert.ok(dialogIndex.includes('createDialogController'));
+  assert.ok(dialogIndex.includes('ContentDialogOptions'));
+});
+
+test('content dialogs render structured sections with responsive wide styling', () => {
+  assert.ok(dialogSource.includes('renderContentSection'));
+  assert.ok(dialogSource.includes("createElement('section')"));
+  assert.ok(dialogSource.includes("createElement('progress')"));
+  assert.ok(dialogSource.includes("createElement(section.ordered ? 'ol' : 'ul')"));
+  assert.ok(dialogSource.includes("workbench-dialog--wide"));
+  assert.ok(studioCss.includes('.workbench-dialog--wide .workbench-dialog__surface'));
+  assert.ok(studioCss.includes('.workbench-dialog__metrics'));
+  assert.ok(studioCss.includes(".workbench-dialog__section[data-tone='warning']"));
 });
 
 test('dialog strings use textContent and never HTML injection sinks', () => {

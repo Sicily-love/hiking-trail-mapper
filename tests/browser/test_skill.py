@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TMPL = ROOT / "hiking-trail-mapper.html"
 RELEASE = ROOT
 HTML = TMPL.read_text(encoding='utf-8')
+CHANGELOG_SOURCE = (ROOT / "src/features/localization/changelog.ts").read_text(encoding='utf-8')
+TRANSLATIONS_SOURCE = (ROOT / "src/features/localization/translations.ts").read_text(encoding='utf-8')
 
 def chrome_bin():
     candidates = [
@@ -48,7 +50,7 @@ print("▸ 版本一致性")
 m1 = re.search(r"APP_VERSION:\s*(v[\d.]+)", HTML)
 m2 = re.search(r"<title>\s*([^<]+?)\s*</title>", HTML)
 m3 = re.search(r"const APP_VERSION\s*=\s*'([^']+)'", HTML)
-m4 = re.search(r"CHANGELOG\s*=\s*\[\s*\{\s*version:\s*'([^']+)'", HTML)
+m4 = re.search(r"export const CHANGELOG\s*=\s*\[\s*\{\s*version:\s*'([^']+)'", CHANGELOG_SOURCE)
 versions = {'注释': m1 and m1.group(1), 'JS APP_VERSION': m3 and m3.group(1),
             'CHANGELOG首条': m4 and m4.group(1)}
 for k, v in versions.items():
@@ -88,8 +90,8 @@ check("haversine 球面距离",
       HTML.count('haversine') >= 3)
 
 print("\n▸ i18n 词条对齐")
-# I18N = { zh: { 'key.a':'..', ... }, en: { 'key.a':'..', ... } }
-i18n_m = re.search(r"const I18N\s*=\s*\{\s*zh:\s*\{([\s\S]*?)\n\s*\},\s*en:\s*\{([\s\S]*?)\n\s*\}\s*\};", HTML)
+# TRANSLATIONS = { zh: { 'key.a':'..', ... }, en: { 'key.a':'..', ... } }
+i18n_m = re.search(r"export const TRANSLATIONS[^=]*=\s*\{\s*zh:\s*\{([\s\S]*?)\n\s*\},\s*en:\s*\{([\s\S]*?)\n\s*\}\s*\};", TRANSLATIONS_SOURCE)
 if i18n_m:
     zh_block, en_block = i18n_m.group(1), i18n_m.group(2)
     # 词条格式：'key.subkey': '...' 或 'key.subkey': "..."
@@ -100,7 +102,7 @@ if i18n_m:
     check("i18n en 词条数量与 zh 对齐（±2）", abs(zh_count - en_count) <= 2,
           f"差 {abs(zh_count-en_count)}")
 else:
-    check("i18n 结构 (zh/en block)", False, "找不到 const I18N")
+    check("i18n 结构 (zh/en block)", False, "找不到 TRANSLATIONS 数据模块")
 
 print("\n▸ 内嵌库")
 check("Leaflet 内嵌", '@license Leaflet' in HTML or 'Leaflet 1.9' in HTML or 'L.map = function' in HTML)

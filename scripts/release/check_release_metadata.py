@@ -46,7 +46,7 @@ def main() -> int:
     source_html_path = ROOT / "index.html"
     release_html_path = ROOT / "hiking-trail-mapper.html"
     runtime_path = ROOT / "src" / "app" / "runtime.ts"
-    localization_runtime_path = ROOT / "src" / "features" / "localization" / "runtime.ts"
+    changelog_path = ROOT / "src" / "features" / "localization" / "changelog.ts"
     package_path = ROOT / "package.json"
     lock_path = ROOT / "package-lock.json"
     tsconfig_path = ROOT / "tsconfig.json"
@@ -60,7 +60,7 @@ def main() -> int:
     source_html = read_text(source_html_path)
     release_html = read_text(release_html_path)
     runtime = read_text(runtime_path)
-    localization_runtime = read_text(localization_runtime_path)
+    changelog_source = read_text(changelog_path)
     package_json = json.loads(read_text(package_path))
     lock_json = json.loads(read_text(lock_path))
     tsconfig = json.loads(read_text(tsconfig_path))
@@ -74,12 +74,12 @@ def main() -> int:
 
     runtime_version = extract(r"const APP_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", runtime)
     runtime_changelog_version = extract(
-        r"const CHANGELOG = \[\s*\{\s*version:\s*'(v[0-9]+\.[0-9]+\.[0-9]+)'",
-        localization_runtime,
+        r"export const CHANGELOG = \[\s*\{\s*version:\s*'(v[0-9]+\.[0-9]+\.[0-9]+)'",
+        changelog_source,
     )
     runtime_build_date = extract(
-        r"const CHANGELOG = \[\s*\{\s*version:\s*'v[0-9]+\.[0-9]+\.[0-9]+',\s*date:\s*'([0-9]{4}-[0-9]{2}-[0-9]{2})'",
-        localization_runtime,
+        r"export const CHANGELOG = \[\s*\{\s*version:\s*'v[0-9]+\.[0-9]+\.[0-9]+',\s*date:\s*'([0-9]{4}-[0-9]{2}-[0-9]{2})'",
+        changelog_source,
     )
     release_comment_version = extract(
         r"APP_VERSION:\s*(v[0-9]+\.[0-9]+\.[0-9]+)", release_html
@@ -112,7 +112,7 @@ def main() -> int:
     print("\n▸ Release 2.0 metadata")
     runner.check("runtime.ts APP_VERSION exists", bool(expected_version), expected_version)
     version_sources = {
-        "localization changelog top": runtime_changelog_version,
+        "changelog module top": runtime_changelog_version,
         "release comment": release_comment_version,
         "release runtime": release_runtime_version,
         "floating version tag": version_tag,
@@ -199,15 +199,15 @@ def main() -> int:
     runner.check("Vite uses relative asset base", "base: './'" in vite_config)
     runner.check("release build reads runtime.ts", "src/app/runtime.ts" in build_script)
     runner.check(
-        "release build reads localization runtime",
-        "src/features/localization/runtime.ts" in build_script,
+        "release build reads changelog module",
+        "src/features/localization/changelog.ts" in build_script,
     )
     runner.check("release build emits release.json", "release.json" in build_script)
     runner.check("release sync uses the Vite build", "npm run build" in sync_script)
     runner.check("version bump updates runtime.ts", "src/app/runtime.ts" in bump_script)
     runner.check(
-        "version bump updates localization runtime",
-        "src/features/localization/runtime.ts" in bump_script,
+        "version bump updates changelog module",
+        "src/features/localization/changelog.ts" in bump_script,
     )
     runner.check("full check exports HTM_RELEASE_HTML", "HTM_RELEASE_HTML" in full_check)
 
