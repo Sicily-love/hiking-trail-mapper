@@ -4,73 +4,13 @@
 export {};
 
 /* @runtime-fragment itinerary.day-preview */
-const dayPreviewState = HTM_APP.createDayPreviewInteractionState();
-
-function getDayIndexRange(trail, dm) {
-  if(!trail || !trail.track || !trail.track.length || !dm) return null;
-  const n = trail.track.length;
-  const isValidIdx = v => Number.isInteger(v) && v >= 0 && v < n;
-  if(isValidIdx(dm.i_start) && isValidIdx(dm.i_end)) {
-    return { iStart: Math.min(dm.i_start, dm.i_end), iEnd: Math.max(dm.i_start, dm.i_end) };
-  }
-  let first = -1, last = -1;
-  let hasExplicitDayId = false;
-  for(let i=0; i<n; i++) {
-    const dayId = Number(trail.track[i][5]);
-    if(Number.isInteger(dayId) && dayId > 0) {
-      hasExplicitDayId = true;
-      if(dayId === dm.d) {
-        if(first < 0) first = i;
-        last = i;
-      }
-    }
-  }
-  if(hasExplicitDayId && first >= 0 && last >= first) return { iStart:first, iEnd:last };
-  if(trail.day_meta && typeof dm.km === 'number') {
-    let prevKm = 0;
-    for(const item of trail.day_meta) {
-      if(item === dm || item.d === dm.d) break;
-      prevKm += Number(item.km) || 0;
-    }
-    const endKm = prevKm + (Number(dm.km) || 0);
-    first = trail.track.findIndex(p => (p[3] || 0) >= prevKm - 0.02);
-    last = -1;
-    for(let i=n-1; i>=0; i--) {
-      if((trail.track[i][3] || 0) <= endKm + 0.02) { last = i; break; }
-    }
-    if(first >= 0 && last >= first) return { iStart:first, iEnd:last };
-  }
-  return null;
-}
-
-function computeDayRangeStats(trail, range) {
-  if(!trail || !range) return null;
-  const i1 = Math.max(0, Math.min(range.iStart, range.iEnd));
-  const i2 = Math.min(trail.track.length - 1, Math.max(range.iStart, range.iEnd));
-  if(i2 < i1) return null;
-  const cache = getMeasureStatsCache(trail);
-  let minE = Infinity, maxE = -Infinity;
-  for(let i=i1; i<=i2; i++) {
-    const e = trail.track[i][2] || 0;
-    if(e < minE) minE = e;
-    if(e > maxE) maxE = e;
-  }
-  if(cache) {
-    return {
-      km: Math.abs((cache.distCum[i2] || 0) - (cache.distCum[i1] || 0)),
-      asc: Math.max(0, (cache.ascCum[i2] || 0) - (cache.ascCum[i1] || 0)),
-      desc: Math.max(0, (cache.descCum[i2] || 0) - (cache.descCum[i1] || 0)),
-      max: maxE,
-      min: minE,
-    };
-  }
-  return segmentStats(i1, i2);
-}
+const dayPreviewController = HTM_APP.createDayPreviewController(runtimeContext);
+const dayPreviewState = dayPreviewController.state;
 
 function clearDaySegmentPreview(opts = {}) {
   if(!opts.fromManager && cancelRuntimeInteraction('day-preview', opts.reason || 'cancelled')) return;
   if(dayPreviewState.layer) dayPreviewState.layer.clearLayers();
-  HTM_APP.clearDayPreviewState(dayPreviewState);
+  dayPreviewController.exit();
   document.querySelectorAll('.day-preview-target.active').forEach(el => el.classList.remove('active'));
   if(!measureState.active) hideMeasureElevReadout();
   if(!opts.silent && typeof refreshElevBar === 'function') refreshElevBar();
@@ -81,22 +21,23 @@ function handleDayPreviewInteractionEvent(event) {
 }
 
 function showDaySegmentPreview(trail, dm) {
-  const range = getDayIndexRange(trail, dm);
-  if(!range) { showToast('这一天缺少可定位的轨迹范围', 'error'); return; }
+  const plan = dayPreviewController.prepare(trail.id, dm, 1200);
+  if(!plan) { showToast('这一天缺少可定位的轨迹范围', 'error'); return; }
   if(interactionManager.current.kind === 'day-preview'
-      && dayPreviewState.active
-      && dayPreviewState.trailId === trail.id
-      && dayPreviewState.day === dm.d) {
+      && dayPreviewController.isActive(trail.id, dm.d)) {
     clearDaySegmentPreview();
     return;
   }
-  const model = buildDayPreviewRenderModel(trail.track, range, 1200);
-  if(!model) return;
   const session = beginRuntimeInteraction('day-preview', 'preview', trail, {
     onEvent: handleDayPreviewInteractionEvent,
     onCancel: opts => clearDaySegmentPreview(opts),
   });
   if(!session) return;
+  if(!dayPreviewController.activate(plan)) {
+    clearDaySegmentPreview({reason:'owner-invalid'});
+    return;
+  }
+  const model = plan.model;
   if(!dayPreviewState.layer) dayPreviewState.layer = L.layerGroup().addTo(map);
   dayPreviewState.layer.clearLayers();
   L.polyline(model.latLngs, model.lineStyle).addTo(dayPreviewState.layer);
@@ -108,13 +49,8 @@ function showDaySegmentPreview(trail, dm) {
   model.endpoints.forEach(endpoint => {
     measureMarker(endpoint.lat, endpoint.lng, endpoint.label, endpoint.color).addTo(dayPreviewState.layer);
   });
-  dayPreviewState.active = true;
-  dayPreviewState.trailId = trail.id;
-  dayPreviewState.day = dm.d;
-  dayPreviewState.iStart = model.iStart;
-  dayPreviewState.iEnd = model.iEnd;
   document.querySelectorAll(`[data-day-preview="${dm.d}"]`).forEach(el => el.classList.add('active'));
-  const stats = computeDayRangeStats(trail, range);
+  const stats = plan.stats;
   const distEl = document.getElementById('m-dist');
   const distBox = document.getElementById('measure-distance');
   if(distEl && stats) distEl.textContent = Number(stats.km || 0).toFixed(1) + ' km';
@@ -153,8 +89,8 @@ function buildDaysTab() {
   }
 
   trail.day_meta.forEach((dm, dIdx) => {
-      const range = getDayIndexRange(trail, dm);
-      const computed = computeDayRangeStats(trail, range) || {};
+      const range = HTM_CORE.getDayIndexRange(trail, dm);
+      const computed = HTM_CORE.computeDayRangeStats(trail, range) || {};
       const dayKm = Number.isFinite(Number(dm.km)) ? Number(dm.km) : (computed.km || 0);
       const dayAsc = Number.isFinite(Number(dm.asc)) ? Number(dm.asc) : (computed.asc || 0);
       const dayDesc = Number.isFinite(Number(dm.desc)) ? Number(dm.desc) : (computed.desc || 0);

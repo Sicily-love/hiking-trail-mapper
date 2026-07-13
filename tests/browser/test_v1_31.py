@@ -232,7 +232,6 @@ try:
                'applyFloatingPanelPosition', 'resetFloatingPanelPosition',
                'clampFloatingPanelPosition', 'floatingStyleOriginRect',
                'setFloatingPanelStyle', 'setMapMode', 'enterInteractionRenderMode',
-               'getDayIndexRange', 'computeDayRangeStats',
                'showDaySegmentPreview', 'clearDaySegmentPreview',
                'showMeasureElevReadout', 'hideMeasureElevReadout',
                'resetMeasureElevReadout', 'setMeasureElevHint',
@@ -242,6 +241,8 @@ try:
 
     check("typed SegmentController 已接管分段状态与提交",
           evalj("typeof segmentController === 'object' && segmentState === segmentController.state && typeof segmentController.apply === 'function'"))
+    check("typed DayPreviewController 已接管 Day 选择状态",
+          evalj("typeof dayPreviewController === 'object' && dayPreviewState === dayPreviewController.state && typeof dayPreviewController.prepare === 'function'"))
 
     check("handleFiles 已瘦身（< 30 行）",
           evalj("handleFiles.toString().split('\\n').length < 30"),
@@ -409,10 +410,15 @@ try:
           """))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
           evalj("""
-            getDayIndexRange.toString().indexOf("dm.i_start") < getDayIndexRange.toString().indexOf("trail.track[i][5]")
-            && showDaySegmentPreview.toString().includes("computeDayRangeStats")
-            && showDaySegmentPreview.toString().includes("m-dist")
-            && showDaySegmentPreview.toString().includes("fitWorkspaceBounds")
+            (() => {
+              const track = Array.from({length: 6}, (_, i) => [30 + i / 10000, 100, 1000 + i, i, i, i < 3 ? 1 : 2]);
+              const trail = {track, day_meta:[{d:2, i_start:2, i_end:5}]};
+              const range = window.HikingTrailCore.getDayIndexRange(trail, trail.day_meta[0]);
+              return range.iStart === 2 && range.iEnd === 5
+                && showDaySegmentPreview.toString().includes("dayPreviewController.prepare")
+                && showDaySegmentPreview.toString().includes("m-dist")
+                && showDaySegmentPreview.toString().includes("fitWorkspaceBounds");
+            })()
           """))
     check("行程分段可恢复/默认起终点/插入边界/指定删除",
           evalj("""

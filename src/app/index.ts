@@ -32,7 +32,12 @@ export {
 } from '../features/measure/controller.ts';
 export {
   clearDayPreviewState,
+  createDayPreviewController,
   createDayPreviewInteractionState,
+  type DayPreviewController,
+  type DayPreviewInteractionState,
+  type DayPreviewPlan,
+  type DayPreviewTrail,
 } from '../features/itinerary/controller.ts';
 export {
   createSegmentController,

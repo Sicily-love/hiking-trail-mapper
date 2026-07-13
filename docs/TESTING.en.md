@@ -65,6 +65,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and classic adapter boundaries |
 | `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and classic adapter boundary |
 | `test_segment_controller.js` | Typed segment editing, camp renumbering, Day commit, and classic adapter boundary |
+| `test_day_preview_controller.js` | Typed Day-preview planning, selection lifecycle, and core/runtime boundary |
 | `test_measure_itinerary.js` | A/B measurement, segmentation, Day ranges, elevation layout, and render models |
 | `test_performance_core.js` | Elevation segmentation, Canvas min/max downsampling, waypoint diffs, and track revisions |
 | `test_app_architecture.js` | App state, feature controllers, adapters, and Workbench fit planning |
