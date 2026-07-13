@@ -47,14 +47,35 @@ T('retired template, IIFE sync, and fallback scripts are absent', () => {
 
 T('release sync and version bump use Vite plus the runtime owners', () => {
   const sync = read('scripts/release/sync_release.sh');
+  const syncDocs = read('scripts/release/sync_release_docs.mjs');
   const bump = read('scripts/release/bump_version.mjs');
   assert.ok(sync.includes('npm run build'));
   assert.ok(!sync.includes('generate_release_html'));
   assert.ok(!sync.includes('runtime.js'));
+  assert.ok(syncDocs.includes("src/features/localization/runtime.ts"));
+  assert.ok(syncDocs.includes("process.argv.includes('--check')"));
+  assert.ok(!syncDocs.includes('const changelogBlock = html.match'));
   assert.ok(bump.includes("src/app/runtime.ts"));
   assert.ok(bump.includes("src/features/localization/runtime.ts"));
   assert.ok(!bump.includes("src/template/app.html"));
   assert.ok(!bump.includes("src/app/runtime.js"));
+});
+
+T('release docs are reproducible from localization source without writing in check mode', () => {
+  const names = ['CHANGELOG.md', 'README.md', 'README.en.md'];
+  const before = Object.fromEntries(names.map(name => [name, read(name)]));
+  const result = spawnSync(process.execPath, [
+    'scripts/release/sync_release_docs.mjs',
+    '--check',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Release docs verified \(\d+ changelog entries\)/);
+  names.forEach(name => assert.strictEqual(read(name), before[name], name));
+  assert.ok(before['CHANGELOG.md'].includes("Leaflet's internal"));
+  assert.ok(before['CHANGELOG.md'].includes("users couldn't find it"));
 });
 
 T('maintenance tools cover the runtime template and vertical owners', () => {
