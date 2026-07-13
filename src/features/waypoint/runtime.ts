@@ -49,6 +49,10 @@ const tagLabels = {
 };
 
 const wpMarkers = {};
+const markerRenderController = HTM_APP.createMarkerRenderController(runtimeContext, {
+  tagColors,
+  iconForWaypoint:waypointIcon,
+});
 
 const leafletMarkerRenderer = HTM_APP.createLeafletMarkerRenderer({
   leaflet:L,
@@ -59,24 +63,13 @@ const leafletMarkerRenderer = HTM_APP.createLeafletMarkerRenderer({
 });
 
 function collectWaypointMarkerModels() {
-  if(!state.showLabel) return [];
-  const models = [];
-  const isWpMode = state.mode === 'waypoint';
-  DATA.trails.forEach(trail => {
-    if(!isWpMode && !isTrailActive(trail)) return;
-    const isPrimary = trail.id === state.primaryTrailId;
-    if(!isWpMode && !isPrimary) return;
-    (trail.waypoints || []).forEach(wp => {
-      if(!state.visibleTags.has(wp.tag)) return;
-      models.push(addWpMarker(trail, wp, isPrimary));
-    });
-  });
-  return models;
+  return markerRenderController.build().waypoints;
 }
 
 function renderWaypointsNow() {
-  renderRuntimeStats.markers = leafletMarkerRenderer.renderWaypoints(collectWaypointMarkerModels());
-  drawHighPoints();
+  const scene = markerRenderController.build();
+  renderRuntimeStats.markers = leafletMarkerRenderer.renderWaypoints(scene.waypoints);
+  leafletMarkerRenderer.renderHighPoints(scene.highPoints);
 }
 
 function drawWaypoints() {
@@ -94,17 +87,7 @@ function addWpMarker(trail, wp, isPrimary) {
 }
 
 function drawHighPoints() {
-  const isWpMode = state.mode === 'waypoint';
-  const showInThisMode = state.visibleTags.has('highpoint');
-  const models = [];
-  DATA.trails.forEach(trail => {
-    if(!isWpMode && !isTrailActive(trail)) return;
-    if(!showInThisMode) return;
-    const isMain = trail.id === state.primaryTrailId;
-    const model = HTM_APP.buildHighPointMarkerModel(trail, isMain);
-    if(model) models.push(model);
-  });
-  leafletMarkerRenderer.renderHighPoints(models);
+  leafletMarkerRenderer.renderHighPoints(markerRenderController.build().highPoints);
 }
 
 /* ============ Tooltip ============ */

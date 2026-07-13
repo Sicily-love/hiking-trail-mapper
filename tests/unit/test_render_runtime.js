@@ -1,6 +1,6 @@
 /** Runtime contracts for RenderScheduler and Performance 2.0 integration. */
 const assert = require('assert');
-const { runtimeSource: runtime } = require('./runtime_source');
+const { read, runtimeSource: runtime } = require('./runtime_source');
 let passed = 0;
 let failed = 0;
 
@@ -56,23 +56,31 @@ test('rebuildAll schedules the complete ordered render set', () => {
 
 test('track runtime delegates bounded elevation rendering to the typed model and Leaflet adapter', () => {
   const source = functionSource('renderTracksNow', 'drawTracks');
-  assert.ok(source.includes('HTM_APP.buildTrackRenderModel'));
+  assert.ok(source.includes('mapRenderController.buildTracks'));
   assert.ok(source.includes('elevationBandCount:40'));
   assert.ok(source.includes('leafletTrackRenderer.render(model)'));
   assert.ok(source.includes('renderRuntimeStats.elevationBands = model.elevationBands'));
   assert.strictEqual(source.includes('L.polyline'), false);
+  assert.strictEqual(source.includes('DATA.'), false);
+  assert.strictEqual(source.includes('state.'), false);
   assert.ok(runtime.includes('HTM_APP.createLeafletTrackRenderer'));
+  assert.ok(runtime.includes('HTM_APP.createMapRenderController'));
 });
 
 test('Canvas elevation rendering downsamples without replacing full hit data', () => {
-  const source = functionSource('buildElevationCanvasRenderModel', 'drawElevBar');
   const draw = functionSource('drawElevBar', 'renderElevationChartNow');
-  assert.ok(source.includes('downsampleMinMaxIndices'));
-  assert.ok(source.includes('sourcePoints:pts.length'));
-  assert.ok(source.includes('renderedPoints:sampleIndices.length'));
-  assert.ok(source.includes('computeElevationRenderModel([], layout).badges'));
+  const model = read('src/features/elevation/render-model.ts');
+  const adapter = read('src/adapters/elevation-canvas.ts');
+  assert.ok(model.includes('downsampleMinMaxIndices'));
+  assert.ok(model.includes('sourcePoints:points.length'));
+  assert.ok(model.includes('renderedPoints:sampleIndices.length'));
+  assert.ok(model.includes('computeElevationRenderModel([], layout).badges'));
   assert.ok(draw.includes('_elevBarData ='));
-  assert.ok(draw.includes('pts, minE: layout.minE'));
+  assert.ok(draw.includes('HTM_APP.buildElevationCanvasScene'));
+  assert.ok(draw.includes('elevationCanvasRenderer.render(scene, dimensions)'));
+  assert.strictEqual(draw.includes('elevCtx.'), false);
+  assert.ok(adapter.includes('chart.fillPolygon'));
+  assert.ok(adapter.includes('chart.curve'));
 });
 
 test('waypoint runtime delegates keyed Marker ownership to the Leaflet adapter', () => {
@@ -81,7 +89,10 @@ test('waypoint runtime delegates keyed Marker ownership to the Leaflet adapter',
   assert.strictEqual(source.includes('wpLayer.clearLayers'), false);
   assert.strictEqual(source.includes('L.marker'), false);
   assert.ok(runtime.includes('HTM_APP.createLeafletMarkerRenderer'));
+  assert.ok(runtime.includes('HTM_APP.createMarkerRenderController'));
   assert.ok(runtime.includes('waypointRegistry:wpMarkers'));
+  assert.strictEqual(source.includes('DATA.'), false);
+  assert.strictEqual(source.includes('state.'), false);
 });
 
 test('FIT is last-request-wins and reset is epoch guarded', () => {

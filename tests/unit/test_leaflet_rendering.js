@@ -45,6 +45,17 @@ function createLeafletHarness() {
   };
 }
 
+function createRenderContext(trails) {
+  return app.createRuntimeContext({
+    project:{title:'Render', trails},
+    state:app.createAppStateStore({trails}),
+    commands:new app.CommandRegistry(),
+    interactions:app.createStudioInteractionManager(),
+    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
+    dialogs:{confirm:async () => true},
+  });
+}
+
 console.log('\n▸ Map and Marker Leaflet boundaries');
 
 T('track model preserves z-order and bounds elevation polylines to 40 groups', () => {
@@ -59,6 +70,15 @@ T('track model preserves z-order and bounds elevation polylines to 40 groups', (
   assert.ok(model.polylines.find(line => line.key === 'a:bloom-outer'));
   assert.ok(model.elevationBands > 0 && model.elevationBands <= 80);
   assert.ok(model.polylines.every(line => line.latLngs.length > 0));
+});
+
+T('map controller owns active-group selection without classic globals', () => {
+  const a = {id:'a', group:'A', name:'A', track:[[30,100,1000],[31,101,1100]]};
+  const b = {id:'b', group:'B', name:'B', track:[[32,102,1200],[33,103,1300]]};
+  const controller = app.createMapRenderController(createRenderContext([a, b]));
+  const model = controller.buildTracks({dayPalette:['#123456'], elevationBandCount:40});
+  assert.ok(model.polylines.length > 0);
+  assert.ok(model.polylines.every(line => line.trail.id === 'a'));
 });
 
 T('track adapter exclusively creates layers and throttles hover callbacks', () => {
@@ -133,6 +153,19 @@ T('high-point models stay declarative and render in their dedicated layer', () =
   assert.strictEqual(highPointLayer.clears, 1);
   assert.strictEqual(highPointLayer.added.length, 1);
   assert.ok(highPointLayer.added[0].popup.content.includes('1200'));
+});
+
+T('Marker controller owns mode, group, tag, and primary visibility', () => {
+  const waypoint = id => ({id, lat:30, lng:100, tag:'camp', km:1, elev:1000, label:`Camp ${id}`});
+  const a = {id:'a', group:'A', name:'A', track:[[30,100,1000],[31,101,1200]], waypoints:[waypoint(1)]};
+  const b = {id:'b', group:'B', name:'B', track:[[32,102,900],[33,103,1100]], waypoints:[waypoint(2)]};
+  const context = createRenderContext([a, b]);
+  const controller = app.createMarkerRenderController(context, {
+    tagColors:{camp:'#080'}, iconForWaypoint:() => 'C',
+  });
+  assert.deepStrictEqual(controller.build().waypoints.map(model => model.trail.id), ['a']);
+  context.state.dispatch({type:'mode.set', mode:'waypoint'});
+  assert.deepStrictEqual(controller.build().waypoints.map(model => model.trail.id), ['a', 'b']);
 });
 
 console.log('\n══════════════════════════════════════════════════');

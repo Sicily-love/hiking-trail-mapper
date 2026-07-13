@@ -1,5 +1,6 @@
 import { buildElevationPolylineSegments } from '../../core/performance/elevation.ts';
 import type { TrackTuple } from '../../core/types.ts';
+import type { RuntimeContext } from '../../app/runtime/context.ts';
 
 export type TrackLatLng = [lat: number, lng: number];
 export type TrackPolylineLatLngs = TrackLatLng[] | TrackLatLng[][];
@@ -8,6 +9,7 @@ export interface TrackRenderTrail {
   id: string;
   name: string;
   color?: string;
+  group?: string;
   track: TrackTuple[];
 }
 
@@ -40,6 +42,36 @@ export interface BuildTrackRenderModelOptions {
   activeEscape: string | null;
   dayPalette: readonly string[];
   elevationBandCount?: number;
+}
+
+export interface MapRenderController {
+  buildTracks(options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount'>): TrackRenderModel;
+}
+
+/** Reads map state through RuntimeContext so the classic runtime does not mirror selection rules. */
+export function createMapRenderController(
+  context: RuntimeContext<TrackRenderTrail>,
+): MapRenderController {
+  const buildTracks = (
+    options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount'>,
+  ): TrackRenderModel => {
+    const state = context.state.snapshot();
+    const trails: TrackRenderInputTrail[] = context.project.trails.map(trail => ({
+      ...trail,
+      active:state.activeGroup !== null
+        && (trail.group || '默认') === state.activeGroup
+        && state.activeTrails.has(trail.id),
+    }));
+    return buildTrackRenderModel({
+      ...options,
+      trails,
+      primaryTrailId:state.primaryTrailId,
+      mode:state.mode,
+      showTrack:state.showTrack,
+      activeEscape:state.activeEscape,
+    });
+  };
+  return Object.freeze({buildTracks});
 }
 
 const ELEVATION_STOPS: ReadonlyArray<readonly [number, readonly [number, number, number]]> = [

@@ -45,12 +45,6 @@ reverseMeasureEndpoints = HTM_CORE.reverseMeasureEndpoints;
 moveSegmentBoundary = HTM_CORE.moveSegmentBoundary;
 computeSegmentStatsForTrack = HTM_CORE.computeSegmentStats;
 buildSegmentLayerModel = HTM_CORE.buildSegmentLayerModel;
-computeElevationLayout = HTM_CORE.computeElevationLayout;
-computeElevationRenderModel = HTM_CORE.computeElevationRenderModel;
-estimateElevationLabelStackDepth = HTM_CORE.estimateElevationLabelStackDepth;
-computeElevationPanelHeight = HTM_CORE.computeElevationPanelHeight;
-layoutElevationAnnotations = HTM_CORE.layoutElevationAnnotations;
-buildElevationAnnotationRenderModel = HTM_CORE.buildElevationAnnotationRenderModel;
 storageTrailGroup = HTM_CORE.storageTrailGroup;
 normalizePrimaryByGroup = HTM_CORE.normalizePrimaryByGroup;
 normalizeActiveTrailIds = HTM_CORE.normalizeActiveTrailIds;
@@ -73,7 +67,6 @@ buildKmlParseModel = HTM_CORE.buildKmlParseModel;
 enrichWaypoints = HTM_CORE.enrichWaypoints;
 computeCumulativeDistance = HTM_CORE.computeCumulativeDistance;
 computeTrailStats = HTM_CORE.computeTrailStats;
-downsampleMinMaxIndices = HTM_CORE.downsampleMinMaxIndices;
 
 
 const APP_VERSION = 'v1.32.2';

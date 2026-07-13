@@ -69,20 +69,36 @@ export {
   type LeafletTrackRenderer,
 } from '../adapters/leaflet.ts';
 export {
+  createMapRenderController,
   buildTrackRenderModel,
   elevationTrackColor,
   type BuildTrackRenderModelOptions,
   type TrackPolylineRenderModel,
   type TrackRenderModel,
   type TrackRenderTrail,
+  type MapRenderController,
 } from '../features/map/render-model.ts';
 export {
   buildHighPointMarkerModel,
   buildWaypointMarkerModel,
+  createMarkerRenderController,
   type LeafletMarkerRenderModel,
   type WaypointRenderRecord,
   type WaypointRenderTrail,
+  type MarkerRenderController,
+  type MarkerRenderScene,
 } from '../features/waypoint/render-model.ts';
+export {
+  buildElevationCanvasScene,
+  estimateElevationPanelHeightForPoints,
+  type BuildElevationCanvasSceneOptions,
+  type ElevationCanvasScene,
+} from '../features/elevation/render-model.ts';
+export {
+  createElevationCanvasRenderer,
+  type ElevationCanvasDimensions,
+  type ElevationCanvasRenderer,
+} from '../adapters/elevation-canvas.ts';
 export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';
 export { openIndexedDbDatabase } from '../adapters/indexedDb.ts';
 export {

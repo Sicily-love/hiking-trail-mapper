@@ -1,4 +1,5 @@
 import type { TrackTuple } from '../../core/types.ts';
+import type { RuntimeContext } from '../../app/runtime/context.ts';
 
 export interface WaypointRenderRecord {
   id: string | number;
@@ -18,8 +19,23 @@ export interface WaypointRenderTrail {
   id: string;
   name: string;
   color?: string;
+  group?: string;
   track: TrackTuple[];
   waypoints?: WaypointRenderRecord[];
+}
+
+export interface MarkerRenderScene {
+  waypoints: LeafletMarkerRenderModel[];
+  highPoints: LeafletMarkerRenderModel[];
+}
+
+export interface MarkerRenderControllerOptions {
+  tagColors: Readonly<Record<string, string>>;
+  iconForWaypoint: (waypoint: WaypointRenderRecord) => string;
+}
+
+export interface MarkerRenderController {
+  build(): MarkerRenderScene;
 }
 
 export interface LeafletMarkerRenderModel {
@@ -94,4 +110,43 @@ export function buildHighPointMarkerModel(
     popupHtml:`<div class="popup-content"><h4>⛰ ${trail.name} 最高点</h4><div class="pmeta">海拔 <b>${maxElevation}</b> m</div><div class="pmeta">里程 <b>${point[3]}</b> km</div></div>`,
     popupOptions:{maxWidth:260}, trail,
   };
+}
+
+/** Centralizes Marker visibility and model creation outside the classic runtime. */
+export function createMarkerRenderController(
+  context: RuntimeContext<WaypointRenderTrail>,
+  options: MarkerRenderControllerOptions,
+): MarkerRenderController {
+  const build = (): MarkerRenderScene => {
+    const state = context.state.snapshot();
+    const waypointMode = state.mode === 'waypoint';
+    const waypoints: LeafletMarkerRenderModel[] = [];
+    const highPoints: LeafletMarkerRenderModel[] = [];
+
+    for(const trail of context.project.trails) {
+      const active = state.activeGroup !== null
+        && (trail.group || '默认') === state.activeGroup
+        && state.activeTrails.has(trail.id);
+      const isPrimary = trail.id === state.primaryTrailId;
+      if(state.showLabel && (waypointMode || (active && isPrimary))) {
+        for(const waypoint of trail.waypoints || []) {
+          if(!state.visibleTags.has(waypoint.tag)) continue;
+          waypoints.push(buildWaypointMarkerModel({
+            trail,
+            waypoint,
+            isPrimary,
+            waypointMode,
+            color:options.tagColors[waypoint.tag] || '#aaa',
+            iconText:options.iconForWaypoint(waypoint),
+          }));
+        }
+      }
+      if((waypointMode || active) && state.visibleTags.has('highpoint')) {
+        const highPoint = buildHighPointMarkerModel(trail, isPrimary);
+        if(highPoint) highPoints.push(highPoint);
+      }
+    }
+    return {waypoints, highPoints};
+  };
+  return Object.freeze({build});
 }

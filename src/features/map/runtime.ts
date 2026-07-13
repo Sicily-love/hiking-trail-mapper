@@ -9,6 +9,7 @@ export {};
 const dayPalette = ['#2F6B5F','#D96C4A','#E1A93B','#5577B8','#8A6BBE','#C45D83','#5E9F65','#C58B54'];
 
 /* ============ Draw Track ============ */
+const mapRenderController = HTM_APP.createMapRenderController(runtimeContext);
 const leafletTrackRenderer = HTM_APP.createLeafletTrackRenderer({
   leaflet:L,
   trackLayer,
@@ -30,12 +31,7 @@ const leafletTrackRenderer = HTM_APP.createLeafletTrackRenderer({
 });
 
 function renderTracksNow() {
-  const model = HTM_APP.buildTrackRenderModel({
-    trails:DATA.trails.map(trail => ({...trail, active:isTrailActive(trail)})),
-    primaryTrailId:state.primaryTrailId,
-    mode:state.mode,
-    showTrack:state.showTrack,
-    activeEscape:state.activeEscape,
+  const model = mapRenderController.buildTracks({
     dayPalette,
     elevationBandCount:40,
   });

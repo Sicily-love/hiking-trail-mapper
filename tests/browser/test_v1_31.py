@@ -215,10 +215,7 @@ try:
                'postImportFinalize',
                'computeCumulativeDistance', 'buildDayMeta',
                'computeTrailStats', 'generateNextTrailId',
-               'computeElevLayout', 'elevRatioColor', 'drawElevBackground',
-               'drawElevGridLines', 'drawElevFill', 'drawElevCurve',
-               'collectElevAnnotations', 'layoutElevLabels',
-               'renderElevLabels', 'drawElevAxes', 'updateElevBadges',
+               'elevRatioColor', 'updateElevBadges',
                'createPrimaryTrackDragSnapper',
                'bindMeasureEndpointDrag', 'addMeasureEndpointMarker', 'measurePointFromHit',
                'buildTrackLatLngs', 'schedulePostRestoreReset',
@@ -257,6 +254,10 @@ try:
     check("drawElevBar 已瘦身（< 40 行）",
           evalj("drawElevBar.toString().split('\\n').length < 40"),
           str(evalj("drawElevBar.toString().split('\\n').length")))
+    for fn in ['createElevationCanvasRenderer', 'buildElevationCanvasScene',
+               'estimateElevationPanelHeightForPoints', 'createMapRenderController',
+               'createMarkerRenderController']:
+        check(f"typed renderer {fn}", evalj(f"typeof window.HikingTrailApp.{fn} === 'function'"))
 
     print(f"\n▸ {EXPECTED_VERSION}：测距端点拖拽回归")
     draggable_marker = evalj("""
@@ -400,15 +401,17 @@ try:
                 && updateMeasureReadout.toString().includes('elev-stat-asc')
                 && updateMeasureReadout.toString().includes('elev-stat-desc')
                 && updateMeasureReadout.toString().includes(\"stats.distKm.toFixed(2) + ' km'\")
-                && collectElevAnnotations.toString().includes('measureMode')
-                && collectElevAnnotations.toString().includes('measure-a')
-                && collectElevAnnotations.toString().includes('measure-b')
-                && collectElevAnnotations.toString().includes("Math.round(maxE) + 'm'")
-                && collectElevAnnotations.toString().includes("Math.round(minE) + 'm'")
-                && !collectElevAnnotations.toString().includes(\"'高 '\")
-                && !collectElevAnnotations.toString().includes(\"'低 '\")
-                && !drawElevAxes.toString().includes('fillText(Math.round(maxE)')
-                && !drawElevAxes.toString().includes('fillText(Math.round(minE)')
+                && (() => {
+                  const pts = [[30,100,1000,0],[31,101,1200,1],[32,102,900,2]];
+                  const layout = window.HikingTrailCore.computeElevationLayout(pts, {width:320,height:160,measureMode:true});
+                  const annotations = window.HikingTrailCore.collectElevationAnnotations(pts, layout, {measureMode:true});
+                  const kinds = annotations.map(item => item.kind);
+                  return kinds.includes('measure-a') && kinds.includes('measure-b')
+                    && kinds.includes('peak') && kinds.includes('low')
+                    && annotations.every(item => !item.text.startsWith('高 ') && !item.text.startsWith('低 '));
+                })()
+                && drawElevBar.toString().includes('buildElevationCanvasScene')
+                && !drawElevBar.toString().includes('elevCtx.')
                 && renderElevationChartNow.toString().includes('measureMode: true');
             })()
           """))
@@ -475,18 +478,19 @@ try:
           evalj("""
             (() => {
               const pts = [[30, 100, 1000, 0], [30.1, 100.1, 1200, 1], [30.2, 100.2, 900, 2]];
-              const layout = computeElevationLayout(pts, {width: 320, height: 160});
-              const model = computeElevationRenderModel(pts, layout);
-              const fillSrc = drawElevFill.toString();
-              return !fillSrc.includes('SEGS')
-                && computeElevationRenderModel === window.HikingTrailCore.computeElevationRenderModel
+              const layout = window.HikingTrailCore.computeElevationLayout(pts, {width: 320, height: 160});
+              const model = window.HikingTrailCore.computeElevationRenderModel(pts, layout);
+              const scene = window.HikingTrailApp.buildElevationCanvasScene(pts, {
+                width:320, height:160, axisLabel:'km'
+              });
+              return typeof window.HikingTrailApp.createElevationCanvasRenderer === 'function'
                 && model.fillPolygon.length === model.curve.length + 2
                 && model.curve.every((point, index) => {
                   const fillPoint = model.fillPolygon[index + 1];
                   return fillPoint.x === point.x && fillPoint.y === point.y;
                 })
-                && fillSrc.includes('renderModel.fillPolygon')
-                && fillSrc.includes('lineTo(fillPolygon[i].x, fillPolygon[i].y)');
+                && scene.chart.fillPolygon.length === scene.chart.curve.length + 2
+                && drawElevBar.toString().includes('elevationCanvasRenderer.render(scene, dimensions)');
             })()
           """))
 
