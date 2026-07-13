@@ -28,6 +28,7 @@ src/
 │   ├── command.ts                  CommandRegistry
 │   ├── interactions/               InteractionManager
 │   ├── rendering/                  RenderScheduler
+│   ├── runtime/context.ts          typed RuntimeContext 服务边界
 │   ├── runtime/compose.ts          runtime 片段完整性与单次组合
 │   ├── runtime/classic.ts          应用状态与 render 编排片段
 │   ├── runtime.ts                  约 340 行启动与命令胶水
@@ -45,7 +46,7 @@ src/
 │   ├── segment/runtime.ts          分段编辑与应用
 │   ├── itinerary/runtime.ts        Day 预览与行程 DOM
 │   ├── escape/runtime.ts           下撤显示、侧栏和交互
-│   └── trails/runtime.ts           轨迹删除、反向与清空
+│   └── trails/                     typed controller + classic UI 适配器
 ├── adapters/                       Leaflet 与 IndexedDB 副作用边界
 ├── ui/
 │   ├── layout/app-shell.ts         Workbench DOM 壳与挂载函数
@@ -88,7 +89,7 @@ index.html
 
 `bootstrap.ts` 通过 raw import 读取 runtime 模板和 13 个垂直 owner。`composeClassicRuntime()` 要求每个命名片段恰好有一个 slot、一个实现且没有闲置片段，再生成唯一 classic script。这样既保持旧代码依赖的全局作用域与执行顺序，也禁止 fallback 和双路径悄悄回来。
 
-垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。13 个 owner 目前仍是 classic 兼容片段，后续 typed 化应逐个引入显式 context，不能复制回模板。
+垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合 project、state、commands、interactions、renderer 和 dialogs 六类稳定服务；`trails/controller.ts` 是第一个接入的 typed feature controller。其余 classic owner 后续应沿用该模式逐个迁移，不能复制回模板。
 
 这个桥是迁移机制，不是长期模块边界。typed 代码不能依赖脚本碰巧创建的隐式全局；迁出一段行为时，应给它明确输入、输出、生命周期和测试。
 

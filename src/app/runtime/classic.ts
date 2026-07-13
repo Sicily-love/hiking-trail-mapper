@@ -127,6 +127,14 @@ const renderScheduler = new HTM_APP.RenderScheduler({
     fit(context) { recordRenderPhase(context); executeWorkspaceFit(context); },
   },
 });
+const runtimeContext = HTM_APP.createRuntimeContext({
+  project:DATA,
+  state:appStateStore,
+  commands:commandRegistry,
+  interactions:interactionManager,
+  renderer:renderScheduler,
+  dialogs:studioDialogs,
+});
 window.__HTM_RENDER_SCHEDULER__ = renderScheduler;
 window.__HTM_RENDER_STATS__ = renderRuntimeStats;
 

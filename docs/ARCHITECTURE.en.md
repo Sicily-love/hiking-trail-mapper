@@ -28,6 +28,7 @@ src/
 │   ├── command.ts                  CommandRegistry
 │   ├── interactions/               InteractionManager
 │   ├── rendering/                  RenderScheduler
+│   ├── runtime/context.ts          Typed RuntimeContext service boundary
 │   ├── runtime/compose.ts          Fragment integrity and one-time composition
 │   ├── runtime/classic.ts          App state and render-orchestration fragments
 │   ├── runtime.ts                  Approximately 340 lines of boot and command glue
@@ -45,7 +46,7 @@ src/
 │   ├── segment/runtime.ts          Segment editing and apply flow
 │   ├── itinerary/runtime.ts        Day preview and itinerary DOM
 │   ├── escape/runtime.ts           Escape display, sidebar, and interaction
-│   └── trails/runtime.ts           Trail delete, reverse, and clear mutations
+│   └── trails/                     Typed controller plus classic UI adapter
 ├── adapters/                       Leaflet and IndexedDB effect boundaries
 ├── ui/
 │   ├── layout/app-shell.ts         Workbench DOM shell and mount function
@@ -88,7 +89,7 @@ index.html
 
 `bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. The 13 owners remain classic compatibility fragments for now; typed migration should introduce explicit contexts one owner at a time without copying code back into the template.
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` now aggregates the six stable project, state, command, interaction, renderer, and dialog services, and `trails/controller.ts` is the first typed feature controller using it. Remaining classic owners should follow this pattern one at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 

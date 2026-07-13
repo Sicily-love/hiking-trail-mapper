@@ -8,6 +8,20 @@ export {
   type DisplayOption,
 } from './state-store.ts';
 export {
+  createRuntimeContext,
+  type RuntimeContext,
+  type RuntimeProject,
+} from './runtime/context.ts';
+export {
+  createTrailController,
+  type MutableTrail,
+  type MutableTrailPoint,
+  type MutableTrailStats,
+  type MutableTrailWaypoint,
+  type TrailController,
+  type TrailControllerDependencies,
+} from '../features/trails/controller.ts';
+export {
   createMeasureInteractionState,
   resetMeasureInteraction,
   reverseMeasureInteraction,
