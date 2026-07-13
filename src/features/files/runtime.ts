@@ -50,15 +50,13 @@ function handleFileImportEvent(event) {
   }
 }
 
+const fileArchiveAdapter = HTM_APP.createFileArchiveAdapter(
+  typeof fflate === 'undefined' ? null : fflate,
+);
 const fileImportController = HTM_APP.createFileImportController(runtimeContext, {
   contentHash:trailContentHash,
-  unzip:bytes => {
-    if(typeof fflate === 'undefined' || typeof fflate.unzipSync !== 'function') {
-      throw new Error('fflate 未加载，无法解压 zip');
-    }
-    return fflate.unzipSync(bytes);
-  },
-  decode:bytes => new TextDecoder('utf-8').decode(bytes),
+  unzip:fileArchiveAdapter.unzip,
+  decode:fileArchiveAdapter.decode,
   palette:PALETTE_LOCAL,
   onEvent:handleFileImportEvent,
   commit:() => applyChange({fit:false}),
@@ -227,53 +225,46 @@ async function handleFiles(files) {
 
 
 /* @runtime-fragment files.download */
+const browserFileAdapter = HTM_APP.createBrowserFileAdapter({
+  document,
+  url:URL,
+  BlobCtor:Blob,
+  showSaveFilePicker:typeof showSaveFilePicker === 'function'
+    ? options => showSaveFilePicker(options)
+    : undefined,
+});
+
+function handleFileExportEvent(event) {
+  if(event.type === 'export.error') {
+    if(event.reason === 'missing-trails') showToast('当前组没有叠加中的轨迹', 'error');
+    else if(event.reason === 'missing-primary') showToast('请先设置主轨迹', 'error');
+    else showToast('ZIP 打包失败：' + (event.error?.message || event.error || 'unknown'), 'error');
+    return;
+  }
+  if(event.type === 'export.progress') {
+    showToast('⏳ 生成行程图…');
+  } else if(event.type === 'export.fallback') {
+    showToast(`ZIP 库未加载，将下载 ${event.downloadCount} 个 KML 文件（首个为合并版）…`, 'info', 4000);
+  } else if(event.type === 'export.completed') {
+    if(event.kind === 'trail-kml') showToast('✓ KML 已下载：' + event.filename.replace(/\.kml$/i, ''));
+    else if(event.kind === 'group-zip') showToast(`✓ 已导出 ${event.trailCount} 条轨迹 → ${event.filename}`);
+    else showToast('✓ 行程 MD（含海拔图）已导出');
+  }
+}
+
+const fileExportController = HTM_APP.createFileExportController(runtimeContext, {
+  archive:fileArchiveAdapter,
+  files:browserFileAdapter,
+  dayPalette,
+  renderDayChart:(points, color, label) =>
+    HTM_APP.renderDayElevationChart(document, points, color, label),
+  getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
+  schedule:(callback, delayMs) => setTimeout(callback, delayMs),
+  onEvent:handleFileExportEvent,
+});
+
 function downloadTrailKML(id) {
-  const trail = DATA.trails.find(t => t.id === id);
-  if(!trail) return;
-  const track = trail.track;
-  const waypoints = trail.waypoints;
-  let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
-  <Document>
-    <name><![CDATA[${trail.name}]]></name>
-    <description><![CDATA[${trail.id} | ${trail.stats.distance_km}km ↑${trail.stats.ascent_m}m | 最高${trail.stats.max_elev}m]]></description>
-    <Style id="trackStyle">
-      <LineStyle><color>ff${trail.color.replace('#','').split('').reverse().join('')}</color><width>3</width></LineStyle>
-    </Style>
-`;
-  // 轨迹线
-  kml += `    <Placemark>
-      <name><![CDATA[${trail.name}]]></name>
-      <styleUrl>#trackStyle</styleUrl>
-      <LineString>
-        <tessellate>1</tessellate>
-        <coordinates>
-`;
-  track.forEach(p => { kml += `          ${p[1]},${p[0]},${p[2]||0}
-`; });
-  kml += `        </coordinates>
-      </LineString>
-    </Placemark>
-`;
-  // 标注点
-  waypoints.forEach(wp => {
-    if(!wp.lat || !wp.lng) return;
-    kml += `    <Placemark>
-      <name><![CDATA[${wp.label || wp.icon}]]></name>
-      <description><![CDATA[${wp.tag} | ${wp.elev}m | ${wp.km}km]]></description>
-      <Point><coordinates>${wp.lng},${wp.lat},${wp.elev||0}</coordinates></Point>
-    </Placemark>
-`;
-  });
-  kml += `  </Document>
-</kml>`;
-  const blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${trail.name}.kml`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showToast('✓ KML 已下载：' + trail.name);
+  return fileExportController.downloadTrailKml(id);
 }
 
 
@@ -374,293 +365,13 @@ function showExportMenu() {
   }, 0);
 }
 
-/* ─── v1.14.1：批量导出当前组叠加中的轨迹为 ZIP ───────────────
-   ZIP 内容：
-     - 每条轨迹独立一个 .kml（含轨迹线 + 标注点）
-     - _<组名>_合并.kml：所有轨迹合并到一个 Document（便于一键导入不支持多文件的设备）
-     - README.txt：说明与轨迹清单
-   fflate 未加载时降级为逐条下载 KML。
-   ────────────────────────────────────────────────────────────── */
-function _trailToKMLString(trail) {
-  const track = trail.track;
-  const waypoints = trail.waypoints || [];
-  const colorHex = (trail.color || '#3F5238').replace('#','');
-  const kmlColor = 'ff' + colorHex.slice(4,6) + colorHex.slice(2,4) + colorHex.slice(0,2);
-  let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name><![CDATA[${trail.name}]]></name>
-    <description><![CDATA[${trail.id} | ${trail.stats.distance_km}km ↑${trail.stats.ascent_m}m | 最高${trail.stats.max_elev}m | 分组：${trailGroup(trail)}]]></description>
-    <Style id="trackStyle"><LineStyle><color>${kmlColor}</color><width>3</width></LineStyle></Style>
-    <Placemark>
-      <name><![CDATA[${trail.name}]]></name>
-      <styleUrl>#trackStyle</styleUrl>
-      <LineString><tessellate>1</tessellate><coordinates>
-`;
-  track.forEach(p => { kml += `        ${p[1]},${p[0]},${p[2]||0}\n`; });
-  kml += `      </coordinates></LineString>
-    </Placemark>
-`;
-  waypoints.forEach(wp => {
-    if(!wp.lat || !wp.lng) return;
-    kml += `    <Placemark>
-      <name><![CDATA[${wp.label || wp.icon || wp.tag}]]></name>
-      <description><![CDATA[${wp.tag} | ${wp.elev}m | ${wp.km}km]]></description>
-      <Point><coordinates>${wp.lng},${wp.lat},${wp.elev||0}</coordinates></Point>
-    </Placemark>
-`;
-  });
-  kml += `  </Document>
-</kml>`;
-  return kml;
-}
-
-function _buildMergedKML(trails, groupName) {
-  let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name><![CDATA[${groupName}（合并）]]></name>
-    <description><![CDATA[导出时间：${new Date().toLocaleString('zh-CN')} | 共 ${trails.length} 条轨迹]]></description>
-`;
-  trails.forEach(trail => {
-    const colorHex = (trail.color || '#3F5238').replace('#','');
-    const kmlColor = 'ff' + colorHex.slice(4,6) + colorHex.slice(2,4) + colorHex.slice(0,2);
-    kml += `    <Style id="s_${trail.id}"><LineStyle><color>${kmlColor}</color><width>3</width></LineStyle></Style>
-    <Folder><name><![CDATA[${trail.name}]]></name>
-      <Placemark>
-        <name><![CDATA[${trail.name} 轨迹]]></name>
-        <styleUrl>#s_${trail.id}</styleUrl>
-        <LineString><tessellate>1</tessellate><coordinates>
-`;
-    trail.track.forEach(p => { kml += `          ${p[1]},${p[0]},${p[2]||0}\n`; });
-    kml += `        </coordinates></LineString>
-      </Placemark>
-`;
-    (trail.waypoints || []).forEach(wp => {
-      if(!wp.lat || !wp.lng) return;
-      kml += `      <Placemark>
-        <name><![CDATA[${wp.label||wp.icon||wp.tag}]]></name>
-        <description><![CDATA[${wp.tag}|${wp.elev}m|${wp.km}km]]></description>
-        <Point><coordinates>${wp.lng},${wp.lat},${wp.elev||0}</coordinates></Point>
-      </Placemark>
-`;
-    });
-    kml += `    </Folder>
-`;
-  });
-  kml += `  </Document>
-</kml>`;
-  return kml;
-}
-
 function exportGroupKML() {
-  const trails = DATA.trails.filter(t => isTrailActive(t));
-  if(!trails.length) {
-    showToast('当前组没有叠加中的轨迹', 'error');
-    return;
-  }
-  const groupName = state.activeGroup || '未选中';
-  const timestamp = new Date().toISOString().slice(0,10);
-  const safeGroup = groupName.replace(/[\\/:*?"<>|]/g, '_');
-
-  if(typeof fflate !== 'undefined') {
-    const files = {};
-    // 独立 KML
-    trails.forEach(trail => {
-      const kml = _trailToKMLString(trail);
-      const safeName = trail.name.replace(/[\\/:*?"<>|]/g, '_');
-      files[`轨迹/${safeName}.kml`] = fflate.strToU8(kml);
-    });
-    // 合并 KML（前缀 _ 排在前面）
-    files[`_${safeGroup}_合并导入.kml`] = fflate.strToU8(_buildMergedKML(trails, groupName));
-    // README
-    const readme = `# ${groupName} 轨迹包
-
-导出时间：${new Date().toLocaleString('zh-CN')}
-共 ${trails.length} 条轨迹
-
-## 使用方式
-- **推荐**：直接拖拽本文件夹里所有 *.kml 到目标地图（支持多选）
-- **一键导入**：拖拽 _${safeGroup}_合并导入.kml 一个文件，即可加载全部
-- **单条查看**：轨迹/ 目录下每条轨迹独立 KML
-
-## 轨迹清单
-${trails.map((t, i) => `${i+1}. ${t.name}  (${t.stats.distance_km}km, ↑${t.stats.ascent_m}m, 最高 ${t.stats.max_elev}m, ${t.waypoints.length} 个标注点)`).join('\n')}
-`;
-    files['README.txt'] = fflate.strToU8(readme);
-
-    fflate.zip(files, {level: 6}, (err, data) => {
-      if(err) { showToast('ZIP 打包失败：' + err.message, 'error'); return; }
-      const blob = new Blob([data], {type: 'application/zip'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${safeGroup}_轨迹_${timestamp}.zip`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-      showToast(`✓ 已导出 ${trails.length} 条轨迹 → ${a.download}`);
-    });
-  } else {
-    // fflate 未加载：先下载合并 KML（一键导入用），再逐条下载单独 KML
-    showToast(`ZIP 库未加载，将下载 ${trails.length + 1} 个 KML 文件（首个为合并版）…`, 'info', 4000);
-    // 合并版
-    const mergedBlob = new Blob([_buildMergedKML(trails, groupName)], {type:'application/vnd.google-earth.kml+xml'});
-    const a0 = document.createElement('a');
-    a0.href = URL.createObjectURL(mergedBlob);
-    a0.download = `_${safeGroup}_合并导入.kml`;
-    a0.click();
-    URL.revokeObjectURL(a0.href);
-    // 单独 KML
-    trails.forEach((trail, i) => {
-      setTimeout(() => {
-        const kml = _trailToKMLString(trail);
-        const blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        const safeName = trail.name.replace(/[\\/:*?"<>|]/g, '_');
-        a.download = `${safeName}.kml`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }, (i + 1) * 400);
-    });
-  }
-}
-
-
-/* ─── 生成单天海拔剖面图 Canvas，返回 base64 PNG dataURL ─── */
-function buildDayElevChart(pts, color, dayLabel) {
-  const CW = 900, CH = 200;
-  const c = document.createElement('canvas'); c.width = CW; c.height = CH;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#1a1f2e'; ctx.fillRect(0, 0, CW, CH);
-  const alts = pts.map(p => p[2]);
-  const minE = Math.min(...alts), maxE = Math.max(...alts), eRng = maxE - minE || 1;
-  const PL = 52, PR = 12, PT = 24, PB = 32;
-  const pw = CW - PL - PR, ph = CH - PT - PB;
-  const pX = i => PL + (i / (pts.length - 1)) * pw;
-  const pY = a => PT + ph * (1 - (a - minE) / eRng);
-  // 填充区域
-  ctx.beginPath();
-  ctx.moveTo(PL, PT + ph);
-  pts.forEach((p, i) => ctx.lineTo(pX(i), pY(p[2])));
-  ctx.lineTo(PL + pw, PT + ph);
-  ctx.closePath();
-  // 将 hex color 转为 rgba
-  let r=100,g=150,b=255;
-  const m = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-  if(m){r=parseInt(m[1],16);g=parseInt(m[2],16);b=parseInt(m[3],16);}
-  const grad = ctx.createLinearGradient(0, PT, 0, PT + ph);
-  grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad; ctx.fill();
-  // 轮廓线
-  ctx.beginPath();
-  pts.forEach((p, i) => i === 0 ? ctx.moveTo(pX(i), pY(p[2])) : ctx.lineTo(pX(i), pY(p[2])));
-  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-  // Y 轴刻度
-  ctx.font = '11px monospace'; ctx.textAlign = 'right';
-  [0, 0.5, 1].forEach(f => {
-    const e = minE + f * eRng, y = PT + ph * (1 - f);
-    ctx.fillStyle = 'rgba(100,120,150,0.25)';
-    ctx.fillRect(PL, y - 0.5, pw, 1);
-    ctx.fillStyle = '#8899aa'; ctx.fillText(Math.round(e) + 'm', PL - 4, y + 4);
-  });
-  // 最高点
-  const peakIdx = alts.indexOf(maxE);
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(pX(peakIdx), pY(maxE), 4, 0, Math.PI * 2); ctx.fill();
-  ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
-  ctx.fillText('▲' + Math.round(maxE) + 'm', pX(peakIdx), pY(maxE) - 10);
-  // 起终高度
-  ctx.font = '11px monospace'; ctx.fillStyle = '#aabbcc';
-  ctx.textAlign = 'left';  ctx.fillText(Math.round(alts[0]) + 'm', PL + 2, CH - 8);
-  ctx.textAlign = 'right'; ctx.fillText(Math.round(alts[alts.length-1]) + 'm', PL + pw - 2, CH - 8);
-  // 标题
-  ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = color; ctx.textAlign = 'left';
-  ctx.fillText(dayLabel + ' 海拔剖面', PL, 16);
-  return c.toDataURL('image/png');
+  return fileExportController.exportGroupKml();
 }
 
 
 async function exportItineraryMD() {
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
-  if(!main) { showToast('请先设置主轨迹', 'error'); return; }
-  const isZh = currentLang === 'zh';
-
-  // ── 按天分组 ──
-  const track = main.track;
-  const days = {};
-  track.forEach(p => { const d = p[5] || 1; if(!days[d]) days[d] = []; days[d].push(p); });
-  const dayKeys = Object.keys(days).map(Number).sort((a,b) => a-b);
-  const DAY_COLORS = dayPalette;
-
-  // ── 辅助函数 ──
-  function haversine2d(p1, p2) {
-    const R=6371, dLat=(p2[0]-p1[0])*Math.PI/180, dLon=(p2[1]-p1[1])*Math.PI/180;
-    const a=Math.sin(dLat/2)**2+Math.cos(p1[0]*Math.PI/180)*Math.cos(p2[0]*Math.PI/180)*Math.sin(dLon/2)**2;
-    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-  }
-  function dayDist2(pts) { let d=0; for(let i=1;i<pts.length;i++) d+=haversine2d(pts[i-1],pts[i]); return d.toFixed(1); }
-  function dayAsc2(pts) { let a=0,prev=pts[0][2]; pts.forEach(p=>{const d=p[2]-prev;if(d>10)a+=d;prev=p[2];}); return Math.round(a); }
-  function dayMax2(pts) { return Math.round(Math.max(...pts.map(p=>p[2]))); }
-  function dayMin2(pts) { return Math.round(Math.min(...pts.map(p=>p[2]))); }
-
-  // ── 生成每天海拔剖面图 ──
-  showToast('⏳ 生成行程图…');
-  const dayCharts = {};
-  dayKeys.forEach((dk, di) => {
-    dayCharts[dk] = buildDayElevChart(days[dk], DAY_COLORS[di % DAY_COLORS.length], 'D' + dk);
-  });
-
-  // ── 生成 MD 内容 ──
-  let md = `# ${main.name} ${isZh ? '行程表' : 'Itinerary'}\n\n`;
-  md += `> 总里程 **${main.stats.distance_km}km** · 爬升 **${main.stats.ascent_m}m** · 最高 **${main.stats.max_elev}m** · ${dayKeys.length}天\n\n---\n\n`;
-
-  // 汇总表格
-  md += `| 天数 | 里程 | 爬升 | 最高海拔 | 最低海拔 | 营地 |\n|---|---|---|---|---|---|\n`;
-  if(main.day_meta && main.day_meta.length) {
-    main.day_meta.forEach(d => {
-      md += `| D${d.d||'?'} | ${d.km||'-'}km | ${d.asc||'-'}m | ${d.max||'-'}m | ${d.min||'-'}m | ${d.camp||'-'}(${d.camp_elev||'?'}m) |\n`;
-    });
-  } else {
-    dayKeys.forEach((dk, di) => {
-      const pts = days[dk];
-      const camp = main.waypoints.find(w => w.tag === 'camp' && (w.day || di+1) === dk);
-      md += `| D${dk} | ${dayDist2(pts)}km | ${dayAsc2(pts)}m | ${dayMax2(pts)}m | ${dayMin2(pts)}m | ${camp ? camp.label + ' ' + camp.elev + 'm' : '-'} |\n`;
-    });
-  }
-  md += '\n---\n\n';
-
-  // 每天详情 + 海拔剖面图
-  dayKeys.forEach((dk, di) => {
-    const pts = days[dk];
-    const color = DAY_COLORS[di % DAY_COLORS.length];
-    const km = dayDist2(pts), asc = dayAsc2(pts), maxE = dayMax2(pts), minE = dayMin2(pts);
-    const camp = main.waypoints.find(w => w.tag === 'camp' && ((w.day || di+1) === dk));
-    const passes = main.waypoints.filter(w => w.tag === 'pass' && ((w.day || di+1) === dk));
-    const imgUrl = dayCharts[dk];
-
-    md += `## D${dk}\n\n`;
-    md += `**里程**: ${km}km　**爬升**: ${asc}m　**最高**: ${maxE}m　**最低**: ${minE}m`;
-    if(camp) md += `　**营地**: ${camp.label} (${camp.elev}m)`;
-    md += '\n\n';
-    if(passes.length) md += passes.map(p => `**垭口**: ${p.label} (${p.elev}m)`).join('　') + '\n\n';
-
-    // 嵌入 base64 海拔剖面图
-    md += `![D${dk} 海拔剖面](${imgUrl})\n\n`;
-
-    md += '---\n\n';
-  });
-
-  const blob = new Blob([md], {type:'text/markdown;charset=utf-8'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = `${main.name}_${isZh?'行程':'itinerary'}.md`;
-  if(window.showSaveFilePicker) {
-    try {
-      const h = await showSaveFilePicker({suggestedName:a.download,types:[{description:'MD',accept:{'text/markdown':['.md']}}]});
-      const w = await h.createWritable(); await w.write(blob); await w.close();
-      showToast('✓ MD 已保存'); return;
-    } catch(e) {}
-  }
-  a.click(); URL.revokeObjectURL(a.href); showToast('✓ 行程 MD（含海拔图）已导出');
+  return fileExportController.exportItineraryMarkdown();
 }
 
 

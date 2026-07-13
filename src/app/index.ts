@@ -64,6 +64,15 @@ export { upsertLeafletPolyline } from '../adapters/leaflet.ts';
 export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';
 export { openIndexedDbDatabase } from '../adapters/indexedDb.ts';
 export {
+  createBrowserFileAdapter,
+  createFileArchiveAdapter,
+  renderDayElevationChart,
+  type BrowserFileAdapter,
+  type BrowserFileEnvironment,
+  type FileArchiveAdapter,
+  type FflateCodec,
+} from '../adapters/file.ts';
+export {
   createStorageController,
   type StorageController,
   type StorageControllerDependencies,
@@ -79,6 +88,13 @@ export {
   type ImportTrail,
   type RenameTrailResult,
 } from '../features/files/import-controller.ts';
+export {
+  createFileExportController,
+  type FileExportController,
+  type FileExportControllerDependencies,
+  type FileExportEvent,
+  type FileExportResult,
+} from '../features/files/export-controller.ts';
 export {
   createWaypointController,
   type ManualWaypointAnchor,

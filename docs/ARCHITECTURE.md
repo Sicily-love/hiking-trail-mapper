@@ -36,7 +36,7 @@ src/
 ├── core/                           无 DOM 的计算、解析、存储与渲染模型
 │   └── performance/               大轨迹分段、抽稀、diff 与 revision
 ├── features/
-│   ├── files/                      typed import controller + KML/DOM/导出适配器
+│   ├── files/                      typed import/export controller + 导入/导出菜单 DOM
 │   ├── storage/                    typed controller + 恢复兼容/UI 适配器
 │   ├── map/runtime.ts              track / Leaflet 渲染
 │   ├── waypoint/                   typed controller + Leaflet marker 适配器
@@ -47,7 +47,7 @@ src/
 │   ├── itinerary/                  typed Day 预览 controller + 行程 DOM/Leaflet 适配器
 │   ├── escape/                     typed 路线 controller + 下撤侧栏/Leaflet 适配器
 │   └── trails/                     typed controller + classic UI 适配器
-├── adapters/                       Leaflet 与 IndexedDB 副作用边界
+├── adapters/                       Leaflet、IndexedDB、ZIP 与浏览器文件副作用边界
 ├── ui/
 │   ├── layout/app-shell.ts         Workbench DOM 壳与挂载函数
 │   ├── workbench.ts                响应式 Workbench chrome
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` 通过 raw import 读取 runtime 模板和 13 个垂直 owner。`composeClassicRuntime()` 要求每个命名片段恰好有一个 slot、一个实现且没有闲置片段，再生成唯一 classic script。这样既保持旧代码依赖的全局作用域与执行顺序，也禁止 fallback 和双路径悄悄回来。
 
-垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合六类稳定服务，trail、storage、file import、waypoint、measure、segment、Day preview 和 escape 已接入 typed controller。`DayPreviewController` 生成基于 core 的范围、抽样线和统计计划；`EscapeController` 持有可见轨迹吸附、A/B 生命周期、方向一致的路线统计、提交、选择与删除。对应 classic owner 只保留 DOM、Leaflet 高亮、视野和读数更新。其余 owner 后续应沿用该模式逐个迁移，不能复制回模板。
+垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合六类稳定服务，trail、storage、file import/export、waypoint、measure、segment、Day preview 和 escape 已接入 typed controller。文件导出 core 生成 KML、合并包和行程 Markdown，file adapter 隔离 fflate、Blob/ObjectURL、保存选择器和导出 Canvas；classic 文件 owner 从 994 行降到约 705 行，只保留导入与菜单 DOM。其余 owner 后续应沿用该模式逐个迁移，不能复制回模板。
 
 这个桥是迁移机制，不是长期模块边界。typed 代码不能依赖脚本碰巧创建的隐式全局；迁出一段行为时，应给它明确输入、输出、生命周期和测试。
 

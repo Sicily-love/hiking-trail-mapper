@@ -36,7 +36,7 @@ src/
 ├── core/                           DOM-free math, parsing, storage, and render models
 │   └── performance/               Large-track segmentation, downsampling, diffs, and revisions
 ├── features/
-│   ├── files/                      Typed import controller plus KML/DOM/export adapter
+│   ├── files/                      Typed import/export controllers plus menu DOM
 │   ├── storage/                    Typed controller plus restore/UI adapter
 │   ├── map/runtime.ts              Track / Leaflet rendering
 │   ├── waypoint/                   Typed controller plus Leaflet marker adapter
@@ -47,7 +47,7 @@ src/
 │   ├── itinerary/                  Typed Day-preview controller plus itinerary DOM/Leaflet adapter
 │   ├── escape/                     Typed route controller plus sidebar/Leaflet adapter
 │   └── trails/                     Typed controller plus classic UI adapter
-├── adapters/                       Leaflet and IndexedDB effect boundaries
+├── adapters/                       Leaflet, IndexedDB, ZIP, and browser-file effect boundaries
 ├── ui/
 │   ├── layout/app-shell.ts         Workbench DOM shell and mount function
 │   ├── workbench.ts                Responsive Workbench chrome
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import, waypoint, measure, segment, Day preview, and escape now use typed controllers. `DayPreviewController` prepares core-derived ranges, thinned lines, and statistics. `EscapeController` owns visible-track snapping, the A/B lifecycle, direction-correct route statistics, commits, selection, and deletion. Their classic owners retain only DOM, Leaflet highlighting, viewport fitting, and readouts. Remaining owners should follow this pattern one at a time without copying code back into the template.
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import/export, waypoint, measure, segment, Day preview, and escape now use typed controllers. The export core builds KML, merged bundles, and itinerary Markdown; the file adapter isolates fflate, Blob/ObjectURL, the save picker, and export Canvas effects. The classic files owner dropped from 994 to about 705 lines and retains only import and menu DOM. Remaining owners should follow this pattern one at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 

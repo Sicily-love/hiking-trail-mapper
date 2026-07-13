@@ -143,6 +143,23 @@ export {
 } from './escape.ts';
 
 export {
+  KML_MIME,
+  buildGroupExportFiles,
+  buildItineraryMarkdown,
+  buildMergedKml,
+  buildTrailKml,
+  groupTrackByDay,
+  sanitizeExportFilename,
+  type ExportDayMeta,
+  type ExportEscapeRoute,
+  type ExportTrail,
+  type ExportTrailStats,
+  type ExportWaypoint,
+  type ItineraryChartMap,
+  type ItineraryDayGroup,
+} from './export.ts';
+
+export {
   buildStorageDeleteOperation,
   buildStorageReadOperation,
   buildStorageWriteOperation,

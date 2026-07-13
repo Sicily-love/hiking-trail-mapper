@@ -78,12 +78,12 @@ index.html
 - `index.html` 只保留元信息、`#app` 和 `/src/main.ts`，不承载业务实现。
 - `src/app/bootstrap.ts` 挂载 Workbench DOM，加载内联 vendor，并按确定顺序启动 typed modules 与过渡 runtime。
 - `src/core` 负责无 DOM 的计算、解析、数据转换和渲染模型。
-- `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet / IndexedDB；`src/ui` 负责 Workbench 与对话框。
+- `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench 与对话框。
 - `InteractionManager` 保证测距、分段、标注、下撤和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
-`src/app/runtime.ts` 已从 8,089 行收口到约 340 行，只保留 core/app 兼容绑定、版本、启动恢复、统一命令注册和初始刷新。文件、存储、地图、Marker、海拔、测距、分段、Day、下撤、轨迹变更、localization 和 DOM 编排分别由 13 个垂直 runtime owner 单独持有；`composeClassicRuntime()` 按原顺序组合一次，不保留旧实现或双路径。文件拆分目标已经完成，trail、storage、file import、waypoint、measure、segment、Day preview 和 escape 已迁入 typed controller；下撤的 A/B 吸附、正反向统计、路线提交与删除由单一控制器持有，classic owner 只保留侧栏、Leaflet 预览和面板更新。
+`src/app/runtime.ts` 已从 8,089 行收口到约 340 行，只保留 core/app 兼容绑定、版本、启动恢复、统一命令注册和初始刷新。文件、存储、地图、Marker、海拔、测距、分段、Day、下撤、轨迹变更、localization 和 DOM 编排分别由 13 个垂直 runtime owner 单独持有；`composeClassicRuntime()` 按原顺序组合一次，不保留旧实现或双路径。文件拆分目标已经完成，trail、storage、file import/export、waypoint、measure、segment、Day preview 和 escape 已迁入 typed controller。KML/Markdown 生成位于纯 core，ZIP、Blob、Canvas 导出图和浏览器保存位于 file adapter；classic 文件 owner 只保留导入面板与导出菜单 DOM。
 
 ## 开发与测试
 

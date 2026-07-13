@@ -63,6 +63,7 @@ npm run check:generated
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` 出口、KML 坐标、`gx:Track`、waypoint 和 import model |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshot、事务提交、Set 序列化、每组主轨迹和 legacy 恢复 |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | typed 存储、导入、标注点 controller 与 classic adapter 边界 |
+| `test_file_export_controller.js` | KML/Markdown 模型、ZIP/Blob adapter、导出 controller 与 classic DOM 边界 |
 | `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 classic adapter 边界 |
 | `test_segment_controller.js` | typed 分段编辑、营地重编号、Day 提交和 classic adapter 边界 |
 | `test_day_preview_controller.js` | typed Day 预览计划、选择生命周期和 core/runtime 边界 |

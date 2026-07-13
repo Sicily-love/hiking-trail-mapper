@@ -63,6 +63,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` exports, KML coordinates, `gx:Track`, waypoints, and import models |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshots and commit timing, Set serialization, per-group primary trails, and legacy restore |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and classic adapter boundaries |
+| `test_file_export_controller.js` | KML/Markdown models, ZIP/Blob adapters, export controller, and classic DOM boundary |
 | `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and classic adapter boundary |
 | `test_segment_controller.js` | Typed segment editing, camp renumbering, Day commit, and classic adapter boundary |
 | `test_day_preview_controller.js` | Typed Day-preview planning, selection lifecycle, and core/runtime boundary |

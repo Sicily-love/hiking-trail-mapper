@@ -245,6 +245,8 @@ try:
           evalj("typeof dayPreviewController === 'object' && dayPreviewState === dayPreviewController.state && typeof dayPreviewController.prepare === 'function'"))
     check("typed EscapeController 已接管下撤状态与路线写入",
           evalj("typeof escapeController === 'object' && addEscapeState === escapeController.state && typeof escapeController.commit === 'function'"))
+    check("typed FileExportController 已接管 KML/ZIP/Markdown 导出",
+          evalj("typeof fileExportController === 'object' && typeof fileExportController.exportGroupKml === 'function' && typeof fileExportController.exportItineraryMarkdown === 'function'"))
 
     check("handleFiles 已瘦身（< 30 行）",
           evalj("handleFiles.toString().split('\\n').length < 30"),
