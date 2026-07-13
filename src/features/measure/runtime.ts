@@ -5,7 +5,8 @@ export {};
 
 /* @runtime-fragment measure.runtime */
 /* ============ 测距功能（主轨迹上选两点 → 爬升/下降/里程） ============ */
-const measureState = HTM_APP.createMeasureInteractionState();
+const measureController = HTM_APP.createMeasureController();
+const measureState = measureController.state;
 const measureTrackCache = new WeakMap();
 const measureStatsCache = new WeakMap();
 
@@ -277,7 +278,7 @@ function handleMeasureTap(event, session) {
     const pt = measurePointFromHit(hit);
     if(tempMarker?.setLatLng) tempMarker.setLatLng([hit.point[0], hit.point[1]]);
     if(!measureState.ptA) {
-      measureState.ptA = pt;
+      measureController.updateEndpoint('A', pt);
       session.setPhase('select-b');
       if(!tempMarker) measureMarker(pt.lat, pt.lng, 'A', '#22c55e').addTo(measureState.layer);
       setMeasureElevHint('再点击终点。');
@@ -288,7 +289,7 @@ function handleMeasureTap(event, session) {
       showToast('起点和终点不能是同一点', 'error');
       return;
     }
-    measureState.ptB = pt;
+    measureController.updateEndpoint('B', pt);
     session.setPhase('ready');
     measureCompute();
   };
@@ -303,7 +304,7 @@ function handleMeasureInteractionEvent(event, session) {
     return;
   }
   if(event.type === 'drag-start') {
-    measureState._justDragged = true;
+    measureController.beginDrag();
     session.setPhase('dragging');
     return;
   }
@@ -315,7 +316,7 @@ function handleMeasureInteractionEvent(event, session) {
   }
   if(event.type !== 'drag-end') return;
   session.setPhase('ready');
-  session.delay(250, () => { measureState._justDragged = false; });
+  session.delay(250, () => { measureController.endDrag(); });
   const hit = event.hit;
   if(!hit) {
     showToast('必须拖到主轨迹附近（200m 内）', 'error');
@@ -342,21 +343,15 @@ function measureEnter() {
     onEvent: handleMeasureInteractionEvent,
     onCancel: opts => measureExit(opts),
   });
-  measureState.trailId = main.id;
+  measureController.enter(main.id);
   enterInteractionRenderMode('测距');
   clearDaySegmentPreview({silent:true});
-  measureState.active = true;
   // v1.28.0：诊断日志（默认关闭，PERF_DEBUG=true 打开）
   if(window.PERF_DEBUG === true) {
     console.log('[measure-perf] 主轨迹点数:', main.track.length,
       '· 主轨迹 waypoint 数:', (main.waypoints || []).length,
       '· DATA.trails 数:', DATA.trails.length);
   }
-  measureState.ptA = null;
-  measureState.ptB = null;
-  measureState._justDragged = false;
-  measureState._fastTapUntil = 0;
-  measureState._computeSeq++;
   if(!measureState.layer) measureState.layer = L.layerGroup().addTo(map);
   clearMeasureLayer();
   const measurePanel = document.getElementById('measure-panel');
@@ -371,13 +366,7 @@ function measureEnter() {
 
 function measureExit(opts = {}) {
   if(!opts.fromManager && cancelRuntimeInteraction('measure', opts.reason || 'cancelled')) return;
-  measureState.active = false;
-  measureState.trailId = null;
-  measureState.ptA = null;
-  measureState.ptB = null;
-  measureState._justDragged = false;
-  measureState._fastTapUntil = 0;
-  measureState._computeSeq++;
+  measureController.exit();
   clearMeasureLayer();
   document.getElementById('measure-panel').style.display = 'none';
   hideMeasureElevReadout();
@@ -390,11 +379,7 @@ function measureExit(opts = {}) {
 }
 
 function measureReset() {
-  measureState.ptA = null;
-  measureState.ptB = null;
-  measureState._justDragged = false;
-  measureState._fastTapUntil = 0;
-  measureState._computeSeq++;
+  measureController.reset();
   setRuntimeInteractionPhase('measure', 'select-a');
   clearMeasureLayer();
   resetMeasureElevReadout('在主轨迹上点击起点，再点击终点。');
@@ -409,10 +394,7 @@ function measureReverse() {
     showToast('请先选择 A/B 两点', 'info');
     return;
   }
-  const reversed = reverseMeasureEndpoints(measureState.ptA, measureState.ptB);
-  if(!reversed) return;
-  measureState.ptA = reversed.ptA;
-  measureState.ptB = reversed.ptB;
+  if(!measureController.reverse()) return;
   measureCompute();
 }
 
@@ -518,12 +500,10 @@ function queueMeasureLiveUpdate() {
 function applyMeasureEndpointHit(label, hit, live = false) {
   if(!hit) return false;
   const pt = measurePointFromHit(hit);
-  const result = applyMeasureEndpointState(measureState.ptA, measureState.ptB, label, pt);
-  if(!result.ok) return false;
-  measureState.ptA = result.ptA;
-  measureState.ptB = result.ptB;
+  const changed = measureController.updateEndpoint(label, pt);
+  if(!changed) return false;
   setMeasureElevHint('');
-  return result.changed;
+  return true;
 }
 
 function bindMeasureEndpointDrag(marker, label) {
@@ -558,7 +538,7 @@ function addMeasureEndpointMarker(pt, label, color) {
 /* @runtime-fragment measure.compute */
 function measureCompute() {
   if(!measureState.ptA || !measureState.ptB) return;
-  const seq = ++measureState._computeSeq;
+  const seq = measureController.nextComputeSequence();
   const a = measureState.ptA, b = measureState.ptB;
 
   // 视觉反馈立即执行：先落 A/B marker，再把长线段绘制放到下一帧，避免拖动松手时卡住点位刷新。
@@ -572,9 +552,9 @@ function measureCompute() {
 
   // ── 计算重活放到下一帧，不阻塞点击 ──
   scheduleRuntimeInteractionFrame('measure', () => {
-    if(seq !== measureState._computeSeq) return;
+    if(!measureController.isComputeCurrent(seq)) return;
     renderMeasureSegmentLine(1200);
-    if(seq !== measureState._computeSeq) return;
+    if(!measureController.isComputeCurrent(seq)) return;
     updateMeasureReadout(false);
 
     // v1.30.0：取消 AB 计算完成后的自动 fitBounds（用户不希望测距时视图跳转）
@@ -582,7 +562,7 @@ function measureCompute() {
     // 海拔图重绘放到再下一帧，让上面的数字先渲染
     if(typeof refreshElevBar === 'function') {
       scheduleRuntimeInteractionFrame('measure', () => {
-        if(seq === measureState._computeSeq) refreshElevBar();
+        if(measureController.isComputeCurrent(seq)) refreshElevBar();
       });
     }
   });

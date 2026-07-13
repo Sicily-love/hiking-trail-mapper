@@ -62,6 +62,8 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_math.js` / `test_enrich.js` | Distance, elevation, stats, waypoint snapping, and content hashes |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` exports, KML coordinates, `gx:Track`, waypoints, and import models |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshots and commit timing, Set serialization, per-group primary trails, and legacy restore |
+| `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and classic adapter boundaries |
+| `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and classic adapter boundary |
 | `test_measure_itinerary.js` | A/B measurement, segmentation, Day ranges, elevation layout, and render models |
 | `test_performance_core.js` | Elevation segmentation, Canvas min/max downsampling, waypoint diffs, and track revisions |
 | `test_app_architecture.js` | App state, feature controllers, adapters, and Workbench fit planning |

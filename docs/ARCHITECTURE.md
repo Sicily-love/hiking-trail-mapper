@@ -42,7 +42,7 @@ src/
 │   ├── waypoint/                   typed controller + Leaflet marker 适配器
 │   ├── elevation/runtime.ts        elevation Canvas 副作用
 │   ├── localization/runtime.ts     i18n、版本日志与语言 DOM
-│   ├── measure/runtime.ts          测距交互与路段渲染
+│   ├── measure/                    typed 会话 controller + Leaflet 路段渲染适配器
 │   ├── segment/runtime.ts          分段编辑与应用
 │   ├── itinerary/runtime.ts        Day 预览与行程 DOM
 │   ├── escape/runtime.ts           下撤显示、侧栏和交互
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` 通过 raw import 读取 runtime 模板和 13 个垂直 owner。`composeClassicRuntime()` 要求每个命名片段恰好有一个 slot、一个实现且没有闲置片段，再生成唯一 classic script。这样既保持旧代码依赖的全局作用域与执行顺序，也禁止 fallback 和双路径悄悄回来。
 
-垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合六类稳定服务，trail、storage、file import 和 waypoint 已接入 typed controller。`WaypointController` 拥有新增模式状态、ID 分配、主轨迹/anchor 校验、Waypoint 构造与提交；classic waypoint owner 只保留吸附、对话框和 Leaflet marker 渲染。其余 owner 后续应沿用该模式逐个迁移，不能复制回模板。
+垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合六类稳定服务，trail、storage、file import、waypoint 和 measure 已接入 typed controller。`MeasureController` 拥有 A/B 会话、拖动抑制、反向、复位和异步计算序列；classic measure owner 只保留轨迹吸附、Leaflet 图层和 DOM/Canvas 更新。其余 owner 后续应沿用该模式逐个迁移，不能复制回模板。
 
 这个桥是迁移机制，不是长期模块边界。typed 代码不能依赖脚本碰巧创建的隐式全局；迁出一段行为时，应给它明确输入、输出、生命周期和测试。
 

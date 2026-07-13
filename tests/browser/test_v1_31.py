@@ -299,7 +299,8 @@ try:
                 && model.latLngs[0][0] === track[0][0]
                 && model.latLngs[899][0] === track[1199][0]
                 && renderMeasureSegmentLine.toString().includes('buildMeasureSegmentRenderModel')
-                && measureCompute.toString().includes('_computeSeq');
+                && measureCompute.toString().includes('nextComputeSequence')
+                && measureCompute.toString().includes('isComputeCurrent');
             })()
           """))
     check("测距统计使用缓存而非整段遍历",
@@ -390,7 +391,8 @@ try:
                 && !!document.getElementById('measure-distance')
                 && !!document.querySelector('#measure-distance #m-dist')
                 && (measureReverse.toString().includes('measureState.ptA = measureState.ptB')
-                  || measureReverse.toString().includes('reverseMeasureEndpoints'))
+                  || measureReverse.toString().includes('reverseMeasureEndpoints')
+                  || measureReverse.toString().includes('measureController.reverse'))
                 && updateMeasureReadout.toString().includes('elev-stat-asc')
                 && updateMeasureReadout.toString().includes('elev-stat-desc')
                 && updateMeasureReadout.toString().includes(\"stats.distKm.toFixed(2) + ' km'\")

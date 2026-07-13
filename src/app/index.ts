@@ -22,10 +22,13 @@ export {
   type TrailControllerDependencies,
 } from '../features/trails/controller.ts';
 export {
+  createMeasureController,
   createMeasureInteractionState,
   resetMeasureInteraction,
   reverseMeasureInteraction,
   updateMeasureEndpoint,
+  type MeasureController,
+  type MeasureInteractionState,
 } from '../features/measure/controller.ts';
 export {
   clearDayPreviewState,
