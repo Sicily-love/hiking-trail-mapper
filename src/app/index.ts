@@ -53,6 +53,16 @@ export {
   type RenameTrailResult,
 } from '../features/files/import-controller.ts';
 export {
+  createWaypointController,
+  type ManualWaypointAnchor,
+  type WaypointController,
+  type WaypointControllerDependencies,
+  type WaypointControllerState,
+  type WaypointRecord,
+  type WaypointTrackPoint,
+  type WaypointTrail,
+} from '../features/waypoint/controller.ts';
+export {
   CommandRegistry,
   STUDIO_COMMANDS,
   type CommandRegistryEvent,

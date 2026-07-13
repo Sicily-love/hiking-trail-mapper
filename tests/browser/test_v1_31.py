@@ -459,7 +459,7 @@ try:
             })()
           """))
     check("新增标注按钮进入一次性点选模式",
-          evalj("enterAddWaypointMode.toString().includes('crosshair') && addManualWaypointAt.toString().includes('gps_idx') && addManualWaypointAt.toString().includes('buildDaysTab')"))
+          evalj("enterAddWaypointMode.toString().includes('crosshair') && addManualWaypointAt.toString().includes('waypointController.addManualWaypoint') && typeof window.HikingTrailApp.createWaypointController === 'function'"))
     check("海拔填充沿完整曲线路径绘制",
           evalj("""
             (() => {

@@ -287,11 +287,19 @@ function showTooltip(e, a, b, trail, heat) {
 function hideTooltip() { tooltipEl.style.display = 'none'; }
 
 /* @runtime-fragment waypoint.interaction */
-const addWaypointState = { active: false, trailId: null };
+const waypointController = HTM_APP.createWaypointController(runtimeContext, {
+  iconForTag:waypointIcon,
+  markRevision:markTrailRevision,
+  renderWaypoints:drawWaypoints,
+  renderFilters:buildFilterGrid,
+  renderDays:buildDaysTab,
+  persist:saveToStorage,
+  notify:message => showToast(message),
+});
+const addWaypointState = waypointController.state;
 
 function nextWaypointId(trail) {
-  const ids = (trail.waypoints || []).map(w => parseInt(w.id, 10)).filter(n => isFinite(n));
-  return ids.length ? Math.max(...ids) + 1 : 1;
+  return waypointController.nextId(trail);
 }
 
 function findWaypointAnchorOnPrimary(latlng, requireNear = false) {
@@ -327,33 +335,11 @@ async function addManualWaypointAt(latlng, opts = {}) {
   });
   if(!name || !name.trim()) return false;
   if(typeof isCurrent === 'function' && !isCurrent()) return false;
-  if(!DATA.trails.includes(main) || main.id !== state.primaryTrailId) return false;
-  const p = anchor.point;
-  const cleanName = name.trim();
-  const wp = {
-    id: nextWaypointId(main),
-    name: cleanName + ' [手动]',
-    label: cleanName + ' [手动]',
-    icon: waypointIcon('other'),
-    tag: 'other',
-    km: parseFloat((p[3] || 0).toFixed(1)),
-    elev: Math.round(p[2] || 0),
-    lat: p[0],
-    lng: p[1],
-    gps_idx: anchor.idx,
-    day: p[5] || null,
-    time: '',
-    photo: '',
-    manuallyAdded: true,
-  };
-  main.waypoints.push(wp);
-  markTrailRevision(main);
-  drawWaypoints();
-  buildFilterGrid();
-  buildDaysTab();
-  saveToStorage();
-  showToast(`✓ "${cleanName}" 已添加`);
-  return true;
+  return !!waypointController.addManualWaypoint({
+    trailId:main.id,
+    trackIndex:anchor.idx,
+    point:anchor.point,
+  }, name);
 }
 
 function handleWaypointInteractionEvent(event, session) {
@@ -378,8 +364,7 @@ function handleWaypointInteractionEvent(event, session) {
 
 function exitAddWaypointMode(opts = {}) {
   if(!opts.fromManager && cancelRuntimeInteraction('waypoint', opts.reason || 'cancelled')) return;
-  addWaypointState.active = false;
-  addWaypointState.trailId = null;
+  waypointController.exit();
   const btn = document.getElementById('add-waypoint-btn');
   if(btn) btn.classList.remove('on');
   map.getContainer().style.cursor = '';
@@ -395,8 +380,7 @@ function enterAddWaypointMode(opts = {}) {
     onEvent: handleWaypointInteractionEvent,
     onCancel: cancelOpts => exitAddWaypointMode(cancelOpts),
   });
-  addWaypointState.active = true;
-  addWaypointState.trailId = main.id;
+  if(!waypointController.enter(main.id)) return null;
   const btn = document.getElementById('add-waypoint-btn');
   if(btn) btn.classList.add('on');
   map.getContainer().style.cursor = 'crosshair';

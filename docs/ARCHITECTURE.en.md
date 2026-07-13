@@ -39,7 +39,7 @@ src/
 │   ├── files/                      Typed import controller plus KML/DOM/export adapter
 │   ├── storage/                    Typed controller plus restore/UI adapter
 │   ├── map/runtime.ts              Track / Leaflet rendering
-│   ├── waypoint/runtime.ts         Waypoint / marker diff rendering
+│   ├── waypoint/                   Typed controller plus Leaflet marker adapter
 │   ├── elevation/runtime.ts        Elevation Canvas effects
 │   ├── localization/runtime.ts     i18n, changelog, and language DOM
 │   ├── measure/runtime.ts          Measurement interaction and segment rendering
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, and file import now use typed controllers. `FileImportController` owns ZIP expansion, content deduplication, unique IDs, project admission, ID/source edits, and import commit; the classic files owner retains DOM feedback, browser KML parsing, and export. Remaining owners should follow this pattern one at a time without copying code back into the template.
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import, and waypoint now use typed controllers. `WaypointController` owns add-mode state, ID allocation, primary-trail/anchor validation, waypoint construction, and commit; the classic waypoint owner retains snapping, dialogs, and Leaflet marker rendering. Remaining owners should follow this pattern one at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 
