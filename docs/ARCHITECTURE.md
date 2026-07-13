@@ -37,7 +37,7 @@ src/
 │   └── performance/               大轨迹分段、抽稀、diff 与 revision
 ├── features/
 │   ├── files/runtime.ts            KML/ZIP 导入、解析与导出
-│   ├── storage/runtime.ts          IndexedDB 保存、恢复与存储信息
+│   ├── storage/                    typed controller + 恢复兼容/UI 适配器
 │   ├── map/runtime.ts              track / Leaflet 渲染
 │   ├── waypoint/runtime.ts         waypoint / marker 差异渲染
 │   ├── elevation/runtime.ts        elevation Canvas 副作用
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` 通过 raw import 读取 runtime 模板和 13 个垂直 owner。`composeClassicRuntime()` 要求每个命名片段恰好有一个 slot、一个实现且没有闲置片段，再生成唯一 classic script。这样既保持旧代码依赖的全局作用域与执行顺序，也禁止 fallback 和双路径悄悄回来。
 
-垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合 project、state、commands、interactions、renderer 和 dialogs 六类稳定服务；`trails/controller.ts` 是第一个接入的 typed feature controller。其余 classic owner 后续应沿用该模式逐个迁移，不能复制回模板。
+垂直拆分已把 `runtime.ts` 从 8,089 行降到约 340 行。迁出的实现不再出现在模板中；`test_runtime_composition.js` 固定 400 行护栏并验证片段的缺失、重复和闲置错误。`RuntimeContext` 已聚合 project、state、commands、interactions、renderer 和 dialogs 六类稳定服务；`trails/controller.ts` 与 `storage/controller.ts` 已接入 typed controller。后者拥有 IndexedDB 连接复用、防抖保存、快照读写、清空、可用性和 typed 事件，classic storage owner 只保留存储信息 UI 与旧轨迹恢复补算。其余 owner 后续应沿用该模式逐个迁移，不能复制回模板。
 
 这个桥是迁移机制，不是长期模块边界。typed 代码不能依赖脚本碰巧创建的隐式全局；迁出一段行为时，应给它明确输入、输出、生命周期和测试。
 

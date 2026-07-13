@@ -1,6 +1,6 @@
 /** Unit test: IndexedDB operations resolve only after transaction commit. */
 const assert = require('assert');
-const { executeIndexedDbOperation } = require('../../src/app/index.ts');
+const { executeIndexedDbOperation, openIndexedDbDatabase } = require('../../src/app/index.ts');
 
 function createFakeDatabase(kind, result) {
   const request = {result: undefined, error: null};
@@ -69,7 +69,23 @@ async function main() {
   await assert.rejects(failure, /commit failed/);
   console.log('  PASS aborted transactions reject');
 
-  console.log('\nResult: 4/4 passed');
+  const createdStores = [];
+  const openedDatabase = {
+    objectStoreNames:{contains:name => createdStores.includes(name)},
+    createObjectStore:name => createdStores.push(name),
+  };
+  const openRequest = {result:openedDatabase, error:null};
+  const opening = openIndexedDbDatabase({open:() => openRequest}, 'studio', 1, ['trails']);
+  openRequest.onupgradeneeded();
+  openRequest.onsuccess();
+  assert.strictEqual(await opening, openedDatabase);
+  assert.deepStrictEqual(createdStores, ['trails']);
+  console.log('  PASS open creates required stores during upgrade');
+
+  await assert.rejects(openIndexedDbDatabase(null, 'studio', 1, ['trails']), /not supported/);
+  console.log('  PASS open rejects when IndexedDB is unavailable');
+
+  console.log('\nResult: 6/6 passed');
 }
 
 main().catch(error => {

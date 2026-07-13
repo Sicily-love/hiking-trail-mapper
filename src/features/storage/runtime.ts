@@ -98,84 +98,41 @@ async function showStorageInfo() {
 const DB_NAME = 'hiking_trail_db';
 const STORE_NAME = 'trails';
 const DATA_KEY = 'main';
-let _dbPromise = null;
-let storageAvailable = true;
 let sandboxWarningShown = false;
 
-function openDB() {
-  if(_dbPromise) return _dbPromise;
-  _dbPromise = new Promise((resolve, reject) => {
-    if(!window.indexedDB) { storageAvailable = false; reject(new Error('IndexedDB not supported')); return; }
-    let req;
-    try {
-      req = indexedDB.open(DB_NAME, 1);
-    } catch(e) {
-      storageAvailable = false;
-      reject(e);
-      return;
-    }
-    req.onerror = () => { storageAvailable = false; reject(req.error); };
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if(!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-    };
-    req.onsuccess = () => resolve(req.result);
-  });
-  return _dbPromise;
-}
-
-let _saveTimer = null;
-function saveToStorage() {
-  // 防抖：300ms 内的多次保存合并成 1 次
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(_doSave, 300);
-}
-
-
-function storageTrailId(trail) {
-  return trail && typeof trail.id === 'string' && trail.id ? trail.id : null;
-}
-
-function storageHasOwn(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-
-async function _doSave() {
-  if(!storageAvailable) {
+function handleStorageControllerEvent(event) {
+  if(event.type === 'storage.saved') {
+    showToast(`✓ 已自动保存（${event.trailCount} 条轨迹）`);
+  } else if(event.type === 'storage.quota-exceeded') {
+    showToast(`❌ 存储已满（${event.trailCount} 条轨迹）。请删除部分后重试`, 'error', 5000);
+  } else if(event.type === 'storage.unavailable') {
+    console.warn('storage unavailable:', event.error);
     if(!sandboxWarningShown) {
       sandboxWarningShown = true;
-      showToast('ℹ 当前环境不支持自动保存。请用「📤 导出」保留数据', 'info', 5000);
+      const detail = event.error && event.error.message ? `：${event.error.message}` : '';
+      showToast(`ℹ 当前环境不支持自动保存${detail}`, 'info', 5000);
     }
-    return;
-  }
-  try {
-    const db = await openDB();
-    const op = buildStorageWriteOperation(DATA.trails, state, { storeName: STORE_NAME, dataKey: DATA_KEY });
-    await HTM_APP.executeIndexedDbOperation(db, op);
-    showToast('✓ 已自动保存（' + DATA.trails.length + ' 条轨迹）');
-  } catch(e) {
-    if(e.name === 'QuotaExceededError') {
-      showToast('❌ 存储已满（' + (DATA.trails.length) + ' 条轨迹）。请删除部分后重试', 'error', 5000);
-    } else {
-      console.warn('save failed:', e);
-      storageAvailable = false;
-      if(!sandboxWarningShown) {
-        sandboxWarningShown = true;
-        showToast('ℹ 当前环境不支持自动保存：' + e.message, 'info', 5000);
-      }
-    }
+  } else if(event.type === 'storage.failed') {
+    console.warn(`${event.operation} failed:`, event.error);
   }
 }
 
+const storageController = HTM_APP.createStorageController(runtimeContext, {
+  openDatabase:() => HTM_APP.openIndexedDbDatabase(window.indexedDB, DB_NAME, 1, [STORE_NAME]),
+  execute:HTM_APP.executeIndexedDbOperation,
+  storeName:STORE_NAME,
+  dataKey:DATA_KEY,
+  onEvent:handleStorageControllerEvent,
+});
+
+function openDB() { return storageController.open(); }
+function saveToStorage() { storageController.scheduleSave(); }
+async function _doSave() { return storageController.flush(); }
+
 async function loadFromStorage() {
-  if(!storageAvailable) return false;
+  const restored = await storageController.load(state.activeGroup);
+  if(!restored) return false;
   try {
-    const db = await openDB();
-    const op = buildStorageReadOperation({ storeName: STORE_NAME, dataKey: DATA_KEY });
-    const data = await HTM_APP.executeIndexedDbOperation(db, op);
-    const restored = restoreStorageSnapshot(data, { currentActiveGroup: state.activeGroup });
-    if(!restored.ok) return false;
     DATA.trails = restored.trails;
     // 兼容旧数据：缺 descent_m 则现场补算
     DATA.trails.forEach(tr => {
@@ -209,14 +166,7 @@ async function loadFromStorage() {
 }
 
 async function clearStorage() {
-  if(!storageAvailable) return;
-  try {
-    const db = await openDB();
-    const op = buildStorageDeleteOperation({ storeName: STORE_NAME, dataKey: DATA_KEY });
-    await HTM_APP.executeIndexedDbOperation(db, op);
-  } catch(e) {
-    console.warn('clear failed:', e);
-  }
+  return storageController.clear();
 }
 
 /* ── 下载单条轨迹为 KML 文件 ── */

@@ -35,6 +35,13 @@ export {
 export { createElevationDockState, toggleElevationDock } from '../features/elevation/controller.ts';
 export { upsertLeafletPolyline } from '../adapters/leaflet.ts';
 export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';
+export { openIndexedDbDatabase } from '../adapters/indexedDb.ts';
+export {
+  createStorageController,
+  type StorageController,
+  type StorageControllerDependencies,
+  type StorageControllerEvent,
+} from '../features/storage/controller.ts';
 export {
   CommandRegistry,
   STUDIO_COMMANDS,

@@ -6,6 +6,31 @@ export interface IndexedDbOperation<T = unknown> {
   value?: T;
 }
 
+export function openIndexedDbDatabase(
+  factory: IDBFactory | null | undefined,
+  name: string,
+  version: number,
+  storeNames: readonly string[],
+): Promise<IDBDatabase> {
+  if(!factory) return Promise.reject(new Error('IndexedDB not supported'));
+  return new Promise((resolve, reject) => {
+    let request: IDBOpenDBRequest;
+    try {
+      request = factory.open(name, version);
+    } catch(error) {
+      reject(error);
+      return;
+    }
+    request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
+    request.onupgradeneeded = () => {
+      for(const storeName of storeNames) {
+        if(!request.result.objectStoreNames.contains(storeName)) request.result.createObjectStore(storeName);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
 export function executeIndexedDbOperation<T>(db: IDBDatabase, operation: IndexedDbOperation<T>): Promise<T | undefined> {
   return new Promise((resolve, reject) => {
     let transaction: IDBTransaction;

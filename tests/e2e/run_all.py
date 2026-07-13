@@ -140,7 +140,7 @@ try:
     check("state.activeGroup 默认值", evalj("typeof state.activeGroup === 'string'"))
 
     # 清空 IndexedDB + trails，保证从零开始。使用应用 API 等待事务完成，避免挂起的 deleteDatabase 在后续重载时误删新缓存。
-    evalj("(async () => { await clearStorage(); DATA.trails = []; state.activeTrails = new Set(); state.primaryTrailId = null; rebuildAll({fit:false}); })()")
+    evalj("(async () => { await clearStorage(); DATA.trails = []; dispatchState({type:'workspace.clear'}); rebuildAll({fit:false}); })()")
     time.sleep(0.5)
 
     # ═══════════════════════════════════════════════════════════════
