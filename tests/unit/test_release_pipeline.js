@@ -45,21 +45,24 @@ T('retired template, IIFE sync, and fallback scripts are absent', () => {
   ].forEach(name => assert.ok(!fs.existsSync(path.join(root, name)), name));
 });
 
-T('release sync and version bump use Vite plus runtime.ts', () => {
+T('release sync and version bump use Vite plus the runtime owners', () => {
   const sync = read('scripts/release/sync_release.sh');
   const bump = read('scripts/release/bump_version.mjs');
   assert.ok(sync.includes('npm run build'));
   assert.ok(!sync.includes('generate_release_html'));
   assert.ok(!sync.includes('runtime.js'));
   assert.ok(bump.includes("src/app/runtime.ts"));
+  assert.ok(bump.includes("src/features/localization/runtime.ts"));
   assert.ok(!bump.includes("src/template/app.html"));
   assert.ok(!bump.includes("src/app/runtime.js"));
 });
 
-T('maintenance tools follow the runtime.ts source path', () => {
+T('maintenance tools cover the runtime template and vertical owners', () => {
   const cleanup = read('scripts/maintenance/clean_version_comments.py');
-  assert.ok(cleanup.includes('src/app/runtime.ts'));
-  assert.ok(cleanup.includes('"runtime.ts"'));
+  assert.ok(cleanup.includes('"app" / "runtime.ts"'));
+  assert.ok(cleanup.includes('"runtime" / "classic.ts"'));
+  assert.ok(cleanup.includes('glob("*/runtime.ts")'));
+  assert.ok(cleanup.includes('"orchestration" / "runtime.ts"'));
   assert.ok(!cleanup.includes('src/app/runtime.js'));
   assert.ok(!cleanup.includes('"runtime.js"'));
 });

@@ -8,19 +8,19 @@
 
 ```text
 index.html -> main.ts -> bootstrap.ts -> Workbench DOM
-           -> vendor + typed core/app -> runtime.ts 兼容层
+           -> vendor + typed core/app -> 垂直 owner 组合 -> runtime.ts 兼容层
 ```
 
 目录职责：
 
 - `core/`：无 DOM 的距离、海拔、KML、存储、测距、分段和渲染模型；`core/performance/` 负责大轨迹分段、抽稀、diff 与 revision。
-- `app/`：bootstrap、应用状态、`CommandRegistry`、`InteractionManager`、`RenderScheduler` 与过渡 `runtime.ts`。
-- `features/`：单一功能 controller 和交互状态。
+- `app/`：bootstrap、应用状态、`CommandRegistry`、`InteractionManager`、`RenderScheduler`、runtime composer 与约 340 行启动/命令模板。
+- `features/`：单一功能 controller；11 个 feature runtime owner 分别拥有文件、存储、地图、标注、海拔、测距、分段、Day、下撤、轨迹变更和 localization 片段。
 - `adapters/`：Leaflet 与 IndexedDB 副作用。
 - `ui/`：Workbench DOM、桌面七项侧栏、移动五项底栏、海拔坞和 `DialogController`。
 - `styles/` / `vendor/`：由 Vite 收集并在发布时内联的样式与浏览器依赖。
 
-`runtime.ts` 仍是正在使用的 classic-runtime 兼容层。新增行为应进入 typed owner；迁移时先补测试、接入对应 manager，再删除旧分支。不要把“管理器已建立”写成“runtime 已完全删除”。
+`runtime.ts` 已达到 400 行最终护栏，只保留启动和命令胶水。新增行为不得写回模板，应进入对应 owner 或 typed controller。垂直文件拆分已经完成，但 classic owner 仍需逐步强类型化。
 
 修改后运行：
 
@@ -38,19 +38,19 @@ Boot chain:
 
 ```text
 index.html -> main.ts -> bootstrap.ts -> Workbench DOM
-           -> vendors + typed core/app -> runtime.ts bridge
+           -> vendors + typed core/app -> vertical owner composition -> runtime.ts bridge
 ```
 
 Directory ownership:
 
 - `core/`: DOM-free distance, elevation, KML, storage, measurement, itinerary, and render models; `core/performance/` owns large-track segmentation, downsampling, diffs, and revisions.
-- `app/`: bootstrap, app state, `CommandRegistry`, `InteractionManager`, `RenderScheduler`, and transitional `runtime.ts`.
-- `features/`: single-feature controllers and interaction state.
+- `app/`: bootstrap, app state, `CommandRegistry`, `InteractionManager`, `RenderScheduler`, the runtime composer, and the approximately 340-line boot/command template.
+- `features/`: single-feature controllers; eleven feature runtime owners hold files, storage, map, waypoint, elevation, measure, segment, Day, escape, trail-mutation, and localization fragments.
 - `adapters/`: Leaflet and IndexedDB effects.
 - `ui/`: Workbench DOM, seven desktop side actions, five mobile bottom actions, elevation dock, and `DialogController`.
 - `styles/` / `vendor/`: styles and browser dependencies collected by Vite and inlined for release.
 
-`runtime.ts` is still a live classic-runtime compatibility layer. New behavior belongs in typed owners. During migration, add tests, connect the relevant manager, then delete the old branch. Do not turn “managers are established” into “runtime has been fully removed.”
+`runtime.ts` now meets the final 400-line guardrail and contains only boot and command glue. New behavior must not return to the template; place it in the matching owner or a typed controller. The vertical file split is complete, while classic owners still need gradual typing.
 
 After changes, run:
 

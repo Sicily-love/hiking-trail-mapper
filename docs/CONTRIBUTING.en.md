@@ -49,7 +49,8 @@ Rules:
 | Leaflet / IndexedDB effects | `src/adapters` |
 | DOM shell, Workbench, responsive layout, dialogs | `src/ui` |
 | Global or vendor styles | `src/styles` |
-| Transitional legacy browser orchestration | `src/app/runtime.ts`, with a migration boundary |
+| Split classic browser orchestration | The matching `src/features/*/runtime.ts` or `src/ui/orchestration/runtime.ts` owner |
+| Unsplit compatibility orchestration | `src/app/runtime.ts`, with a migration boundary |
 
 Prefer existing owners. Do not create a parallel architecture for a local change.
 
@@ -71,18 +72,18 @@ When adding boot behavior:
 
 ## Migrating runtime.ts
 
-`src/app/runtime.ts` is a live classic-runtime compatibility layer, not an empty deprecated file. Production bugs in behavior that has not moved yet can be fixed there, but new features should normally go into a typed owner.
+`src/app/runtime.ts` is approximately 340 lines of boot/command compatibility glue, protected by a 400-line guardrail. All browser orchestration now has one of 13 owners and must not be copied back into the template. Production fixes belong in the matching owner; new features should normally start in a typed controller.
 
 Recommended migration steps:
 
 1. Add a unit, browser, or E2E regression for current behavior.
 2. Extract DOM-free calculations and feature state.
 3. Connect the appropriate manager/controller/adapter.
-4. Forward the old entrypoint to the new implementation.
-5. Delete the fully replaced branch from `runtime.ts`.
+4. Change the existing owner or add a typed entrypoint. Add a named fragment only when classic ordering is still required, retaining exactly one slot at the original position.
+5. Delete the matching implementation from `runtime.ts` in the same commit and verify that composition produces one definition.
 6. Build the single HTML and run real-browser tests.
 
-Do not copy a new implementation while leaving the old one in place. A file rename alone also does not mean the runtime has been split.
+Do not copy a new implementation while leaving the old one in place, and do not add a second slot. A file rename alone also does not mean typed migration is complete. `test_runtime_composition.js` must remain green.
 
 ## Choosing a Manager
 

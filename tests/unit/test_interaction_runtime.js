@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
-const runtime = fs.readFileSync(path.join(root, 'src/app/runtime.ts'), 'utf8');
+const { runtimeSource: runtime } = require('./runtime_source');
 const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 let passed = 0;
 let failed = 0;

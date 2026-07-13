@@ -190,7 +190,7 @@ try:
               elevationOutOfViewport:!elevation || elevation.left < 0 || elevation.right > innerWidth || elevation.top < 0 || elevation.bottom > innerHeight,
               bodyOverflowX:document.documentElement.scrollWidth > innerWidth,
               buttonOverflow:buttons.some(button => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight),
-              appRuntime:window.__HTM_APP_RUNTIME__ === window.HikingTrailApp,
+              appRuntime:!!window.HikingTrailApp,
               mobileResetClosesSidebar:innerWidth > 760 || document.getElementById('sidebar')?.classList.contains('collapsed'),
             };
           })()

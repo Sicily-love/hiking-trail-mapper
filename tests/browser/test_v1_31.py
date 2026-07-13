@@ -104,6 +104,18 @@ try:
           evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
     check("唯一命令与对话框运行时已挂载",
           evalj("window.__OUTDOOR_ROUTE_STUDIO__?.commands === window.__HTM_COMMAND_REGISTRY__ && window.__OUTDOOR_ROUTE_STUDIO__?.dialogs === window.__HTM_DIALOG_CONTROLLER__"))
+    check("垂直 owner 只组合为一份无标记运行时",
+          evalj("""
+            (() => {
+              const source = document.querySelector('script[data-studio-runtime="runtime.js"]')?.textContent || '';
+              const functions = ['handleFiles','loadFromStorage','renderWaypointsNow','renderTracksNow','drawElevBar','setLang','openLightbox'];
+              return source.length > 0
+                && !source.includes('@runtime-slice')
+                && !source.includes('@runtime-fragment')
+                && !source.includes('export {};')
+                && functions.every(name => (source.match(new RegExp(`function ${name}\\\\(`, 'g')) || []).length === 1);
+            })()
+          """))
     check("顶部 7 个菜单已渲染",
           evalj("document.querySelectorAll('.studio-menu-trigger').length === 7"))
     check("左侧 7 个活动入口已渲染",
@@ -117,7 +129,7 @@ try:
     check("顶部、活动栏和分析栏均绑定语义命令",
           evalj("[...document.querySelectorAll('.studio-command,.studio-activity-button,.studio-bottom-tab')].every(node => node.dataset.commandId && window.__HTM_COMMAND_REGISTRY__.has(node.dataset.commandId))"))
     check("TypeScript core runtime 已接管关键函数",
-          evalj("!!window.HikingTrailCore && window.__HTM_CORE_RUNTIME__ === window.HikingTrailCore && haversine === window.HikingTrailCore.haversine && buildDayPreviewRenderModel === window.HikingTrailCore.buildDayPreviewRenderModel"))
+          evalj("!!window.HikingTrailCore && haversine === window.HikingTrailCore.haversine && buildDayPreviewRenderModel === window.HikingTrailCore.buildDayPreviewRenderModel"))
     check("state.batchMode 已移除",
           evalj("!('batchMode' in state)"),
           str(evalj("'batchMode' in state")))
@@ -337,7 +349,6 @@ try:
                 'add-escape-btn','reverse-btn','add-trail-btn','export-btn','clear-btn'];
               return document.documentElement.dataset.ui === 'studio'
                 && !!window.HikingTrailApp
-                && window.__HTM_APP_RUNTIME__ === window.HikingTrailApp
                 && !!toolbar.querySelector('.studio-brand')
                 && !toolbar.querySelector('#toolbar-more:not([hidden])')
                 && commandIds.every(id => {
@@ -352,7 +363,7 @@ try:
     check("顶部缓存按钮已移除",
           evalj("!document.getElementById('storage-btn') && !document.getElementById('storage-text')"))
     check("测距/分段进入时自动切换到标注点模式",
-          evalj("measureEnter.toString().includes('enterInteractionRenderMode') && segmentEnter.toString().includes('enterInteractionRenderMode') && setMapMode.toString().includes('state.mode = mode')"))
+          evalj("measureEnter.toString().includes('enterInteractionRenderMode') && segmentEnter.toString().includes('enterInteractionRenderMode') && setMapMode.toString().includes(\"type:'mode.set'\")"))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
           evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('min: stats.minE') && segmentApply.toString().includes('i_start') && renderElevationChartNow.toString().includes('dayPreviewState.active')"))
     check("地图 +/- 缩放步进已调大",

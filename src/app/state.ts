@@ -66,6 +66,8 @@ export function createAppState(data: AppDataSeed = {}) {
   };
 }
 
+export type AppState = ReturnType<typeof createAppState>;
+
 export function toggleSetItem<T>(set: Set<T>, item: T): boolean {
   if(set.has(item)) set.delete(item);
   else set.add(item);

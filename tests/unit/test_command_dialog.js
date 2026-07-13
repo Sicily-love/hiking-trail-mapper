@@ -6,7 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const { CommandRegistry, STUDIO_COMMANDS } = require(path.join(root, 'src/app/command.ts'));
 const bootstrapSource = fs.readFileSync(path.join(root, 'src/app/bootstrap.ts'), 'utf8');
-const runtimeSource = fs.readFileSync(path.join(root, 'src/app/runtime.ts'), 'utf8');
+const { runtimeSource } = require('./runtime_source');
 const workbenchSource = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const dialogSource = fs.readFileSync(
   path.join(root, 'src/ui/dialog/controller.ts'),

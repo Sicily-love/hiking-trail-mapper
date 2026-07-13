@@ -1,5 +1,13 @@
 export { createAppState, toggleSetItem } from './state.ts';
 export {
+  AppStateStore,
+  createAppStateStore,
+  type AppStateChangedEvent,
+  type AppStateCommand,
+  type AppStateListener,
+  type DisplayOption,
+} from './state-store.ts';
+export {
   createMeasureInteractionState,
   resetMeasureInteraction,
   reverseMeasureInteraction,

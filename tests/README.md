@@ -29,7 +29,7 @@ npm run test:visual:capture
 
 - `index.html` 是只加载 `src/main.ts` 的 Vite 小壳；
 - `hiking-trail-mapper.html` / `dist/index.html` 是从 `src/` 生成的自包含发布物；
-- `runtime.ts` 仍是渐进拆分中的兼容层，不应被测试虚报为已完全移除。
+- `runtime.ts` 是受 400 行和命名片段唯一性护栏保护的启动/命令模板。
 
 新增测试文件后必须接入 npm 或完整检查流水线。
 
@@ -57,6 +57,6 @@ Entry tests must distinguish:
 
 - `index.html` is the small Vite shell that only loads `src/main.ts`;
 - `hiking-trail-mapper.html` / `dist/index.html` are self-contained releases generated from `src/`;
-- `runtime.ts` is still a progressively split compatibility layer and must not be falsely reported as fully removed.
+- `runtime.ts` is a boot/command template protected by a 400-line cap and unique-fragment checks.
 
 Wire every new test file into npm or the full-check pipeline.

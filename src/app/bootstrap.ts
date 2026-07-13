@@ -1,5 +1,6 @@
 import * as core from '../core/index.ts';
 import * as app from './index.ts';
+import { composeClassicRuntime } from './runtime/compose.ts';
 import { mountAppShell } from '../ui/layout/app-shell.ts';
 import {
   upgradeWorkbenchLayout,
@@ -9,7 +10,36 @@ import {
 import leafletSource from '../vendor/leaflet.js?raw';
 import decoratorSource from '../vendor/polyline-decorator.js?raw';
 import fflateSource from '../vendor/fflate.js?raw';
-import runtimeSource from './runtime.ts?raw';
+import runtimeTemplate from './runtime.ts?raw';
+import appClassicRuntimeSource from './runtime/classic.ts?raw';
+import fileRuntimeSource from '../features/files/runtime.ts?raw';
+import storageRuntimeSource from '../features/storage/runtime.ts?raw';
+import waypointRuntimeSource from '../features/waypoint/runtime.ts?raw';
+import mapRuntimeSource from '../features/map/runtime.ts?raw';
+import elevationRuntimeSource from '../features/elevation/runtime.ts?raw';
+import localizationRuntimeSource from '../features/localization/runtime.ts?raw';
+import escapeRuntimeSource from '../features/escape/runtime.ts?raw';
+import itineraryRuntimeSource from '../features/itinerary/runtime.ts?raw';
+import measureRuntimeSource from '../features/measure/runtime.ts?raw';
+import segmentRuntimeSource from '../features/segment/runtime.ts?raw';
+import trailRuntimeSource from '../features/trails/runtime.ts?raw';
+import uiRuntimeSource from '../ui/orchestration/runtime.ts?raw';
+
+const runtimeSource = composeClassicRuntime(runtimeTemplate, [
+  { name: 'app/classic', source: appClassicRuntimeSource },
+  { name: 'features/files', source: fileRuntimeSource },
+  { name: 'features/storage', source: storageRuntimeSource },
+  { name: 'features/waypoint', source: waypointRuntimeSource },
+  { name: 'features/map', source: mapRuntimeSource },
+  { name: 'features/elevation', source: elevationRuntimeSource },
+  { name: 'features/localization', source: localizationRuntimeSource },
+  { name: 'features/escape', source: escapeRuntimeSource },
+  { name: 'features/itinerary', source: itineraryRuntimeSource },
+  { name: 'features/measure', source: measureRuntimeSource },
+  { name: 'features/segment', source: segmentRuntimeSource },
+  { name: 'features/trails', source: trailRuntimeSource },
+  { name: 'ui/orchestration', source: uiRuntimeSource },
+]);
 
 declare global {
   interface Window {

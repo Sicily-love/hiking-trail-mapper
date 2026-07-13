@@ -24,7 +24,7 @@ npm run version:bump -- patch --zh "..." --en "..."
 3. 最终 `dist/index.html` 必须是无外部 JavaScript/CSS asset 的自包含单 HTML。
 4. `dist/hiking-trail-mapper.html` 是同内容兼容别名，不是第二套源码。
 5. Pages workflow 上传 `dist/`。
-6. `src/app/runtime.ts` 仍是过渡兼容层；脚本不得假装它已删除，构建必须继续显式包含它，直到迁移完成。
+6. `src/app/runtime.ts` 是启动/命令模板；Vite 必须通过 bootstrap 的 composer 同时包含模板和 13 个垂直 owner，发布元数据从 runtime 的 `APP_VERSION` 与 localization 的 CHANGELOG 读取。
 
 新脚本放入最小匹配目录；浏览器断言属于 `tests/browser`，不要放进 `scripts/`。
 
@@ -50,6 +50,6 @@ Build rules:
 3. Final `dist/index.html` is a self-contained single HTML with no external JavaScript/CSS assets.
 4. `dist/hiking-trail-mapper.html` is an identical compatibility alias, not a second source.
 5. The Pages workflow uploads `dist/`.
-6. `src/app/runtime.ts` remains transitional; scripts must include it explicitly until migration is complete and must not pretend it has already been deleted.
+6. `src/app/runtime.ts` is the boot/command template. Vite must include it and all 13 vertical owners through bootstrap's composer; release metadata comes from runtime `APP_VERSION` and the localization CHANGELOG.
 
 Put new scripts in the smallest matching directory. Browser assertions belong under `tests/browser`, not `scripts/`.

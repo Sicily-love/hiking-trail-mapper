@@ -1,10 +1,6 @@
 /** Runtime contracts for RenderScheduler and Performance 2.0 integration. */
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-const root = path.resolve(__dirname, '../..');
-const runtime = fs.readFileSync(path.join(root, 'src/app/runtime.ts'), 'utf8');
+const { runtimeSource: runtime } = require('./runtime_source');
 let passed = 0;
 let failed = 0;
 

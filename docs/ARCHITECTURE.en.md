@@ -11,7 +11,7 @@ Outdoor Route Studio uses modular TypeScript source with a self-contained single
 - `src/` is the only source of truth for application implementation.
 - Root `index.html` is a stable, minimal Vite entry shell containing only page metadata, `#app`, and `src/main.ts`.
 - `src/app/bootstrap.ts` is the browser boot orchestrator.
-- `src/app/runtime.ts` remains a transitional classic-runtime compatibility layer executed in order by bootstrap.
+- `src/app/runtime.ts` is an approximately 340-line boot/command compatibility template. Thirteen vertical owners hold all business fragments and bootstrap composes them once in their original order.
 - Vite builds the module graph, then the release script inlines CSS and JavaScript into one file that works on GitHub Pages and over `file://`.
 
 “`src` is the only source” does not mean every repository file lives under `src`. The entry shell, build configuration, and scripts are engineering metadata; business logic, DOM structure, styles, and runtime behavior must originate under `src/`.
@@ -23,21 +23,36 @@ src/
 ├── main.ts                         Imports styles and invokes bootstrap
 ├── app/
 │   ├── bootstrap.ts                Boot order and compatibility bridge
-│   ├── state.ts                    Application state
+│   ├── state.ts                    Application state model
+│   ├── state-store.ts              Typed state commands/events and sole write boundary
 │   ├── command.ts                  CommandRegistry
 │   ├── interactions/               InteractionManager
 │   ├── rendering/                  RenderScheduler
-│   ├── runtime.ts                  Transitional classic runtime
+│   ├── runtime/compose.ts          Fragment integrity and one-time composition
+│   ├── runtime/classic.ts          App state and render-orchestration fragments
+│   ├── runtime.ts                  Approximately 340 lines of boot and command glue
 │   └── index.ts                    Typed app public exports
 ├── core/                           DOM-free math, parsing, storage, and render models
 │   └── performance/               Large-track segmentation, downsampling, diffs, and revisions
-├── features/                       Measure, segment, Day, elevation, and other controllers
+├── features/
+│   ├── files/runtime.ts            KML/ZIP import, parsing, and export
+│   ├── storage/runtime.ts          IndexedDB save, restore, and storage information
+│   ├── map/runtime.ts              Track / Leaflet rendering
+│   ├── waypoint/runtime.ts         Waypoint / marker diff rendering
+│   ├── elevation/runtime.ts        Elevation Canvas effects
+│   ├── localization/runtime.ts     i18n, changelog, and language DOM
+│   ├── measure/runtime.ts          Measurement interaction and segment rendering
+│   ├── segment/runtime.ts          Segment editing and apply flow
+│   ├── itinerary/runtime.ts        Day preview and itinerary DOM
+│   ├── escape/runtime.ts           Escape display, sidebar, and interaction
+│   └── trails/runtime.ts           Trail delete, reverse, and clear mutations
 ├── adapters/                       Leaflet and IndexedDB effect boundaries
 ├── ui/
 │   ├── layout/app-shell.ts         Workbench DOM shell and mount function
 │   ├── workbench.ts                Responsive Workbench chrome
 │   ├── workbench.css               Workbench visuals and layout
-│   └── dialog/                     DialogController
+│   ├── dialog/                     DialogController
+│   └── orchestration/runtime.ts    Help and image-modal compatibility orchestration
 ├── styles/                         Global/vendor style entries
 └── vendor/                         Browser dependencies inlined by the build
 ```
@@ -66,11 +81,14 @@ index.html
               ├── mountAppShell(#app)
               ├── execute Leaflet / decorator / fflate vendors
               ├── expose HikingTrailCore and HikingTrailApp
-              ├── execute the runtime.ts compatibility script
+              ├── validate and compose vertical runtime owners
+              ├── execute the one compatibility script
               └── expose __OUTDOOR_ROUTE_STUDIO__.ready
 ```
 
-`bootstrap.ts` uses raw imports to hand vendors and `runtime.ts` to Vite, then executes compatibility code as a classic script. Typed modules and the Workbench DOM therefore exist before legacy code receives the global scope and execution order it expects.
+`bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
+
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. The 13 owners remain classic compatibility fragments for now; typed migration should introduce explicit contexts one owner at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 
@@ -86,7 +104,13 @@ The Workbench is a map-first interface that changes placement, not command meani
 
 Seven-side/five-bottom is a layout contract, not two feature sets. Command IDs, enabled/checked state, and dispatch paths should be shared through `CommandRegistry`; visual tests cover desktop and mobile breakpoints.
 
-## Four Managers
+## Five Managers
+
+### AppStateStore
+
+`src/app/state-store.ts` is the sole write boundary for mutable application state. Classic owners may read the stable `snapshot()` view, but trail visibility, primary trail, groups, batch selection, map mode, waypoint filters, escape selection, and cache restoration must dispatch discriminated `AppStateCommand` values. Every commit emits an `AppStateChangedEvent` with an increasing revision, which command state observes.
+
+Transient measure, segment, waypoint-add, escape-add, and Day-preview data remains owned by feature controllers. Effect objects such as Leaflet layers do not enter application state. A source contract rejects any classic owner that reintroduces direct state assignment or Set mutation.
 
 ### InteractionManager
 
@@ -136,7 +160,7 @@ All native runtime `alert`, `confirm`, and `prompt` calls now use this controlle
 
 ## Manager Adoption Status
 
-The typed APIs and unit contracts for all four managers are in place. `InteractionManager` owns all five mutually exclusive map interactions, `RenderScheduler` owns all seven runtime render/fit phases, `CommandRegistry` owns all four Workbench entry surfaces, and `DialogController` owns every native browser dialog. The compatibility runtime remains, but the primary interaction, rendering, command, and native-dialog lifecycles are unified.
+The typed APIs and unit contracts for all five managers/store are in place. `AppStateStore` owns application-level writes, `InteractionManager` owns all five mutually exclusive map interactions, `RenderScheduler` owns all seven runtime render/fit phases, `CommandRegistry` owns all four Workbench entry surfaces, and `DialogController` owns every native browser dialog. The compatibility runtime remains, but state writes, primary interaction, rendering, command, and native-dialog lifecycles are unified.
 
 Each migration should:
 
@@ -151,7 +175,7 @@ Each migration should:
 ```text
 File/user event
   -> CommandRegistry / InteractionManager
-  -> state or feature controller
+  -> AppStateStore.dispatch(command) or feature controller
   -> core pure function / render model
   -> RenderScheduler.invalidate(mask)
   -> adapters + DOM/Canvas renderer

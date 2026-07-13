@@ -71,6 +71,7 @@ index.html
   -> bootstrapOutdoorRouteStudio()
   -> mountAppShell()
   -> typed core/app modules
+  -> compose vertical runtime owners
   -> runtime.ts compatibility bridge
 ```
 
@@ -82,7 +83,7 @@ index.html
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
 - `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, and Escape shortcut. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
 
-`src/app/runtime.ts` remains a **transitional classic-runtime compatibility layer**. It keeps existing browser orchestration working under the new boot chain, but it does not mean the historical runtime has been completely removed. Import/export, map and Canvas effects, persistence, and remaining DOM orchestration will move progressively into typed controllers and managers. New modular behavior must not be copied back into generated HTML.
+`src/app/runtime.ts` has been reduced from 8,089 lines to about 340. It now contains only core/app compatibility bindings, release version, restore boot, unified command registration, and initial invalidation. Files, storage, map, markers, elevation, measure, segment, Day, escape, trail mutations, localization, and DOM orchestration have 13 single vertical runtime owners. `composeClassicRuntime()` assembles them once in the original order, with no retained fallback or dual path. The file split is complete; future work converts these still-classic owners into typed controllers with explicit contexts rather than shortening the boot glue further.
 
 ## Development and Tests
 
@@ -109,7 +110,7 @@ npm run test:visual:capture
 | Milestone 5: Release pipeline | Complete | Vite single-file builds, release metadata, full checks, and GitHub Pages deployment are fixed |
 | Milestone 6: Entry and orchestration | Complete | Outdoor Route Studio naming, the small shell, bootstrap, four managers, and seven-side/five-bottom Workbench contracts are in place |
 
-Milestone 6 establishes the new entry and orchestration boundaries. It does not claim that `runtime.ts` is empty; progressively splitting that compatibility layer remains the highest-priority architecture work.
+Milestone 6 now includes the entry boundary and the complete vertical split of the classic runtime; `runtime.ts` is about 340 lines of boot/command glue. This does not claim that all 13 owners are typed. Future refactoring focuses on explicit dependencies and typed controllers.
 
 ## GPX / GeoJSON
 

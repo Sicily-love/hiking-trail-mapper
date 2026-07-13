@@ -36,9 +36,10 @@ async function inlineViteAssets(html) {
 
 const packageJson = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 const runtime = await readFile(path.join(root, 'src/app/runtime.ts'), 'utf8');
+const localizationRuntime = await readFile(path.join(root, 'src/features/localization/runtime.ts'), 'utf8');
 const version = `v${packageJson.version}`;
 const runtimeVersion = runtime.match(/const APP_VERSION = '(v\d+\.\d+\.\d+)'/)?.[1];
-const buildDate = runtime.match(/version:\s*'v\d+\.\d+\.\d+',\s*\n\s*date:\s*'(\d{4}-\d{2}-\d{2})'/)?.[1];
+const buildDate = localizationRuntime.match(/version:\s*'v\d+\.\d+\.\d+',\s*\n\s*date:\s*'(\d{4}-\d{2}-\d{2})'/)?.[1];
 if(runtimeVersion !== version || !buildDate) throw new Error('Runtime release metadata does not match package.json');
 
 await build({

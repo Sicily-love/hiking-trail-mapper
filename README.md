@@ -71,6 +71,7 @@ index.html
   -> bootstrapOutdoorRouteStudio()
   -> mountAppShell()
   -> typed core/app modules
+  -> compose vertical runtime owners
   -> runtime.ts compatibility bridge
 ```
 
@@ -82,7 +83,7 @@ index.html
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
-`src/app/runtime.ts` 仍是 classic runtime 的**过渡兼容层**。它让既有浏览器编排在新启动链路下继续工作，但不代表历史 runtime 已完全删除。后续会把导入导出、地图/Canvas 副作用、持久化和剩余 DOM 编排渐进迁入 typed controller 与 manager；新增模块化代码不应重新复制进生成 HTML。
+`src/app/runtime.ts` 已从 8,089 行收口到约 340 行，只保留 core/app 兼容绑定、版本、启动恢复、统一命令注册和初始刷新。文件、存储、地图、Marker、海拔、测距、分段、Day、下撤、轨迹变更、localization 和 DOM 编排分别由 13 个垂直 runtime owner 单独持有；`composeClassicRuntime()` 按原顺序组合一次，不保留旧实现或双路径。文件拆分目标已经完成，后续工作是把这些仍属 classic 的 owner 逐步改造成显式 context 的 typed controller，而不是继续缩短启动胶水。
 
 ## 开发与测试
 
@@ -109,7 +110,7 @@ npm run test:visual:capture
 | Milestone 5：发布链路 | 完成 | Vite 单文件构建、发布元数据、完整检查和 GitHub Pages 部署固定 |
 | Milestone 6：入口与编排 | 完成 | Outdoor Route Studio 命名、小壳入口、bootstrap、四个 manager 与七侧栏/五底栏契约落位 |
 
-Milestone 6 完成的是新的入口和编排边界，不是宣称 `runtime.ts` 已经清零。渐进拆分兼容层仍是后续架构工作的首要事项。
+Milestone 6 已完成入口边界和 classic runtime 的垂直拆分；`runtime.ts` 只剩约 340 行启动/命令胶水。这里不宣称 13 个 owner 已全部强类型化，后续重构重点转为显式依赖和 typed controller。
 
 ## GPX / GeoJSON
 

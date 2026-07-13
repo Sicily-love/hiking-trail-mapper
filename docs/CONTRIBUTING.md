@@ -49,7 +49,8 @@ dist/                         自动生成的 Pages 发布目录
 | Leaflet / IndexedDB 副作用 | `src/adapters` |
 | DOM 壳、Workbench、响应式布局、dialog | `src/ui` |
 | 全局或 vendor 样式 | `src/styles` |
-| 过渡旧浏览器编排 | `src/app/runtime.ts`，并附迁移边界 |
+| 已拆分的 classic 浏览器编排 | 对应 `src/features/*/runtime.ts` 或 `src/ui/orchestration/runtime.ts` |
+| 尚未拆分的兼容编排 | `src/app/runtime.ts`，并附迁移边界 |
 
 优先复用现有 owner，不为一个局部改动新建平行架构。
 
@@ -71,18 +72,18 @@ index.html -> src/main.ts -> bootstrapOutdoorRouteStudio()
 
 ## 迁移 runtime.ts
 
-`src/app/runtime.ts` 是仍在使用的 classic-runtime 兼容层，不是已废弃的空文件。可以修复其中尚未迁出的生产 bug，但新功能应尽量进入 typed owner。
+`src/app/runtime.ts` 是约 340 行的启动/命令兼容模板，目前受 400 行护栏约束。全部浏览器编排已有 13 个单独 owner，禁止把任何实现重新写回模板。生产修复应进入对应 owner；新功能应尽量直接进入 typed controller。
 
 迁移一个行为的推荐步骤：
 
 1. 为当前行为补单元、浏览器或 E2E 回归。
 2. 抽出 DOM-free 计算和 feature state。
 3. 接入合适的 manager/controller/adapter。
-4. 让旧入口转发到新实现。
-5. 删除 `runtime.ts` 中被完全替代的分支。
+4. 在现有功能 owner 中修改，或增加一个 typed 入口；只有确需保持 classic 顺序时才增加命名 fragment，并在原位置保留唯一 slot。
+5. 同一提交删除 `runtime.ts` 中对应实现，确认组合后只有一份定义。
 6. 构建单 HTML并跑真实浏览器测试。
 
-不要复制一份新实现后把旧实现留在原处；也不要仅因文件改名就宣称 runtime 已完成拆分。
+不要复制一份新实现后把旧实现留在原处；不要新增第二个 slot；也不要仅因文件改名就宣称 typed 迁移已经完成。`test_runtime_composition.js` 必须保持通过。
 
 ## 四个管理器怎么选
 

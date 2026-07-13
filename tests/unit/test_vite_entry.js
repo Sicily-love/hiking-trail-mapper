@@ -44,7 +44,12 @@ T('bootstrap mounts the shell and activates source modules once', () => {
   const bootstrap = read('src/app/bootstrap.ts');
   assert.ok(bootstrap.includes("import * as core from '../core/index.ts'"));
   assert.ok(bootstrap.includes("import * as app from './index.ts'"));
-  assert.ok(bootstrap.includes("import runtimeSource from './runtime.ts?raw'"));
+  assert.ok(bootstrap.includes("import runtimeTemplate from './runtime.ts?raw'"));
+  assert.ok(bootstrap.includes("import { composeClassicRuntime } from './runtime/compose.ts'"));
+  assert.ok(bootstrap.includes("import fileRuntimeSource from '../features/files/runtime.ts?raw'"));
+  assert.ok(bootstrap.includes("import appClassicRuntimeSource from './runtime/classic.ts?raw'"));
+  assert.ok(bootstrap.includes("import measureRuntimeSource from '../features/measure/runtime.ts?raw'"));
+  assert.ok(bootstrap.includes('const runtimeSource = composeClassicRuntime(runtimeTemplate'));
   assert.ok(bootstrap.includes('mountAppShell(root)'));
   assert.ok(bootstrap.includes('window.HikingTrailCore = core'));
   assert.ok(bootstrap.includes('window.HikingTrailApp = app'));

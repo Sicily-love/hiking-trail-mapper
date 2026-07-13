@@ -26,7 +26,7 @@ Visual and real-Chrome checks require an environment that can launch a browser. 
 
 1. `src/` is the behavior source of truth; tests do not treat generated HTML as editable implementation.
 2. `index.html` and `hiking-trail-mapper.html` have different roles and must no longer be asserted byte-identical.
-3. `runtime.ts` remains a transitional compatibility layer; tests protect its migration boundary and do not assume it is gone.
+3. `runtime.ts` is boot/command compatibility glue; tests enforce its 400-line cap and unique named fragments.
 4. Pure functions use Node unit tests; DOM/Canvas/Leaflet behavior uses browser tests; complete user workflows use E2E.
 5. When behavior moves out of `runtime.ts`, preserve the old behavior test first, switch the owner, then delete the old path.
 
@@ -48,7 +48,7 @@ Build contracts:
 - The Vite entry is the root `index.html` shell.
 - `index.html` contains only `#app`, product metadata, and `/src/main.ts`.
 - `src/main.ts` imports styles and calls `bootstrapOutdoorRouteStudio()`.
-- Bootstrap mounts the Workbench before vendors, typed modules, and the `runtime.ts` bridge start.
+- Bootstrap mounts the Workbench before vendors and typed modules, then composes vertical owners into the one classic runtime.
 - Temporary `.vite-build/index.html` references no external JavaScript/CSS assets.
 - `.vite-build/hiking-trail-mapper.html` is an identical compatibility alias.
 - `.vite-build/release.json` records product, version, date, hash, and entrypoints.
@@ -65,6 +65,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_measure_itinerary.js` | A/B measurement, segmentation, Day ranges, elevation layout, and render models |
 | `test_performance_core.js` | Elevation segmentation, Canvas min/max downsampling, waypoint diffs, and track revisions |
 | `test_app_architecture.js` | App state, feature controllers, adapters, and Workbench fit planning |
+| `test_runtime_composition.js` | The 400-line boot-glue guardrail, vertical-fragment ownership, and missing/duplicate/unused rejection |
 | `test_interaction_manager.js` | Session exclusivity, owner/session guards, AbortController, and timer/RAF cleanup |
 | `test_interaction_runtime.js` | Runtime contracts wiring all five map modes to the unified interaction state machine |
 | `test_render_scheduler.js` | Dirty-mask coalescing, fixed flush order, next-frame re-entry, and fit epochs |
@@ -81,7 +82,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 
 `python3 scripts/release/check_release_metadata.py` should verify:
 
-- `package.json` / lockfile, `APP_VERSION`, CHANGELOG, and README versions agree;
+- `package.json` / lockfile, runtime `APP_VERSION`, localization CHANGELOG, and README versions agree;
 - the product name is Outdoor Route Studio;
 - the shell title, runtime release metadata, and generated HTML comment agree;
 - `release.json` matches the single-HTML hash and byte count;
