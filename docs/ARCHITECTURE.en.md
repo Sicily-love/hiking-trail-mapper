@@ -36,7 +36,7 @@ src/
 ├── core/                           DOM-free math, parsing, storage, and render models
 │   └── performance/               Large-track segmentation, downsampling, diffs, and revisions
 ├── features/
-│   ├── files/runtime.ts            KML/ZIP import, parsing, and export
+│   ├── files/                      Typed import controller plus KML/DOM/export adapter
 │   ├── storage/                    Typed controller plus restore/UI adapter
 │   ├── map/runtime.ts              Track / Leaflet rendering
 │   ├── waypoint/runtime.ts         Waypoint / marker diff rendering
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` now aggregates the six stable project, state, command, interaction, renderer, and dialog services. Both `trails/controller.ts` and `storage/controller.ts` now use that boundary. The latter owns IndexedDB connection reuse, debounced saves, snapshot reads/writes, clearing, availability, and typed events; the classic storage owner retains only storage-information UI and legacy-trail restoration fixes. Remaining owners should follow this pattern one at a time without copying code back into the template.
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, and file import now use typed controllers. `FileImportController` owns ZIP expansion, content deduplication, unique IDs, project admission, ID/source edits, and import commit; the classic files owner retains DOM feedback, browser KML parsing, and export. Remaining owners should follow this pattern one at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 

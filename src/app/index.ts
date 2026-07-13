@@ -43,6 +43,16 @@ export {
   type StorageControllerEvent,
 } from '../features/storage/controller.ts';
 export {
+  createFileImportController,
+  type AddTrailResult,
+  type FileImportController,
+  type FileImportControllerDependencies,
+  type FileImportEvent,
+  type ImportFileLike,
+  type ImportTrail,
+  type RenameTrailResult,
+} from '../features/files/import-controller.ts';
+export {
   CommandRegistry,
   STUDIO_COMMANDS,
   type CommandRegistryEvent,

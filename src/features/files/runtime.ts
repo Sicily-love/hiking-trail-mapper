@@ -38,6 +38,33 @@ kmlFile.addEventListener('change', e => handleFiles(e.target.files));
 
 const PALETTE_LOCAL = ['#f97316','#3b82f6','#10b981','#a855f7','#eab308','#ec4899','#06b6d4','#f59e0b','#84cc16'];
 
+function handleFileImportEvent(event) {
+  if(event.type === 'archive.expanded') {
+    kmlList.innerHTML += `<div style="color:#5cb85c;font-size:11px">📦 ${event.archiveName} → 提取 ${event.count} 个 KML</div>`;
+  } else if(event.type === 'archive.empty') {
+    kmlList.innerHTML += `<div style="color:#ff8888">❌ ${event.archiveName}：压缩包内未找到 .kml 文件</div>`;
+  } else if(event.type === 'archive.failed') {
+    console.error('[expandZipFiles] 解压 zip 失败:', event.archiveName, event.error);
+    const detail = event.error && event.error.message ? event.error.message : String(event.error);
+    kmlList.innerHTML += `<div style="color:#ff8888">❌ ${event.archiveName}：解压失败（${detail}）</div>`;
+  }
+}
+
+const fileImportController = HTM_APP.createFileImportController(runtimeContext, {
+  contentHash:trailContentHash,
+  unzip:bytes => {
+    if(typeof fflate === 'undefined' || typeof fflate.unzipSync !== 'function') {
+      throw new Error('fflate 未加载，无法解压 zip');
+    }
+    return fflate.unzipSync(bytes);
+  },
+  decode:bytes => new TextDecoder('utf-8').decode(bytes),
+  palette:PALETTE_LOCAL,
+  onEvent:handleFileImportEvent,
+  commit:() => applyChange({fit:false}),
+  resetView:() => { if(typeof resetView === 'function') resetView(); },
+});
+
 
 /* ═════════════════════════════════════════════════════════════════
    File Import Pipeline（v1.18.0 拆分：主函数 + 6 个辅助）
@@ -57,55 +84,14 @@ const PALETTE_LOCAL = ['#f97316','#3b82f6','#10b981','#a855f7','#eab308','#ec489
  * @returns {Promise<Array<File | {name:string, text:()=>Promise<string>, _fromZip:string}>>}
  */
 async function expandZipFiles(files) {
-  const expanded = [];
-  for(const f of files) {
-    const lower = f.name.toLowerCase();
-    if(!(lower.endsWith('.zip') || lower.endsWith('.kml.zip'))) {
-      expanded.push(f); continue;
-    }
-    try {
-      const buf = new Uint8Array(await f.arrayBuffer());
-      if(typeof fflate === 'undefined' || typeof fflate.unzipSync !== 'function') {
-        throw new Error('fflate 未加载，无法解压 zip');
-      }
-      const entries = fflate.unzipSync(buf);
-      let picked = 0;
-      for(const [path, bytes] of Object.entries(entries)) {
-        if(!path.toLowerCase().endsWith('.kml')) continue;
-        // 跳过 __MACOSX 和隐藏文件（macOS 打包容易带进去）
-        if(path.startsWith('__MACOSX/') || path.split('/').some(seg => seg.startsWith('.'))) continue;
-        const text = new TextDecoder('utf-8').decode(bytes);
-        expanded.push({
-          name: path.split('/').pop() || path,
-          _fromZip: f.name,
-          text: async () => text,
-        });
-        picked++;
-      }
-      if(picked === 0) {
-        kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：压缩包内未找到 .kml 文件</div>`;
-      } else {
-        kmlList.innerHTML += `<div style="color:#5cb85c;font-size:11px">📦 ${f.name} → 提取 ${picked} 个 KML</div>`;
-      }
-    } catch(err) {
-      console.error('[expandZipFiles] 解压 zip 失败:', f.name, err);
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：解压失败（${err.message}）</div>`;
-    }
-  }
-  return expanded;
+  return fileImportController.expandFiles(files);
 }
 
 /**
  * 保证 trail.id 在 DATA.trails 中唯一（时间戳+随机极端撞车时补序号）
  */
 function ensureUniqueTrailId(trail) {
-  let safeId = trail.id;
-  let suffix = 0;
-  while(DATA.trails.some(t => t.id === safeId)) {
-    suffix++;
-    safeId = trail.id + '-' + suffix;
-  }
-  trail.id = safeId;
+  return fileImportController.ensureUniqueId(trail);
 }
 
 /**
@@ -113,14 +99,7 @@ function ensureUniqueTrailId(trail) {
  * @returns {Trail|null} 重复的现有轨迹；null 表示不重复
  */
 function findDuplicateTrail(trail) {
-  const newHash = trailContentHash(trail);
-  const dup = DATA.trails.find(t => {
-    if(!t._contentHash) t._contentHash = trailContentHash(t);
-    return t._contentHash === newHash;
-  });
-  if(dup) return dup;
-  trail._contentHash = newHash;
-  return null;
+  return fileImportController.findDuplicate(trail);
 }
 
 /**
@@ -154,10 +133,10 @@ function bindKmlImportRowEvents(row, trail) {
 
   idInput.addEventListener('change', () => {
     const newId = idInput.value.trim();
-    const tr = DATA.trails.find(x => x.id === cachedTid);
-    if(!tr || newId === cachedTid) return;
-    if(!newId) { idInput.value = cachedTid; return; }
-    if(DATA.trails.some(other => other !== tr && other.id === newId)) {
+    const result = fileImportController.renameTrail(cachedTid, newId);
+    if(result.status === 'missing' || result.status === 'unchanged') return;
+    if(result.status === 'empty') { idInput.value = cachedTid; return; }
+    if(result.status === 'duplicate') {
       void studioDialogs.info({
         title:currentLang === 'zh' ? '无法修改 ID' : 'Cannot change ID',
         message:'ID 已存在 / ID already exists',
@@ -166,20 +145,13 @@ function bindKmlImportRowEvents(row, trail) {
       idInput.value = cachedTid;
       return;
     }
-    const oldId = cachedTid;
-    tr.id = newId;
-    dispatchState({type:'trail-id.rename', oldId, newId});
-    cachedTid = newId;
-    srcInput.dataset.tid = newId;
-    idInput.dataset.tid = newId;
-    applyChange();
+    cachedTid = result.newId;
+    srcInput.dataset.tid = result.newId;
+    idInput.dataset.tid = result.newId;
   });
 
   srcInput.addEventListener('change', () => {
-    const tr = DATA.trails.find(x => x.id === cachedTid);
-    if(!tr) return;
-    tr.source = srcInput.value.trim();
-    applyChange();
+    fileImportController.updateSource(cachedTid, srcInput.value);
   });
 }
 
@@ -204,18 +176,11 @@ async function importSingleKml(f) {
       return 'failed';
     }
 
-    const dup = findDuplicateTrail(trail);
-    if(dup) {
-      kmlList.innerHTML += `<div style="color:#f59e0b">⚠ ${displayLabel}：与「${dup.name}」重复，已跳过</div>`;
+    const result = fileImportController.addTrail(trail);
+    if(result.status === 'duplicate') {
+      kmlList.innerHTML += `<div style="color:#f59e0b">⚠ ${displayLabel}：与「${result.duplicate.name}」重复，已跳过</div>`;
       return 'skipped';
     }
-
-    ensureUniqueTrailId(trail);
-    trail.color = PALETTE_LOCAL[DATA.trails.length % PALETTE_LOCAL.length];
-    // v1.20.0：当前无选中分组时，新轨迹归入「默认」组（否则会成为"孤儿"）
-    if(!trail.group) trail.group = state.activeGroup || '默认';
-    DATA.trails.push(trail);
-    dispatchState({type:'active-trail.set', trailId:trail.id, active:true});
 
     renderKmlImportRow(displayLabel, trail);
     addStatus.textContent = '';
@@ -232,7 +197,6 @@ async function importSingleKml(f) {
  */
 function postImportFinalize(addedCount) {
   if(addedCount === 0) return;
-  dispatchState({type:'escape.set-active', escapeId:null});
   if(state.autoGenerateEscape) {
     for(const tr of DATA.trails) {
       if(!tr.waypoints || !tr.track || !tr.track.length) continue;
@@ -241,9 +205,7 @@ function postImportFinalize(addedCount) {
       tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
     }
   }
-  applyChange({ fit: false });
-  // v1.22.0：导入完成后自动执行完整复位
-  if(typeof resetView === 'function') resetView();
+  fileImportController.finalizeImport(addedCount);
 }
 
 async function handleFiles(files) {
