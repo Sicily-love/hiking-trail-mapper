@@ -66,6 +66,7 @@ npm run check:generated
 | `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 classic adapter 边界 |
 | `test_segment_controller.js` | typed 分段编辑、营地重编号、Day 提交和 classic adapter 边界 |
 | `test_day_preview_controller.js` | typed Day 预览计划、选择生命周期和 core/runtime 边界 |
+| `test_escape_controller.js` | 下撤 A/B 吸附、正反向统计、抽稀、提交/删除和 classic adapter 边界 |
 | `test_measure_itinerary.js` | A/B 测距、分段、Day 范围、海拔布局和 render model |
 | `test_performance_core.js` | 海拔分段、Canvas min/max 抽稀、waypoint diff 与 track revision |
 | `test_app_architecture.js` | app state、feature controller、adapter 与 Workbench fit 计划 |

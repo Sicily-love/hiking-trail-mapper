@@ -243,6 +243,8 @@ try:
           evalj("typeof segmentController === 'object' && segmentState === segmentController.state && typeof segmentController.apply === 'function'"))
     check("typed DayPreviewController 已接管 Day 选择状态",
           evalj("typeof dayPreviewController === 'object' && dayPreviewState === dayPreviewController.state && typeof dayPreviewController.prepare === 'function'"))
+    check("typed EscapeController 已接管下撤状态与路线写入",
+          evalj("typeof escapeController === 'object' && addEscapeState === escapeController.state && typeof escapeController.commit === 'function'"))
 
     check("handleFiles 已瘦身（< 30 行）",
           evalj("handleFiles.toString().split('\\n').length < 30"),

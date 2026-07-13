@@ -51,6 +51,14 @@ export {
   type SegmentTrail,
   type SegmentTrailWaypoint,
 } from '../features/segment/controller.ts';
+export {
+  createEscapeController,
+  createEscapeInteractionState,
+  type EscapeController,
+  type EscapeControllerDependencies,
+  type EscapeInteractionState,
+  type EscapeTrail,
+} from '../features/escape/controller.ts';
 export { createElevationDockState, toggleElevationDock } from '../features/elevation/controller.ts';
 export { upsertLeafletPolyline } from '../adapters/leaflet.ts';
 export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';

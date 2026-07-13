@@ -133,6 +133,16 @@ export {
 } from './render.ts';
 
 export {
+  buildManualEscapeRoute,
+  type EscapeAnchorPoint,
+  type EscapeReferenceTrail,
+  type EscapeRoute,
+  type EscapeRouteAnchor,
+  type EscapeRoutePreview,
+  type EscapeRoutePreviewResult,
+} from './escape.ts';
+
+export {
   buildStorageDeleteOperation,
   buildStorageReadOperation,
   buildStorageWriteOperation,

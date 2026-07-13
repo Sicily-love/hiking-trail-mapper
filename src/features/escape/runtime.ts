@@ -5,19 +5,17 @@ export {};
 
 /* @runtime-fragment escape.display */
 /* ============ Escape ============ */
+const escapeController = HTM_APP.createEscapeController(runtimeContext, {
+  markRevision:markTrailRevision,
+});
+const addEscapeState = escapeController.state;
+
 function showEscape(trailId, escapeId) {
   escapeLayer.clearLayers();
-  dispatchState({type:'escape.set-active', escapeId:null});
-  drawTracks();  // 重绘以淡化
-
-  if(!escapeId) return;
-  const trail = DATA.trails.find(t => t.id === trailId);
-  if(!trail) return;
-  const r = trail.escape_routes.find(e => e.id === escapeId);
+  const r = escapeId ? escapeController.selectDisplayedRoute(trailId, escapeId) : null;
+  if(!escapeId) escapeController.clearDisplayedRoute();
+  drawTracks();
   if(!r) return;
-
-  dispatchState({type:'escape.set-active', escapeId});
-  drawTracks();  // 再画一次（淡化版）
 
   const pl = L.polyline(r.line, {
     color:'#ff3030', weight:5.5, opacity:0.95,
@@ -36,7 +34,7 @@ function showEscape(trailId, escapeId) {
 
 function clearEscape() {
   escapeLayer.clearLayers();
-  dispatchState({type:'escape.set-active', escapeId:null});
+  escapeController.clearDisplayedRoute();
   drawTracks();
   document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
 }
@@ -77,11 +75,12 @@ function buildEscapeTab() {
       item.addEventListener('click', e => {
         if(e.target.classList.contains('escape-del-btn')) {
           const delId = e.target.dataset.id;
-          trail.escape_routes = trail.escape_routes.filter(x => x.id !== delId);
-          markTrailRevision(trail);
-          if(state.activeEscape === delId) clearEscape();
-          saveToStorage();
-          buildEscapeTab();
+          const wasActive = state.activeEscape === delId;
+          if(escapeController.deleteRoute(trail.id, delId)) {
+            if(wasActive) clearEscape();
+            saveToStorage();
+            buildEscapeTab();
+          }
           return;
         }
         if(state.activeEscape === r.id) {
@@ -108,45 +107,16 @@ function buildEscapeTab() {
 
 /* @runtime-fragment escape.interaction */
 /* ============ 手动添加下撤路线 ============ */
-const addEscapeState = {
-  active: false,
-  trailId: null,
-  ptA: null,   // {lat, lng, elev, trailId, trackIdx}
-  ptB: null,
-  layer: null,
-  _pending: null, // 待保存的路线对象
-};
-
-// 在所有活跃轨迹中，找离 (lat,lng) 最近的轨迹点
-function nearestPointOnAnyTrail(lat, lng) {
-  let best = null, bestD = Infinity;
-  for(const tr of DATA.trails) {
-    if(!isTrailActive(tr)) continue;
-    if(!tr.track || !tr.track.length) continue;
-    for(let i = 0; i < tr.track.length; i++) {
-      const p = tr.track[i];
-      const d = haversine(lat, lng, p[0], p[1]);
-      if(d < bestD) {
-        bestD = d;
-        best = { lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0,
-                 trailId: tr.id, trailName: tr.name, trackIdx: i };
-      }
-    }
-  }
-  return bestD < 2000 ? best : null; // 2km 内才吸附
-}
 
 function handleEscapeInteractionEvent(event, session) {
   if(event.type !== 'tap') return;
-  const hit = nearestPointOnAnyTrail(event.latlng.lat, event.latlng.lng);
+  const hit = escapeController.nearestPoint(event.latlng.lat, event.latlng.lng);
   if(!hit) {
     showToast('请点击轨迹附近（2km 内）', 'error');
     return;
   }
   if(session.phase === 'select-a') {
-    addEscapeState.ptA = hit;
-    addEscapeState.ptB = null;
-    addEscapeState._pending = null;
+    escapeController.selectA(hit);
     addEscapeState.layer.clearLayers();
     L.circleMarker([hit.lat, hit.lng], {radius:8, color:'#fff', weight:2, fillColor:'#22c55e', fillOpacity:1})
       .bindTooltip('A（起点）', {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'})
@@ -159,7 +129,7 @@ function handleEscapeInteractionEvent(event, session) {
   }
   if(session.phase === 'preview') session.setPhase('select-b');
   if(session.phase !== 'select-b') return;
-  addEscapeState.ptB = hit;
+  escapeController.selectB(hit);
   addEscapeCompute();
 }
 
@@ -170,13 +140,9 @@ function addEscapeEnter() {
     onEvent: handleEscapeInteractionEvent,
     onCancel: opts => addEscapeExit(opts),
   });
-  addEscapeState.active = true;
-  addEscapeState.trailId = main.id;
+  if(!escapeController.enter(main.id)) return;
   const btn = document.getElementById('add-escape-btn');
   if(btn) btn.classList.add('on');
-  addEscapeState.ptA = null;
-  addEscapeState.ptB = null;
-  addEscapeState._pending = null;
   if(!addEscapeState.layer) addEscapeState.layer = L.layerGroup().addTo(map);
   addEscapeState.layer.clearLayers();
   document.getElementById('addescape-panel').style.display = 'block';
@@ -188,22 +154,16 @@ function addEscapeEnter() {
 
 function addEscapeExit(opts = {}) {
   if(!opts.fromManager && cancelRuntimeInteraction('escape', opts.reason || 'cancelled')) return;
-  addEscapeState.active = false;
-  addEscapeState.trailId = null;
+  escapeController.exit();
   const btn = document.getElementById('add-escape-btn');
   if(btn) btn.classList.remove('on');
-  addEscapeState.ptA = null;
-  addEscapeState.ptB = null;
-  addEscapeState._pending = null;
   if(addEscapeState.layer) addEscapeState.layer.clearLayers();
   document.getElementById('addescape-panel').style.display = 'none';
   map.getContainer().style.cursor = '';
 }
 
 function addEscapeReset() {
-  addEscapeState.ptA = null;
-  addEscapeState.ptB = null;
-  addEscapeState._pending = null;
+  escapeController.reset();
   if(addEscapeState.layer) addEscapeState.layer.clearLayers();
   document.getElementById('addescape-result').style.display = 'none';
   document.getElementById('addescape-hint').innerHTML =
@@ -212,116 +172,59 @@ function addEscapeReset() {
 }
 
 function addEscapeCompute() {
-  const a = addEscapeState.ptA, b = addEscapeState.ptB;
-  if(!a || !b) return;
-
-  // 找两点共同最近的轨迹（优先同一条；若不同条，选 A 所在轨迹）
-  let refTrailId = a.trailId;
-  // 如果 B 在同一轨迹上，直接用该轨迹；否则也用 A 的轨迹（B 已 snap 到该轨迹）
-  // 重新 snap B 到 refTrail 上
-  const refTrail = DATA.trails.find(t => t.id === refTrailId);
-  if(!refTrail) return;
-
-  // 在 refTrail.track 上找 A、B 最近点
-  function snapToTrail(lat, lng, track) {
-    let best = 0, bestD = Infinity;
-    for(let i = 0; i < track.length; i++) {
-      const d = haversine(lat, lng, track[i][0], track[i][1]);
-      if(d < bestD) { bestD = d; best = i; }
+  const result = escapeController.compute();
+  if(!result.ok) {
+    if(result.reason === 'same-point') {
+      showToast('两点太近，请重新选择', 'error');
     }
-    return { idx: best, pt: track[best] };
+    return false;
   }
-  const snapA = snapToTrail(a.lat, a.lng, refTrail.track);
-  const snapB = snapToTrail(b.lat, b.lng, refTrail.track);
-
-  if(snapA.idx === snapB.idx) {
-    showToast('两点太近，请重新选择', 'error'); return;
-  }
-
-  const i1 = Math.min(snapA.idx, snapB.idx);
-  const i2 = Math.max(snapA.idx, snapB.idx);
-  const seg = refTrail.track.slice(i1, i2 + 1);
-
-  // 计算里程
-  let dist_m = 0;
-  for(let i = 1; i < seg.length; i++) {
-    dist_m += haversine(seg[i-1][0], seg[i-1][1], seg[i][0], seg[i][1]);
-  }
-  const elevs = seg.map(p => p[2] || 0);
-  const asc = Math.round((accumulatorAscent(elevs, 10) || [0]).slice(-1)[0]);
-  const desc = Math.round((accumulatorDescent(elevs, 10) || [0]).slice(-1)[0]);
-  const drop = Math.round(snapA.pt[2] - snapB.pt[2]);
-  const km = +(dist_m / 1000).toFixed(1);
-
-  // 抽稀构建 line
-  const line = [];
-  for(let i = 0; i < seg.length; i += Math.max(1, Math.floor(seg.length / 200))) {
-    line.push([+seg[i][0].toFixed(6), +seg[i][1].toFixed(6)]);
-  }
-  if(line[line.length-1][0] !== seg[seg.length-1][0]) {
-    line.push([+seg[seg.length-1][0].toFixed(6), +seg[seg.length-1][1].toFixed(6)]);
-  }
+  const preview = result.preview;
+  const route = preview.route;
+  if(!route._anchor) return false;
+  if(!route.line.length) return false;
+  const pointA = preview.pointA;
+  const pointB = preview.pointB;
 
   // 预览高亮
   addEscapeState.layer.clearLayers();
-  L.circleMarker([snapA.pt[0], snapA.pt[1]], {radius:8, color:'#fff', weight:2, fillColor:'#22c55e', fillOpacity:1})
+  L.circleMarker([pointA.lat, pointA.lng], {radius:8, color:'#fff', weight:2, fillColor:'#22c55e', fillOpacity:1})
     .bindTooltip('A（起点）', {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'})
     .addTo(addEscapeState.layer);
-  L.circleMarker([snapB.pt[0], snapB.pt[1]], {radius:8, color:'#fff', weight:2, fillColor:'#ef4444', fillOpacity:1})
+  L.circleMarker([pointB.lat, pointB.lng], {radius:8, color:'#fff', weight:2, fillColor:'#ef4444', fillOpacity:1})
     .bindTooltip('B（终点）', {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'})
     .addTo(addEscapeState.layer);
-  L.polyline(line, {color:'#f87171', weight:5, opacity:0.9, dashArray:'10,7'}).addTo(addEscapeState.layer);
-  map.flyToBounds(L.latLngBounds(line).pad(0.2), {duration:0.6});
+  L.polyline(route.line, {color:'#f87171', weight:5, opacity:0.9, dashArray:'10,7'}).addTo(addEscapeState.layer);
+  map.flyToBounds(L.latLngBounds(route.line).pad(0.2), {duration:0.6});
 
   // 填充面板
-  document.getElementById('ae-dist').textContent = km + ' km';
-  document.getElementById('ae-trail').textContent = refTrail.name;
-  document.getElementById('ae-asc').textContent = asc + ' m';
-  document.getElementById('ae-desc').textContent = desc + ' m';
-  document.getElementById('ae-eA').textContent = Math.round(snapA.pt[2] || 0) + ' m';
-  document.getElementById('ae-eB').textContent = Math.round(snapB.pt[2] || 0) + ' m';
+  document.getElementById('ae-dist').textContent = route.distance_km + ' km';
+  document.getElementById('ae-trail').textContent = route._anchor.trailName;
+  document.getElementById('ae-asc').textContent = preview.ascentM + ' m';
+  document.getElementById('ae-desc').textContent = preview.descentM + ' m';
+  document.getElementById('ae-eA').textContent = Math.round(pointA.elev) + ' m';
+  document.getElementById('ae-eB').textContent = Math.round(pointB.elev) + ' m';
 
-  const autoName = `手动下撤 A→B（${refTrail.name}，${km}km）`;
-  document.getElementById('addescape-name').value = autoName;
+  document.getElementById('addescape-name').value = route.name;
   document.getElementById('addescape-result').style.display = 'block';
   document.getElementById('addescape-hint').textContent = '✓ 路线已预览。确认后点击「保存」。';
-
-  const direction = snapA.idx < snapB.idx ? '正向' : '逆向（反方向）';
-  addEscapeState._pending = {
-    id: `manual-escape-${Date.now()}`,
-    name: autoName,
-    desc: `手动选点 · ${direction} · 依据轨迹《${refTrail.name}》，沿轨迹约 ${km}km，落差 ${Math.abs(drop)}m（${drop > 0 ? '下降' : drop < 0 ? '上升' : '平路'}）。↑${asc}m ↓${desc}m`,
-    distance_km: km, drop_m: drop, line,
-    _manual: true,
-    _anchor: { trailId: refTrailId, trailName: refTrail.name },
-  };
   setRuntimeInteractionPhase('escape', 'preview');
   return true;
 }
 
 function addEscapeCommit() {
-  const pending = addEscapeState._pending;
-  if(!pending) return;
-  const trail = DATA.trails.find(t => t.id === state.primaryTrailId);
-  if(!trail) { showToast('请先设置主轨迹', 'error'); return; }
-  if(!trail.escape_routes) trail.escape_routes = [];
+  if(!addEscapeState._pending) return;
   if(!setRuntimeInteractionPhase('escape', 'committing')) return;
-  // 用用户填写的名称覆盖
   const nameInput = document.getElementById('addescape-name').value.trim();
-  if(nameInput) {
-    pending.name = nameInput;
-    pending.desc = pending.desc.replace(/^手动选点.*?）/, `${nameInput}`).replace(/^[^·]+·/, `${nameInput} ·`);
-    // 重写 desc 更简洁
-    pending.desc = `手动标注 · 依据轨迹《${pending._anchor.trailName}》，沿轨迹约 ${pending.distance_km}km，落差 ${Math.abs(pending.drop_m)}m（${pending.drop_m > 0 ? '下降' : pending.drop_m < 0 ? '上升' : '平路'}）。`;
-    pending.name = nameInput;
+  const route = escapeController.commit(nameInput);
+  if(!route) {
+    setRuntimeInteractionPhase('escape', 'preview');
+    showToast('下撤状态已失效，请重新选择', 'error');
+    return;
   }
-  // 去重（同 id）
-  trail.escape_routes = trail.escape_routes.filter(r => r.id !== pending.id);
-  trail.escape_routes.push(pending);
-  markTrailRevision(trail);
   saveToStorage();
   buildEscapeTab();
-  showToast(`✓ 下撤路线「${pending.name}」已保存`);
+  showToast(`✓ 下撤路线「${route.name}」已保存`);
   addEscapeExit({reason:'committed'});
 }
 

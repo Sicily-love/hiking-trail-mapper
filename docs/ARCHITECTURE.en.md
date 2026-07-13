@@ -45,7 +45,7 @@ src/
 │   ├── measure/                    Typed session controller plus Leaflet segment adapter
 │   ├── segment/                    Typed edit/commit controller plus Leaflet/DOM adapter
 │   ├── itinerary/                  Typed Day-preview controller plus itinerary DOM/Leaflet adapter
-│   ├── escape/runtime.ts           Escape display, sidebar, and interaction
+│   ├── escape/                     Typed route controller plus sidebar/Leaflet adapter
 │   └── trails/                     Typed controller plus classic UI adapter
 ├── adapters/                       Leaflet and IndexedDB effect boundaries
 ├── ui/
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import, waypoint, measure, segment, and Day preview now use typed controllers. `DayPreviewController` prepares core-derived ranges, thinned lines, and statistics, then owns selection state after the unified interaction session starts; the classic itinerary owner retains itinerary DOM, Leaflet highlighting, viewport fitting, and elevation readouts. Remaining owners should follow this pattern one at a time without copying code back into the template.
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import, waypoint, measure, segment, Day preview, and escape now use typed controllers. `DayPreviewController` prepares core-derived ranges, thinned lines, and statistics. `EscapeController` owns visible-track snapping, the A/B lifecycle, direction-correct route statistics, commits, selection, and deletion. Their classic owners retain only DOM, Leaflet highlighting, viewport fitting, and readouts. Remaining owners should follow this pattern one at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 
