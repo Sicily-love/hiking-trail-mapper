@@ -43,7 +43,7 @@ src/
 │   ├── elevation/runtime.ts        Elevation Canvas effects
 │   ├── localization/runtime.ts     i18n, changelog, and language DOM
 │   ├── measure/                    Typed session controller plus Leaflet segment adapter
-│   ├── segment/runtime.ts          Segment editing and apply flow
+│   ├── segment/                    Typed edit/commit controller plus Leaflet/DOM adapter
 │   ├── itinerary/runtime.ts        Day preview and itinerary DOM
 │   ├── escape/runtime.ts           Escape display, sidebar, and interaction
 │   └── trails/                     Typed controller plus classic UI adapter
@@ -89,7 +89,7 @@ index.html
 
 `bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import, waypoint, and measure now use typed controllers. `MeasureController` owns the A/B session, drag suppression, reverse/reset behavior, and asynchronous compute sequence; the classic measure owner retains track snapping, Leaflet layers, and DOM/Canvas updates. Remaining owners should follow this pattern one at a time without copying code back into the template.
+The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import, waypoint, measure, and segment now use typed controllers. `SegmentController` owns boundary restore/insert/drag/delete, camp-edit renumbering, and the atomic track Day, `day_meta`, and waypoint Day commit; the classic segment owner retains snapping, Leaflet layers, DOM inputs, and post-commit refresh. Remaining owners should follow this pattern one at a time without copying code back into the template.
 
 This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
 

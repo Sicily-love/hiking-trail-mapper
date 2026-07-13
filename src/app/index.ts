@@ -33,8 +33,19 @@ export {
 export {
   clearDayPreviewState,
   createDayPreviewInteractionState,
-  createSegmentInteractionState,
 } from '../features/itinerary/controller.ts';
+export {
+  createSegmentController,
+  createSegmentInteractionState,
+  type SegmentApplyResult,
+  type SegmentController,
+  type SegmentControllerDependencies,
+  type SegmentEditReason,
+  type SegmentEditResult,
+  type SegmentInteractionState,
+  type SegmentTrail,
+  type SegmentTrailWaypoint,
+} from '../features/segment/controller.ts';
 export { createElevationDockState, toggleElevationDock } from '../features/elevation/controller.ts';
 export { upsertLeafletPolyline } from '../adapters/leaflet.ts';
 export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';

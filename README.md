@@ -83,7 +83,7 @@ index.html
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
-`src/app/runtime.ts` 已从 8,089 行收口到约 340 行，只保留 core/app 兼容绑定、版本、启动恢复、统一命令注册和初始刷新。文件、存储、地图、Marker、海拔、测距、分段、Day、下撤、轨迹变更、localization 和 DOM 编排分别由 13 个垂直 runtime owner 单独持有；`composeClassicRuntime()` 按原顺序组合一次，不保留旧实现或双路径。文件拆分目标已经完成，trail、storage、file import、waypoint 和 measure 已迁入 typed controller，后续继续收紧其余 classic owner 的状态所有权。
+`src/app/runtime.ts` 已从 8,089 行收口到约 340 行，只保留 core/app 兼容绑定、版本、启动恢复、统一命令注册和初始刷新。文件、存储、地图、Marker、海拔、测距、分段、Day、下撤、轨迹变更、localization 和 DOM 编排分别由 13 个垂直 runtime owner 单独持有；`composeClassicRuntime()` 按原顺序组合一次，不保留旧实现或双路径。文件拆分目标已经完成，trail、storage、file import、waypoint、measure 和 segment 已迁入 typed controller，后续继续收紧 Day 预览、下撤等 classic owner 的状态所有权。
 
 ## 开发与测试
 

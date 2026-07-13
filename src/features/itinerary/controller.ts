@@ -1,14 +1,3 @@
-import type { SegmentCampEdits, TrackIndexPoint } from '../../core/types.ts';
-
-export interface SegmentInteractionState {
-  active: boolean;
-  trailId: string | null;
-  points: TrackIndexPoint[];
-  campEdits: SegmentCampEdits;
-  layer: unknown;
-  _justDragged: boolean;
-  _fastTapUntil: number;
-}
 export interface DayPreviewInteractionState {
   active: boolean;
   layer: unknown;
@@ -16,18 +5,6 @@ export interface DayPreviewInteractionState {
   day: number | null;
   iStart: number | null;
   iEnd: number | null;
-}
-
-export function createSegmentInteractionState(): SegmentInteractionState {
-  return {
-    active: false,
-    trailId: null,
-    points: [],
-    campEdits: {},
-    layer: null,
-    _justDragged: false,
-    _fastTapUntil: 0,
-  };
 }
 
 export function createDayPreviewInteractionState(): DayPreviewInteractionState {

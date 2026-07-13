@@ -379,7 +379,7 @@ const networkLayer = L.layerGroup().addTo(map);
     if(!dispatchRuntimeInteraction(kind, {type:'tap', source:'fast', latlng})) return;
     const until = Date.now() + 350;
     if(kind === 'measure') measureController.suppressFastTap(until);
-    else segmentState._fastTapUntil = until;
+    else segmentController.suppressFastTap(until);
   }
   // 优先使用 pointer 事件（覆盖鼠标 + 触屏 + 触控笔）
   if(window.PointerEvent) {

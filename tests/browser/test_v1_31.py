@@ -237,12 +237,11 @@ try:
                'showMeasureElevReadout', 'hideMeasureElevReadout',
                'resetMeasureElevReadout', 'setMeasureElevHint',
                'measureReverse',
-               'segmentPointFromTrackIdx', 'segmentIndexesToPoints',
-               'segmentHasExplicitDayIds', 'segmentRangeFromDayMeta',
-               'restoreSegmentStateFromTrail', 'segmentInsertPoint',
-               'segmentDeleteDay', 'renumberSegmentCampEditsForInsert',
-               'renumberSegmentCampEditsForDelete']:
+               'segmentInsertPoint', 'segmentDeleteDay']:
         check(f"函数 {fn}", evalj(f"typeof {fn} === 'function'"))
+
+    check("typed SegmentController 已接管分段状态与提交",
+          evalj("typeof segmentController === 'object' && segmentState === segmentController.state && typeof segmentController.apply === 'function'"))
 
     check("handleFiles 已瘦身（< 30 行）",
           evalj("handleFiles.toString().split('\\n').length < 30"),
@@ -339,7 +338,7 @@ try:
     check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
           evalj("schedulePrimaryMiniPositionApply.toString().includes('setTimeout') && toggleSidebar.toString().includes('schedulePrimaryMiniPositionApply')"))
     check("地图标注点显示分段 D 天数",
-          evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('main.days = day_meta.length')"))
+          evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('segmentController.apply')"))
     check("标注点图标按 tag 统一渲染",
           evalj("waypointIcon('supply') === '🏪' && addWpMarker.toString().includes('waypointIcon(wp)') && buildFilterGrid.toString().includes('waypointIcon(tag)') && buildDaysTab.toString().includes('waypointIcon(wp)')"))
     check("Workbench 顶栏含品牌和完整菜单命令",
@@ -366,7 +365,7 @@ try:
     check("测距/分段进入时自动切换到标注点模式",
           evalj("measureEnter.toString().includes('enterInteractionRenderMode') && segmentEnter.toString().includes('enterInteractionRenderMode') && setMapMode.toString().includes(\"type:'mode.set'\")"))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
-          evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('min: stats.minE') && segmentApply.toString().includes('i_start') && renderElevationChartNow.toString().includes('dayPreviewState.active')"))
+          evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('segmentController.apply') && renderElevationChartNow.toString().includes('dayPreviewState.active')"))
     check("地图 +/- 缩放步进已调大",
           evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.5"))
     check("海拔图与测距浮动栏支持拖动记忆和双击复位",
@@ -429,7 +428,7 @@ try:
               const inserted = core.insertSegmentPoint(endpoints, core.pointFromTrackIndex(track, 4));
               const deleted = inserted && core.deleteSegmentDay(inserted.points, 1);
               const model = buildSegmentLayerModel(track, inserted ? inserted.points : endpoints, ['#123456'], 900);
-              return segmentEnter.toString().includes('restoreSegmentStateFromTrail')
+              return segmentEnter.toString().includes('segmentController.enter')
                 && segmentEnter.toString().includes('resetView({restoreActive: true})')
                 && defaults.join('|') === '0|9'
                 && restored.join('|') === '0|4|9'
@@ -437,7 +436,7 @@ try:
                 && deleted.length === 2
                 && model.markers[1].markerOptions.draggable === true
                 && renderSegmentList.toString().includes('seg-day-delete')
-                && segmentDeleteDay.toString().includes('renumberSegmentCampEditsForDeleteFrom')
+                && segmentDeleteDay.toString().includes('segmentController.deleteDay')
                 && redrawSegmentLayer.toString().includes('m.markerOptions');
             })()
           """))

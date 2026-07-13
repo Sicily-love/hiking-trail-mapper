@@ -5,108 +5,10 @@ export {};
 
 /* @runtime-fragment segment.runtime */
 /* ============ 分段功能（在主轨迹上依次选点，标记每天行程） ============ */
-const segmentState = HTM_APP.createSegmentInteractionState();
-
-function segmentPointFromTrackIdx(trail, idx) {
-  if(!trail || !trail.track || !trail.track.length) return null;
-  return pointFromTrackIndex(trail.track, idx);
-}
-
-function normalizeSegmentIndexes(trail, indexes) {
-  if(!trail || !trail.track || !trail.track.length) return [];
-  const n = trail.track.length;
-  const clean = Array.from(new Set((indexes || [])
-    .map(v => clampTrackIndex(trail.track, Number(v)))
-    .filter(v => Number.isInteger(v))))
-    .sort((a, b) => a - b);
-  if(clean[0] !== 0) clean.unshift(0);
-  if(clean[clean.length - 1] !== n - 1) clean.push(n - 1);
-  return clean;
-}
-
-function segmentIndexesToPoints(trail, indexes) {
-  if(!trail || !trail.track || !trail.track.length) return [];
-  const clean = normalizeSegmentIndexes(trail, indexes);
-  return clean.map(idx => segmentPointFromTrackIdx(trail, idx)).filter(Boolean);
-}
-
-function segmentHasExplicitDayIds(trail) {
-  return !!(trail && trail.track && trail.track.some(p => {
-    const d = Number(p[5]);
-    return Number.isInteger(d) && d > 0;
-  }));
-}
-
-function segmentRangeFromDayMeta(trail, dm) {
-  if(!trail || !trail.track || !trail.track.length || !dm) return null;
-  const n = trail.track.length;
-  const isValidIdx = v => Number.isInteger(v) && v >= 0 && v < n;
-  if(isValidIdx(dm.i_start) && isValidIdx(dm.i_end)) {
-    return { iStart: Math.min(dm.i_start, dm.i_end), iEnd: Math.max(dm.i_start, dm.i_end) };
-  }
-  return getDayIndexRange(trail, dm);
-}
-
-function segmentIndexesFromDayMeta(trail, dayMeta) {
-  if(!trail || !trail.track || !trail.track.length || !dayMeta || !dayMeta.length) return [];
-  const indexes = [];
-  const meta = dayMeta.slice().sort((a, b) => (a.d || 0) - (b.d || 0));
-  if(meta.length) {
-    meta.forEach((dm, i) => {
-      const range = segmentRangeFromDayMeta(trail, dm);
-      if(range) {
-        if(i === 0) indexes.push(range.iStart);
-        indexes.push(range.iEnd);
-      }
-    });
-  }
-  return normalizeSegmentIndexes(trail, indexes);
-}
-
-function segmentIndexesFromDayIds(trail) {
-  if(!trail || !trail.track || !trail.track.length || !segmentHasExplicitDayIds(trail)) return [];
-  const indexes = [0];
-  let currentDay = Number(trail.track[0][5]) || null;
-  for(let i=1; i<trail.track.length; i++) {
-    const d = Number(trail.track[i][5]) || null;
-    if(d && currentDay && d !== currentDay) {
-      indexes.push(i - 1);
-      currentDay = d;
-    } else if(d && !currentDay) {
-      currentDay = d;
-    }
-  }
-  indexes.push(trail.track.length - 1);
-  return normalizeSegmentIndexes(trail, indexes);
-}
-
-function restoreSegmentIndexesForTrail(trail) {
-  if(!trail || !trail.track || !trail.track.length) return [];
-  const fromMeta = segmentIndexesFromDayMeta(trail, trail.day_meta || []);
-  if(fromMeta.length >= 2) return fromMeta;
-  const fromDays = segmentIndexesFromDayIds(trail);
-  if(fromDays.length >= 2) return fromDays;
-  return [0, trail.track.length - 1];
-}
-
-function segmentCampEditsFromDayMeta(dayMeta) {
-  const edits = {};
-  const meta = (dayMeta || []).slice().sort((a, b) => (a.d || 0) - (b.d || 0));
-  meta.forEach((dm, i) => {
-    if(dm.camp && dm.camp !== '-') {
-      edits[dm.d || (i + 1)] = { name: dm.camp, elev: dm.camp_elev || null };
-    }
-  });
-  return edits;
-}
-
-function restoreSegmentStateFromTrail(trail) {
-  segmentState.points = [];
-  segmentState.campEdits = {};
-  if(!trail || !trail.track || !trail.track.length) return;
-  segmentState.campEdits = segmentCampEditsFromDayMeta(trail.day_meta || []);
-  segmentState.points = segmentIndexesToPoints(trail, restoreSegmentIndexesForTrail(trail));
-}
+const segmentController = HTM_APP.createSegmentController(runtimeContext, {
+  markRevision:markTrailRevision,
+});
+const segmentState = segmentController.state;
 
 function handleSegmentTap(event, session) {
   if(segmentState._justDragged) return;
@@ -141,13 +43,13 @@ function handleSegmentInteractionEvent(event, session) {
     return;
   }
   if(event.type === 'drag-start') {
-    segmentState._justDragged = true;
+    segmentController.beginDrag();
     session.setPhase('dragging');
     return;
   }
   if(event.type !== 'drag-end') return;
   session.setPhase('editing');
-  session.delay(200, () => { segmentState._justDragged = false; });
+  session.delay(200, () => { segmentController.endDrag(); });
   const hit = event.hit;
   if(!hit) {
     showToast('必须拖到主轨迹附近（200m 内）', 'error');
@@ -156,7 +58,7 @@ function handleSegmentInteractionEvent(event, session) {
   }
   const p = hit.point;
   const nextPoint = {idx:hit.idx, lat:p[0], lng:p[1], elev:p[2] || 0, km:p[3] || 0};
-  const move = moveSegmentBoundary(segmentState.points, event.boundaryIndex, nextPoint);
+  const move = segmentController.moveBoundary(event.boundaryIndex, nextPoint);
   if(!move.ok && move.reason === 'duplicate') {
     showToast('该位置已被占用，请选另一处', 'error');
     redrawSegmentLayer();
@@ -172,7 +74,6 @@ function handleSegmentInteractionEvent(event, session) {
     redrawSegmentLayer();
     return;
   }
-  segmentState.points = move.points;
   updateSegmentUI();
 }
 
@@ -188,12 +89,9 @@ function segmentEnter() {
   });
   enterInteractionRenderMode('分段');
 
-  segmentState.active = true;
-  segmentState.trailId = main.id;
-  segmentState._fastTapUntil = 0;
+  if(!segmentController.enter(main.id)) return;
   if(!segmentState.layer) segmentState.layer = L.layerGroup().addTo(map);
   segmentState.layer.clearLayers();
-  restoreSegmentStateFromTrail(main);
 
   document.getElementById('segment-panel').style.display = 'flex';
   map.getContainer().style.cursor = 'crosshair';
@@ -205,10 +103,7 @@ function segmentEnter() {
 
 function segmentExit(opts = {}) {
   if(!opts.fromManager && cancelRuntimeInteraction('segment', opts.reason || 'cancelled')) return;
-  segmentState.active = false;
-  segmentState.trailId = null;
-  segmentState._justDragged = false;
-  segmentState._fastTapUntil = 0;
+  segmentController.exit();
   if(segmentState.layer) segmentState.layer.clearLayers();
   document.getElementById('segment-panel').style.display = 'none';
   map.getContainer().style.cursor = '';
@@ -221,68 +116,12 @@ function segmentUndo() {
 }
 
 function segmentClear() {
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
-  segmentState.points = main ? segmentIndexesToPoints(main, [0, main.track.length - 1]) : [];
-  segmentState.campEdits = {};
-  updateSegmentUI();
-}
-
-function renumberSegmentCampEditsForInsertFrom(old, insertAt) {
-  const next = {};
-  Object.keys(old || {}).forEach(k => {
-    const d = Number(k);
-    next[d >= insertAt ? d + 1 : d] = old[k];
-  });
-  return next;
-}
-
-function renumberSegmentCampEditsForDeleteFrom(old, dayNo, oldDayCount) {
-  const next = {};
-  for(let d=1; d<=oldDayCount; d++) {
-    if(d === dayNo) continue;
-    const newDay = d < dayNo ? d : d - 1;
-    if(old && old[d]) next[newDay] = old[d];
-  }
-  return next;
-}
-
-function renumberSegmentCampEditsForInsert(insertAt) {
-  segmentState.campEdits = renumberSegmentCampEditsForInsertFrom(segmentState.campEdits || {}, insertAt);
-}
-
-function renumberSegmentCampEditsForDelete(dayNo, oldDayCount) {
-  segmentState.campEdits = renumberSegmentCampEditsForDeleteFrom(segmentState.campEdits || {}, dayNo, oldDayCount);
-}
-
-function insertSegmentPointInto(points, pt) {
-  if(!pt) return { ok: false, reason: 'empty' };
-  if(points.some(p => p.idx === pt.idx)) return { ok: false, reason: 'duplicate' };
-  let insertAt = -1;
-  for(let i=1; i<points.length; i++) {
-    if(pt.idx > points[i-1].idx && pt.idx < points[i].idx) {
-      insertAt = i;
-      break;
-    }
-  }
-  if(insertAt < 0) return { ok: false, reason: 'out-of-range' };
-  const next = points.slice();
-  next.splice(insertAt, 0, pt);
-  return { ok: true, points: next, insertAt };
-}
-
-function deleteSegmentDayFrom(points, dayNo) {
-  const oldDayCount = points.length - 1;
-  if(oldDayCount <= 1) return { ok: false, reason: 'min-days', oldDayCount };
-  if(dayNo < 1 || dayNo > oldDayCount) return { ok: false, reason: 'out-of-range', oldDayCount };
-  const removePointIdx = dayNo < oldDayCount ? dayNo : dayNo - 1;
-  const next = points.slice();
-  next.splice(removePointIdx, 1);
-  return { ok: true, points: next, oldDayCount, removePointIdx };
+  if(segmentController.clear()) updateSegmentUI();
 }
 
 
 function segmentInsertPoint(pt) {
-  const result = insertSegmentPointInto(segmentState.points, pt);
+  const result = segmentController.insertPoint(pt);
   if(!result.ok) {
     if(result.reason === 'empty') return false;
     if(result.reason === 'duplicate') {
@@ -292,22 +131,18 @@ function segmentInsertPoint(pt) {
     showToast('请点击现有行程范围内的未占用位置', 'error');
     return false;
   }
-  segmentState.campEdits = renumberSegmentCampEditsForInsertFrom(segmentState.campEdits || {}, result.insertAt);
-  segmentState.points = result.points;
   updateSegmentUI();
   return true;
 }
 
 function segmentDeleteDay(dayNo) {
-  const result = deleteSegmentDayFrom(segmentState.points, dayNo);
+  const result = segmentController.deleteDay(dayNo);
   if(!result.ok) {
     if(result.reason === 'min-days') {
       showToast('至少保留 1 天行程', 'info');
     }
     return false;
   }
-  segmentState.points = result.points;
-  segmentState.campEdits = renumberSegmentCampEditsForDeleteFrom(segmentState.campEdits || {}, dayNo, result.oldDayCount);
   updateSegmentUI();
   return true;
 }
@@ -372,16 +207,14 @@ function renderSegmentList() {
   list.querySelectorAll('.seg-camp-name').forEach(inp => {
     inp.addEventListener('input', e => {
       const d = +e.target.dataset.day;
-      if(!segmentState.campEdits[d]) segmentState.campEdits[d] = {};
-      segmentState.campEdits[d].name = e.target.value;
+      segmentController.updateCamp(d, {name:e.target.value});
     });
   });
   list.querySelectorAll('.seg-camp-elev').forEach(inp => {
     inp.addEventListener('input', e => {
       const d = +e.target.dataset.day;
-      if(!segmentState.campEdits[d]) segmentState.campEdits[d] = {};
       const v = parseFloat(e.target.value);
-      segmentState.campEdits[d].elev = isNaN(v) ? null : v;
+      segmentController.updateCamp(d, {elev:isNaN(v) ? null : v});
     });
   });
   list.querySelectorAll('.seg-day-delete').forEach(btn => {
@@ -437,81 +270,18 @@ function redrawSegmentLayer() {
 }
 
 function segmentApply() {
-  const main = DATA.trails.find(t => t.id === state.primaryTrailId);
-  if(!main) return;
-  const pts = segmentState.points;
-  if(pts.length < 2) {
+  if(segmentState.points.length < 2) {
     showToast('至少需要 2 个分段点（1 天）', 'error');
     return;
   }
   if(!setRuntimeInteractionPhase('segment', 'committing')) return;
-  const tk = main.track;
-  // 写 track[i][5] = dayId
-  // 分段点之间的所有点归属该天；两点方向可能反转，用 min/max
-  // 先全部重置为 1，再按段覆盖
-  const dayIds = new Array(tk.length).fill(1);
-  for(let d=1; d<pts.length; d++) {
-    const i1 = Math.min(pts[d-1].idx, pts[d].idx);
-    const i2 = Math.max(pts[d-1].idx, pts[d].idx);
-    for(let i=i1; i<=i2; i++) dayIds[i] = d;
+  const result = segmentController.apply();
+  if(!result) {
+    setRuntimeInteractionPhase('segment', 'editing');
+    showToast('分段状态已失效，请重新进入分段模式', 'error');
+    return;
   }
-  // 覆盖到 track（每个点第 6 个位置存 dayId，若原本没有则扩展）
-  for(let i=0; i<tk.length; i++) {
-    if(tk[i].length < 6) {
-      while(tk[i].length < 6) tk[i].push(null);
-    }
-    tk[i][5] = dayIds[i];
-  }
-  // 生成 day_meta
-  const day_meta = [];
-  for(let d=1; d<pts.length; d++) {
-    const stats = segmentStats(pts[d-1].idx, pts[d].idx);
-    const campData = segmentState.campEdits[d] || {};
-    const startElev = Math.round(pts[d-1].elev);
-    const endElev = Math.round(pts[d].elev);
-    const iStart = Math.min(pts[d-1].idx, pts[d].idx);
-    const iEnd = Math.max(pts[d-1].idx, pts[d].idx);
-    // seg 描述：起点海拔 → 最高海拔 → 终点海拔（km）
-    const seg = `起 ${startElev}m → 顶 ${stats.maxE}m → 低 ${stats.minE}m → 终 ${endElev}m（${stats.km}km）`;
-    day_meta.push({
-      d: d,
-      km: parseFloat(stats.km),
-      asc: stats.asc,
-      desc: stats.desc,
-      max: stats.maxE,
-      min: stats.minE,
-      seg: seg,
-      camp: campData.name && campData.name.trim() ? campData.name.trim() : '-',
-      camp_elev: campData.elev != null ? Math.round(campData.elev) : Math.round(pts[d].elev),
-      i_start: iStart,
-      i_end: iEnd,
-    });
-  }
-  main.day_meta = day_meta;
-  main.days = day_meta.length;
-  markTrailRevision(main);
-  // v1.27.0：给主轨迹的 waypoints 也打上 day 字段（按最近 track idx 匹配所在段）
-  if(main.waypoints && main.waypoints.length && main.track && main.track.length) {
-    main.waypoints.forEach(wp => {
-      // 找 waypoint 对应的 track idx（优先用 wp.trackIdx，否则做一次 nearest 搜索）
-      let idx = wp.gps_idx != null ? wp.gps_idx : wp.trackIdx;
-      if(idx == null || idx < 0 || idx >= main.track.length) {
-        // 用 haversine 找最近点（简易 O(n)）
-        let bestI = 0, bestD = Infinity;
-        const cosL = Math.cos(wp.lat * Math.PI / 180);
-        for(let i=0; i<main.track.length; i++) {
-          const dy = main.track[i][0] - wp.lat;
-          const dx = (main.track[i][1] - wp.lng) * cosL;
-          const d2 = dx*dx + dy*dy;
-          if(d2 < bestD) { bestD = d2; bestI = i; }
-        }
-        idx = bestI;
-      }
-      const dayId = main.track[idx][5];
-      if(dayId != null) wp.day = dayId;
-    });
-  }
-  showToast('✓ 已应用 ' + (pts.length-1) + ' 天分段');
+  showToast('✓ 已应用 ' + result.dayCount + ' 天分段');
   // 保存 + 完整重绘（fit:false 保持当前视野，但同步地图标注、行程、主轨迹小卡等所有 UI）
   saveToStorage();
   rebuildAll({fit:false});

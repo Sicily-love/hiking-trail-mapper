@@ -6,6 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const { runtimeSource: runtime } = require('./runtime_source');
 const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
+const segmentController = fs.readFileSync(path.join(root, 'src/features/segment/controller.ts'), 'utf8');
 let passed = 0;
 let failed = 0;
 
@@ -81,7 +82,8 @@ test('owner revisions are checked before dispatch and render work', () => {
   assert.ok(runtime.includes('function revalidateRuntimeInteractionOwner()'));
   assert.ok(runtime.includes('runtimeInteractionOwnerIsCurrent(current)'));
   assert.ok(runtime.includes("interactionManager.cancel('owner-invalid'"));
-  assert.ok(runtime.includes('markTrailRevision(main)'));
+  assert.ok(runtime.includes('segmentController.apply()'));
+  assert.ok(segmentController.includes('dependencies.markRevision(trail)'));
   assert.ok(runtime.includes('markTrailRevision(trail)'));
 });
 
