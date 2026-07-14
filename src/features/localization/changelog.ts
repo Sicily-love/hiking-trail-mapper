@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.2',
+    date: '2026-07-14',
+    items: {
+      zh: ['将视图菜单中的复位、帮助和语言拆分为顶栏独立操作，移除不再承载内容的设置入口，并优化桌面与移动端响应式排列'],
+      en: ['Split Reset, Help, and Language out of the View menu into standalone top-bar actions, removed the now-empty Settings entry, and refined responsive desktop and mobile layouts'],
+    },
+  },
+  {
     version: 'v2.0.1',
     date: '2026-07-14',
     items: {

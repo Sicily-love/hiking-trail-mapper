@@ -5021,7 +5021,6 @@ export function startStudioRuntime(
         activateSidebarTab('trails');
         setMapMode('waypoint');
       }),
-      register(STUDIO_COMMANDS.WORKSPACE_SETTINGS, () => undefined),
     ];
     window.__HTM_RUNTIME_COMMAND_DISPOSERS__ = disposers;
     commandRegistry.notifyChanged();

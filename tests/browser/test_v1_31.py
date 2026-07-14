@@ -138,16 +138,21 @@ try:
           evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.commands && !!window.__OUTDOOR_ROUTE_STUDIO__?.dialogs"))
     check("业务代码由直接 TypeScript runtime 启动",
           evalj("!!window.__HTM_RUNTIME_INSPECTOR__ && !document.querySelector('script[data-studio-runtime]') && window.__OUTDOOR_ROUTE_STUDIO__?.architecture === 2"))
-    check("顶部 7 个菜单已渲染",
-          evalj("document.querySelectorAll('.studio-menu-trigger').length === 7"))
+    check("顶部 6 个分组菜单与 3 个独立视图命令已渲染",
+          evalj("document.querySelectorAll('.studio-menu-trigger').length === 6 && document.querySelectorAll('.studio-quick-command').length === 3 && !!document.querySelector('.studio-quick-actions > #reset-btn') && !!document.querySelector('.studio-quick-actions > #help-btn') && !!document.querySelector('.studio-quick-actions > #lang-btn')"))
     menu_hit_targets = evalj("""
-      [...document.querySelectorAll('.studio-menu-trigger')].every(trigger => {
-        const rect = trigger.getBoundingClientRect();
-        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-        return hit === trigger || trigger.contains(hit);
-      })
+      (() => {
+        const misses = [...document.querySelectorAll('.studio-menu-trigger')].flatMap(trigger => {
+          const rect = trigger.getBoundingClientRect();
+          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          return hit === trigger || trigger.contains(hit) ? [] : [{menu:trigger.dataset.menu, rect:{left:rect.left,right:rect.right,width:rect.width}, hit:hit?.className || hit?.tagName}];
+        });
+        return {ok:misses.length === 0, width:innerWidth, misses};
+      })()
     """)
-    check("顶部 7 个菜单都能接收真实指针命中", menu_hit_targets is True)
+    check("顶部 6 个菜单都能接收真实指针命中",
+          isinstance(menu_hit_targets, dict) and menu_hit_targets.get('ok') is True,
+          str(menu_hit_targets))
     file_menu_point = evalj("""
       (() => {
         const trigger = document.querySelector('[data-menu="file"]');
@@ -163,8 +168,8 @@ try:
     check("File/文件菜单可由真实鼠标点击展开",
           evalj("document.querySelector('[data-menu=\"file\"]')?.getAttribute('aria-expanded') === 'true' && !document.getElementById('workbench-menu-file')?.hidden"))
     evalj("window.__OUTDOOR_ROUTE_STUDIO__.workbench.closeMenus()")
-    check("左侧 4 个互不重复的活动入口已渲染",
-          evalj("document.querySelectorAll('.studio-activity-button').length === 4"))
+    check("左侧 3 个有效活动入口已渲染且无空设置入口",
+          evalj("document.querySelectorAll('.studio-activity-button').length === 3 && !document.querySelector('[data-activity=\"settings\"]')"))
     check("Workbench 已移除右上角旧侧栏恢复按钮",
           evalj("!document.getElementById('sidebar-toggle')"))
     check("底部已收敛为无重复 Tab 的海拔分析区",
@@ -177,6 +182,7 @@ try:
         const read = selector => [...document.querySelectorAll(selector)].map(node => node.textContent.trim());
         const zh = {
           menu: read('.studio-menu-label'),
+          quick: read('.studio-quick-actions .studio-command-label'),
           activity: read('.studio-activity-label'),
           bottom: read('.studio-bottom-tab-label'),
           context: document.getElementById('toolbar-context')?.textContent,
@@ -185,6 +191,7 @@ try:
         await new Promise(resolve => setTimeout(resolve, 0));
         const en = {
           menu: read('.studio-menu-label'),
+          quick: read('.studio-quick-actions .studio-command-label'),
           activity: read('.studio-activity-label'),
           bottom: read('.studio-bottom-tab-label'),
           context: document.getElementById('toolbar-context')?.textContent,
@@ -196,14 +203,16 @@ try:
     """)
     check("Workbench 中文标签完整且不混用英文",
           isinstance(language_flow, dict)
-          and language_flow.get('zh', {}).get('menu') == ['文件','编辑','测距','规划','标注','视图','导出']
-          and language_flow.get('zh', {}).get('activity') == ['轨迹','行程','标注点','设置']
+          and language_flow.get('zh', {}).get('menu') == ['文件','编辑','测距','规划','标注','导出']
+          and language_flow.get('zh', {}).get('quick') == ['复位视图','帮助','语言']
+          and language_flow.get('zh', {}).get('activity') == ['轨迹','行程','标注点']
           and language_flow.get('zh', {}).get('bottom') == []
           and language_flow.get('zh', {}).get('context') == '尚未加载轨迹', str(language_flow))
     check("Workbench 英文标签完整并可切回中文",
           isinstance(language_flow, dict)
-          and language_flow.get('en', {}).get('menu') == ['File','Edit','Measure','Plan','Waypoint','View','Export']
-          and language_flow.get('en', {}).get('activity') == ['Trails','Itinerary','Waypoints','Settings']
+          and language_flow.get('en', {}).get('menu') == ['File','Edit','Measure','Plan','Waypoint','Export']
+          and language_flow.get('en', {}).get('quick') == ['Reset view','Help','Language']
+          and language_flow.get('en', {}).get('activity') == ['Trails','Itinerary','Waypoints']
           and language_flow.get('en', {}).get('bottom') == []
           and language_flow.get('en', {}).get('context') == 'No trail loaded'
           and language_flow.get('finalLang') == 'zh-CN', str(language_flow))
@@ -238,8 +247,8 @@ try:
     evalj("document.querySelector('dialog[open] .workbench-dialog__button')?.click()")
     check("Studio 主题变量已生效",
           evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
-    check("旧命令节点已无损迁移到 Workbench 菜单",
-          evalj("['add-trail-btn','reverse-btn','clear-btn','measure-btn','segment-btn','add-escape-btn','add-waypoint-btn','reset-btn','help-btn','lang-btn','export-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup'))"))
+    check("旧命令节点已无损迁移到分组菜单或独立操作区",
+          evalj("['add-trail-btn','reverse-btn','clear-btn','measure-btn','segment-btn','add-escape-btn','add-waypoint-btn','export-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup')) && ['reset-btn','help-btn','lang-btn'].every(id => document.getElementById(id)?.closest('.studio-quick-actions'))"))
     check("顶部、活动栏和分析栏均绑定语义命令",
           evalj("[...document.querySelectorAll('.studio-command,.studio-activity-button,.studio-bottom-tab')].every(node => node.dataset.commandId && window.__OUTDOOR_ROUTE_STUDIO__?.commands.has(node.dataset.commandId))"))
     check("TypeScript core runtime 已接管关键函数",
@@ -466,7 +475,7 @@ try:
           """) and source_has('function addWpMarker', 'function segmentApply', 'segmentController.apply'))
     check("标注点图标按 tag 统一渲染",
           evalj("waypointIcon('supply') === '🏪'") and source_has('waypointIcon(wp)', 'waypointIcon(tag)'))
-    check("Workbench 顶栏含品牌和完整菜单命令",
+    check("Workbench 顶栏含品牌、分组菜单和独立视图命令",
           evalj("""
             (() => {
               const toolbar = document.getElementById('map-toolbar');
@@ -479,7 +488,7 @@ try:
                 && commandIds.every(id => {
                   const button = document.getElementById(id);
                   return !!button
-                    && !!button.closest('.studio-menu-popup')
+                    && !!button.closest('.studio-menu-popup,.studio-quick-actions')
                     && !!button.querySelector('.studio-command-icon')
                     && !!button.querySelector('.studio-command-label');
                 });

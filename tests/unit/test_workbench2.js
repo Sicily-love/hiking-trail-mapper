@@ -87,28 +87,33 @@ test('icon helper renders against a supplied pure DOM document', () => {
   assert.ok(icon.children.length > 1);
 });
 
-test('top menu has the seven required groups and moves every legacy command', () => {
-  const expectedLabels = ['File', 'Edit', 'Measure', 'Plan', 'Waypoint', 'View', 'Export'];
-  const expectedZhLabels = ['文件', '编辑', '测距', '规划', '标注', '视图', '导出'];
-  const expectedCommands = [
+test('top menu keeps six grouped menus and separates every View command', () => {
+  const expectedLabels = ['File', 'Edit', 'Measure', 'Plan', 'Waypoint', 'Export'];
+  const expectedZhLabels = ['文件', '编辑', '测距', '规划', '标注', '导出'];
+  const expectedMenuCommands = [
     'add-trail-btn', 'reverse-btn', 'clear-btn', 'measure-btn', 'segment-btn',
-    'add-escape-btn', 'add-waypoint-btn', 'reset-btn', 'help-btn', 'lang-btn', 'export-btn',
+    'add-escape-btn', 'add-waypoint-btn', 'export-btn',
   ];
+  const expectedStandalone = ['reset-btn', 'help-btn', 'lang-btn'];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.MENU_DEFINITIONS.map(item => item.label), expectedLabels);
     assert.deepStrictEqual(workbenchModule.MENU_DEFINITIONS.map(item => item.labelZh), expectedZhLabels);
     const commandIds = workbenchModule.MENU_DEFINITIONS.flatMap(item => item.commandIds);
-    assert.deepStrictEqual([...commandIds].sort(), [...expectedCommands].sort());
+    assert.deepStrictEqual([...commandIds].sort(), [...expectedMenuCommands].sort());
+    assert.deepStrictEqual([...workbenchModule.STANDALONE_COMMAND_IDS], expectedStandalone);
     assert.strictEqual(new Set(commandIds).size, commandIds.length);
   } else {
     expectedLabels.forEach(label => assert.ok(workbenchSource.includes(`label: '${label}'`), label));
     expectedZhLabels.forEach(label => assert.ok(workbenchSource.includes(`labelZh: '${label}'`), label));
-    expectedCommands.forEach(id => assert.ok(workbenchSource.includes(`'${id}'`), id));
+    [...expectedMenuCommands, ...expectedStandalone]
+      .forEach(id => assert.ok(workbenchSource.includes(`'${id}'`), id));
   }
+  assert.ok(workbenchSource.includes("quickActions.className") || workbenchSource.includes("'studio-quick-actions'"));
+  assert.ok(workbenchSource.includes('toolbar.replaceChildren(brandView.brand, menuList, quickActions)'));
 });
 
-test('activity rail exposes four focused destinations without duplicate views', () => {
-  const expected = ['Trails', 'Itinerary', 'Waypoints', 'Settings'];
+test('activity rail exposes three focused destinations without dead settings', () => {
+  const expected = ['Trails', 'Itinerary', 'Waypoints'];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.ACTIVITY_DEFINITIONS.map(item => item.label), expected);
   } else {
@@ -234,7 +239,7 @@ test('Studio palette includes required semantic colors', () => {
 test('Studio CSS owns all four responsive contracts', () => {
   [1440, 1024, 390, 320]
     .forEach(width => assert.ok(css.includes(`@media (max-width: ${width}px)`), `${width}px`));
-  assert.ok(css.includes('grid-template-columns:repeat(6,minmax(0,1fr));'));
+  assert.ok(css.includes('grid-template-columns:repeat(5,minmax(0,1fr));'));
   assert.ok(css.includes("#measure-panel.studio-elevation-measure-actions"));
   assert.strictEqual(css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
   assert.ok(css.includes("html[data-workbench='2'] [hidden]"));

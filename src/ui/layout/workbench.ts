@@ -36,7 +36,6 @@ export const MENU_DEFINITIONS = [
   { key: 'measure', label: 'Measure', labelZh: '测距', icon: 'ruler', commandIds: ['measure-btn'] },
   { key: 'plan', label: 'Plan', labelZh: '规划', icon: 'calendar', commandIds: ['segment-btn', 'add-escape-btn'] },
   { key: 'waypoint', label: 'Waypoint', labelZh: '标注', icon: 'map-pin', commandIds: ['add-waypoint-btn'] },
-  { key: 'view', label: 'View', labelZh: '视图', icon: 'eye', commandIds: ['reset-btn', 'help-btn', 'lang-btn'] },
   { key: 'export', label: 'Export', labelZh: '导出', icon: 'download', commandIds: ['export-btn'] },
 ] as const satisfies ReadonlyArray<{
   key: string;
@@ -46,18 +45,22 @@ export const MENU_DEFINITIONS = [
   commandIds: ReadonlyArray<keyof typeof COMMAND_DEFINITIONS>;
 }>;
 
+export const STANDALONE_COMMAND_IDS = [
+  'reset-btn',
+  'help-btn',
+  'lang-btn',
+] as const satisfies ReadonlyArray<keyof typeof COMMAND_DEFINITIONS>;
+
 export const ACTIVITY_DEFINITIONS = [
   { key: 'trails', label: 'Trails', labelZh: '轨迹', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
   { key: 'itinerary', label: 'Itinerary', labelZh: '行程', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
   { key: 'waypoints', label: 'Waypoints', labelZh: '标注点', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
-  { key: 'settings', label: 'Settings', labelZh: '设置', icon: 'settings', commandId: STUDIO_COMMANDS.WORKSPACE_SETTINGS, menu: 'view' },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
   labelZh: string;
   icon: WorkbenchIconName;
   commandId: StudioCommandId;
-  menu?: string;
 }>;
 
 export const MAP_MODE_DEFINITIONS = [
@@ -270,7 +273,6 @@ function buildActivityRail(document: Document, language: WorkbenchLanguage): {
     button.tabIndex = -1;
     label.textContent = localized;
     button.append(createWorkbenchIcon(document, definition.icon, { size: 19 }), label);
-    if(definition.key === 'settings') button.classList.add('studio-activity-button--settings');
     root.appendChild(button);
     buttons.set(definition.key, button);
   }
@@ -407,6 +409,7 @@ export function upgradeWorkbenchLayout(
   const analysisDock = buildAnalysisDock(document, language);
   const activityRail = buildActivityRail(document, language);
   const menuList = createElement(document, 'div', 'studio-menu-list');
+  const quickActions = createElement(document, 'div', 'studio-quick-actions');
   const menuViews = new Map<WorkbenchMenuKey, MenuView>();
   const commandButtons = new Map<keyof typeof COMMAND_DEFINITIONS, HTMLButtonElement>();
   let activeMenu: WorkbenchMenuKey | null = null;
@@ -416,6 +419,8 @@ export function upgradeWorkbenchLayout(
 
   menuList.setAttribute('role', 'menubar');
   menuList.setAttribute('aria-label', 'Application menu');
+  quickActions.setAttribute('role', 'toolbar');
+  quickActions.setAttribute('aria-label', language === 'zh' ? '快捷操作' : 'Quick actions');
 
   const dispatchCommand = (commandId: StudioCommandId): void => {
     try {
@@ -479,6 +484,25 @@ export function upgradeWorkbenchLayout(
     menuViews.set(definition.key, { panel, trigger });
   }
 
+  for(const id of STANDALONE_COMMAND_IDS) {
+    const command = document.getElementById(id) as HTMLButtonElement | null;
+    if(!command) continue;
+    const definition = COMMAND_DEFINITIONS[id];
+    command.type = 'button';
+    command.dataset.commandId = definition.commandId;
+    decorateControl(document, command, definition, 'command', language);
+    command.classList.add('studio-quick-command');
+    const onCommandClick = (event: MouseEvent): void => {
+      event.preventDefault();
+      closeMenus(false);
+      dispatchCommand(definition.commandId);
+    };
+    command.addEventListener('click', onCommandClick);
+    cleanups.push(() => command.removeEventListener('click', onCommandClick));
+    quickActions.appendChild(command);
+    commandButtons.set(id, command);
+  }
+
   const retainedToolbarNodes = Array.from(toolbar.querySelectorAll<HTMLElement>('[id]'))
     .filter(node => node.id !== 'toolbar-context');
   retainedToolbarNodes
@@ -487,7 +511,7 @@ export function upgradeWorkbenchLayout(
 
   toolbar.classList.add('studio-menubar');
   toolbar.setAttribute('aria-label', 'Trail workspace');
-  toolbar.replaceChildren(brandView.brand, menuList);
+  toolbar.replaceChildren(brandView.brand, menuList, quickActions);
   header.classList.add('studio-topbar');
   header.style.removeProperty('display');
   header.removeAttribute('aria-hidden');
@@ -533,6 +557,7 @@ export function upgradeWorkbenchLayout(
       button.dataset.workbenchLabel = label;
       button.setAttribute('aria-label', label);
     }
+    quickActions.setAttribute('aria-label', language === 'zh' ? '快捷操作' : 'Quick actions');
     for(const definition of ACTIVITY_DEFINITIONS) {
       const button = activityRail.buttons.get(definition.key);
       const label = localizedLabel(definition, language);
@@ -729,9 +754,6 @@ export function upgradeWorkbenchLayout(
     syncActivitySelection(key);
     sidebarElement.classList.remove('collapsed');
 
-    if('menu' in definition && definition.menu) {
-      openMenu(definition.menu as WorkbenchMenuKey, true);
-    }
   }
 
   function syncCommandButtons(commandId?: string): void {
