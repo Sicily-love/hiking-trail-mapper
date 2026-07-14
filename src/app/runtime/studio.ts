@@ -1922,6 +1922,7 @@ export function startStudioRuntime(
     pane.classList.add('active');
     if(tabName === 'days') {
       if(state.mode !== 'day') lastNonDayMode = state.mode;
+      buildDaysTab();
       setMapMode('day');
     } else if(state.mode === 'day') {
       if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
