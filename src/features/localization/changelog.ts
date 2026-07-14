@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.4',
+    date: '2026-07-14',
+    items: {
+      zh: ['将轨迹组提升为最左侧活动栏中的独立入口和专门页面', '轨迹组页面始终显示当前工作组与轨迹数量，并为移动端增加六格响应式入口'],
+      en: ['Promoted Trail Groups to a dedicated far-left activity and workspace page', 'Trail Groups now always shows workspace choices and trail counts with a six-item responsive mobile rail'],
+    },
+  },
+  {
     version: 'v2.0.3',
     date: '2026-07-14',
     items: {

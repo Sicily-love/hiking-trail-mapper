@@ -216,6 +216,25 @@ try:
     cdp("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False})
     evaluate("""
       (() => {
+        toggleSidebar(true);
+        document.getElementById('workbench-activity-groups')?.click();
+        window.dispatchEvent(new Event('resize'));
+      })()
+    """)
+    time.sleep(0.4)
+    group_state = evaluate("""
+      document.getElementById('tab-groups')?.classList.contains('active')
+        && document.getElementById('workbench-activity-groups')?.classList.contains('is-active')
+        && getComputedStyle(document.getElementById('primary-card')).display === 'none'
+        && document.querySelectorAll('#trail-group-list .group-tab').length > 0
+    """)
+    hide_transient_ui()
+    wait_for_map_tiles()
+    group_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-trail-groups.png").write_bytes(base64.b64decode(group_shot["result"]["data"]))
+
+    evaluate("""
+      (() => {
         measureState.active && measureExit();
         segmentState.active && segmentExit();
         toggleSidebar(true);
@@ -343,7 +362,7 @@ try:
     time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"]]
-    if not day_state or not measure_state or not segment_state or not dialog_state or not mobile_dialog_state:
+    if not group_state or not day_state or not measure_state or not segment_state or not dialog_state or not mobile_dialog_state:
         invalid.append("interaction-states")
     if invalid:
         raise RuntimeError(f"Visual layout contract failed: {', '.join(invalid)}")

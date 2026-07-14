@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.0.4 — 2026-07-14
+
+**中文**
+
+- 将轨迹组提升为最左侧活动栏中的独立入口和专门页面
+- 轨迹组页面始终显示当前工作组与轨迹数量，并为移动端增加六格响应式入口
+
+**English**
+
+- Promoted Trail Groups to a dedicated far-left activity and workspace page
+- Trail Groups now always shows workspace choices and trail counts with a six-item responsive mobile rail
+
 ## v2.0.3 — 2026-07-14
 
 **中文**

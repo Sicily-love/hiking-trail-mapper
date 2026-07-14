@@ -39,6 +39,7 @@ export const STUDIO_COMMANDS = Object.freeze({
   INTERACTION_CANCEL: 'interaction.cancel',
   MODE_ELEVATION: 'mode.elevation',
   MODE_WAYPOINT: 'mode.waypoint',
+  WORKSPACE_GROUPS: 'workspace.groups',
   WORKSPACE_TRAILS: 'workspace.trails',
   WORKSPACE_ITINERARY: 'workspace.itinerary',
   WORKSPACE_WAYPOINTS: 'workspace.waypoints',

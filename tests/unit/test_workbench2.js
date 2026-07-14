@@ -124,8 +124,8 @@ test('top toolbar keeps only multi-command menus and flattens direct commands', 
   assert.ok(workbenchSource.includes('toolbar.replaceChildren(brandView.brand, menuList)'));
 });
 
-test('activity rail exposes three focused destinations without dead settings', () => {
-  const expected = ['Trails', 'Itinerary', 'Waypoints'];
+test('activity rail exposes trail groups as its first dedicated destination', () => {
+  const expected = ['Trail Groups', 'Trails', 'Itinerary', 'Waypoints'];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.ACTIVITY_DEFINITIONS.map(item => item.label), expected);
   } else {
@@ -137,7 +137,7 @@ test('activity rail exposes three focused destinations without dead settings', (
   assert.strictEqual(shellSource.includes('tab-escape'), false);
 });
 
-test('map modes live at the far-left rail and trails have a dedicated selector', () => {
+test('map modes and trail groups own dedicated far-left rail destinations', () => {
   const expectedModes = ['elev', 'waypoint'];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.MAP_MODE_DEFINITIONS.map(item => item.mode), expectedModes);
@@ -145,12 +145,16 @@ test('map modes live at the far-left rail and trails have a dedicated selector',
     expectedModes.forEach(mode => assert.ok(workbenchSource.includes(`mode: '${mode}'`), mode));
   }
   assert.ok(shellSource.indexOf('id="map-mode-controls"') < shellSource.indexOf('id="map"'));
+  assert.ok(shellSource.includes('id="tab-groups"'));
   assert.ok(shellSource.includes('id="trail-group-panel"'));
   assert.ok(shellSource.includes('id="trail-group-list"'));
+  assert.ok(shellSource.indexOf('id="tab-groups"') < shellSource.indexOf('id="tab-trails"'));
   assert.ok(shellSource.includes('id="trail-selector-panel"'));
   assert.ok(shellSource.includes('id="trail-list"'));
   assert.ok(runtimeSource.includes("document.getElementById('trail-group-list')"));
-  assert.ok(runtimeSource.includes('groupPanel.hidden = !tabs'));
+  assert.ok(runtimeSource.includes('groupPanel.hidden = false'));
+  assert.ok(runtimeSource.includes('groups:STUDIO_COMMANDS.WORKSPACE_GROUPS'));
+  assert.ok(runtimeSource.includes("register(STUDIO_COMMANDS.WORKSPACE_GROUPS"));
   assert.strictEqual(runtimeSource.includes('list.appendChild(tabs)'), false);
   assert.ok(workbenchSource.includes('root.appendChild(modeSwitcher)'));
   assert.ok(workbenchSource.includes("modeSwitcher.className = 'studio-mode-switcher'"));
@@ -256,7 +260,7 @@ test('Studio palette includes required semantic colors', () => {
 test('Studio CSS owns all four responsive contracts', () => {
   [1440, 1024, 390, 320]
     .forEach(width => assert.ok(css.includes(`@media (max-width: ${width}px)`), `${width}px`));
-  assert.ok(css.includes('grid-template-columns:repeat(5,minmax(0,1fr));'));
+  assert.ok(css.includes('grid-template-columns:repeat(6,minmax(0,1fr));'));
   assert.ok(css.includes("#measure-panel.studio-elevation-measure-actions"));
   assert.strictEqual(css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
   assert.ok(css.includes("html[data-workbench='2'] [hidden]"));

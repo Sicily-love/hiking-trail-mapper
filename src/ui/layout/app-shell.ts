@@ -72,19 +72,22 @@ export const APP_SHELL = `
     <button class="sidebar-close" id="sidebar-close" title="收起">收起</button>
     <div id="primary-card"></div>
     <nav class="tabs" aria-label="工作台页面">
+      <button class="tab" data-tab="groups" data-i18n="tab.group">轨迹组</button>
       <button class="tab active" data-tab="trails" data-i18n="tab.trail">轨迹</button>
       <button class="tab" data-tab="days" data-i18n="tab.day">行程</button>
       <button id="lang-btn" class="btn-mini" title="Language / 语言">语言</button>
     </nav>
     <div class="tab-content">
-      <section class="tab-pane active" id="tab-trails">
-        <section id="trail-group-panel" class="studio-trail-group-selector" aria-labelledby="trail-group-title" hidden>
+      <section class="tab-pane" id="tab-groups">
+        <section id="trail-group-panel" class="studio-trail-group-selector" aria-labelledby="trail-group-title">
           <header class="studio-trail-selector__header">
             <h3 id="trail-group-title" data-i18n="trail.groups">轨迹组</h3>
             <span class="studio-trail-selector__hint" data-i18n="trail.groups.hint">切换当前工作组</span>
           </header>
           <div id="trail-group-list"></div>
         </section>
+      </section>
+      <section class="tab-pane active" id="tab-trails">
         <section id="trail-selector-panel" class="studio-trail-selector" aria-labelledby="trail-selector-title">
           <header class="studio-trail-selector__header">
             <h3 id="trail-selector-title" data-i18n="trail.list">轨迹选择</h3>

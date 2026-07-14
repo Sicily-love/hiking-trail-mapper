@@ -1222,20 +1222,26 @@ export function startStudioRuntime(
        4. attachTrailCardHandlers() —— 卡片事件绑定
      ═════════════════════════════════════════════════════════════════ */
 
-  /** 顶部分组 Tab bar（仅在存在自定义分组时显示） */
+  /** 独立轨迹组页面中的分组选择列表。 */
   function renderGroupTabs() {
     const groups = getGroups();
-    if(groups.length <= 1 && groups[0] === '默认') return null;
     const bar = document.createElement('div');
-    bar.className = 'group-tab-bar';
+    bar.className = 'group-tab-bar studio-group-list';
     groups.forEach(g => {
       const btn = document.createElement('button');
       const count = DATA.trails.filter(t => trailGroup(t) === g).length;
       btn.className = 'group-tab' + (g === state.activeGroup ? ' active' : '');
-      btn.textContent = `${g}·${count}`;
+      btn.setAttribute('aria-pressed', String(g === state.activeGroup));
+      const name = document.createElement('span');
+      const meta = document.createElement('span');
+      name.className = 'group-tab-name';
+      meta.className = 'group-tab-meta';
+      name.textContent = g;
+      meta.textContent = currentLang === 'zh' ? `${count} 条轨迹` : `${count} trails`;
+      btn.append(name, meta);
       btn.title = g === state.activeGroup
-        ? `再次点击取消选中「${g}」组`
-        : `切换到「${g}」组`;
+        ? (currentLang === 'zh' ? `再次点击取消选中「${g}」组` : `Select again to clear “${g}”`)
+        : (currentLang === 'zh' ? `切换到「${g}」组` : `Switch to “${g}”`);
       btn.addEventListener('click', () => {
         // v1.20.0：再次点击当前 tab → 取消选中（进入无分组显示状态）
         if(g === state.activeGroup) switchGroup(null);
@@ -1590,8 +1596,8 @@ export function startStudioRuntime(
     const groupPanel = document.getElementById('trail-group-panel');
     const groupList = document.getElementById('trail-group-list');
     const tabs = renderGroupTabs();
-    if(groupList) groupList.replaceChildren(...(tabs ? [tabs] : []));
-    if(groupPanel) groupPanel.hidden = !tabs;
+    if(groupList) groupList.replaceChildren(tabs);
+    if(groupPanel) groupPanel.hidden = false;
 
     // v1.20.0：无选中分组时给一个明确提示（而不是"当前组暂无备选轨迹"的误导）
     if(state.activeGroup == null && DATA.trails.length > 0) {
@@ -1911,6 +1917,7 @@ export function startStudioRuntime(
   // tabs
   let lastNonDayMode = state.mode === 'day' ? 'elev' : state.mode;
   const sidebarTabCommands = {
+    groups:STUDIO_COMMANDS.WORKSPACE_GROUPS,
     trails:STUDIO_COMMANDS.WORKSPACE_TRAILS,
     days:STUDIO_COMMANDS.WORKSPACE_ITINERARY,
   };
@@ -5019,6 +5026,7 @@ export function startStudioRuntime(
       register(STUDIO_COMMANDS.MODE_WAYPOINT, () => setMapMode('waypoint'), {
         checked:() => state.mode === 'waypoint',
       }),
+      register(STUDIO_COMMANDS.WORKSPACE_GROUPS, () => activateSidebarTab('groups')),
       register(STUDIO_COMMANDS.WORKSPACE_TRAILS, () => activateSidebarTab('trails')),
       register(STUDIO_COMMANDS.WORKSPACE_ITINERARY, () => activateSidebarTab('days')),
       register(STUDIO_COMMANDS.WORKSPACE_WAYPOINTS, () => {

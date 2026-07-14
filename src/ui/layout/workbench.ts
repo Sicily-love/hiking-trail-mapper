@@ -64,6 +64,7 @@ export const TOOLBAR_LAYOUT = [
 ] as const;
 
 export const ACTIVITY_DEFINITIONS = [
+  { key: 'groups', label: 'Trail Groups', labelZh: '轨迹组', icon: 'folder-tree', commandId: STUDIO_COMMANDS.WORKSPACE_GROUPS },
   { key: 'trails', label: 'Trails', labelZh: '轨迹', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
   { key: 'itinerary', label: 'Itinerary', labelZh: '行程', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
   { key: 'waypoints', label: 'Waypoints', labelZh: '标注点', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
@@ -600,7 +601,12 @@ export function upgradeWorkbenchLayout(
     analysisDock.setAttribute('aria-label', language === 'zh' ? '海拔分析' : 'Elevation analysis');
     analysisDock.querySelector<HTMLElement>('[data-analysis-panel="elevation"]')
       ?.setAttribute('aria-label', language === 'zh' ? '海拔剖面' : 'Elevation profile');
-    if(sidebarTitle) sidebarTitle.textContent = language === 'zh' ? '路线与行程' : 'Routes & Itinerary';
+    if(sidebarTitle) {
+      const activity = ACTIVITY_DEFINITIONS.find(item => item.key === sidebarElement.dataset.activity);
+      sidebarTitle.textContent = activity?.key === 'groups'
+        ? localizedLabel(activity, language)
+        : (language === 'zh' ? '路线与行程' : 'Routes & Itinerary');
+    }
     elevationToggle.render(language);
     for(const [id, definition] of Object.entries(AUXILIARY_CONTROLS)) {
       const control = document.getElementById(id);
@@ -773,6 +779,11 @@ export function upgradeWorkbenchLayout(
     if(!definition) return;
     syncActivitySelection(key);
     sidebarElement.classList.remove('collapsed');
+    if(sidebarTitle) {
+      sidebarTitle.textContent = key === 'groups'
+        ? localizedLabel(definition, language)
+        : (language === 'zh' ? '路线与行程' : 'Routes & Itinerary');
+    }
 
   }
 

@@ -68,6 +68,7 @@ T('empty primary mini card still cannot cover commands', () => {
   assert.ok(runtime.includes("mini.style.display = 'none';\n      return false;"));
 });
 T('visual fixtures cover real Day, measurement, and segmentation states', () => {
+  assert.ok(visual.includes('workbench-trail-groups.png'));
   assert.ok(visual.includes('workbench-day-cards.png'));
   assert.ok(visual.includes('workbench-measure.png'));
   assert.ok(visual.includes('workbench-segment.png'));

@@ -168,8 +168,8 @@ try:
     check("Edit/编辑菜单可由真实鼠标点击展开",
           evalj("document.querySelector('[data-menu=\"edit\"]')?.getAttribute('aria-expanded') === 'true' && !document.getElementById('workbench-menu-edit')?.hidden"))
     evalj("window.__OUTDOOR_ROUTE_STUDIO__.workbench.closeMenus()")
-    check("左侧 3 个有效活动入口已渲染且无空设置入口",
-          evalj("document.querySelectorAll('.studio-activity-button').length === 3 && !document.querySelector('[data-activity=\"settings\"]')"))
+    check("左侧轨迹组、轨迹、行程和标注点 4 个入口已渲染",
+          evalj("document.querySelectorAll('.studio-activity-button').length === 4 && document.querySelector('.studio-activity-button')?.dataset.activity === 'groups' && !document.querySelector('[data-activity=\"settings\"]')"))
     check("Workbench 已移除右上角旧侧栏恢复按钮",
           evalj("!document.getElementById('sidebar-toggle')"))
     check("底部已收敛为无重复 Tab 的海拔分析区",
@@ -205,14 +205,14 @@ try:
           isinstance(language_flow, dict)
           and language_flow.get('zh', {}).get('menu') == ['编辑','规划']
           and language_flow.get('zh', {}).get('direct') == ['添加轨迹','测距','标注','导出','复位','帮助','语言']
-          and language_flow.get('zh', {}).get('activity') == ['轨迹','行程','标注点']
+          and language_flow.get('zh', {}).get('activity') == ['轨迹组','轨迹','行程','标注点']
           and language_flow.get('zh', {}).get('bottom') == []
           and language_flow.get('zh', {}).get('context') == '尚未加载轨迹', str(language_flow))
     check("Workbench 英文标签完整并可切回中文",
           isinstance(language_flow, dict)
           and language_flow.get('en', {}).get('menu') == ['Edit','Plan']
           and language_flow.get('en', {}).get('direct') == ['Add trail','Measure','Waypoint','Export','Reset','Help','Language']
-          and language_flow.get('en', {}).get('activity') == ['Trails','Itinerary','Waypoints']
+          and language_flow.get('en', {}).get('activity') == ['Trail Groups','Trails','Itinerary','Waypoints']
           and language_flow.get('en', {}).get('bottom') == []
           and language_flow.get('en', {}).get('context') == 'No trail loaded'
           and language_flow.get('finalLang') == 'zh-CN', str(language_flow))
@@ -249,8 +249,8 @@ try:
           evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
     check("旧命令节点已无损迁移到多项菜单或顶栏直接操作区",
           evalj("['reverse-btn','clear-btn','segment-btn','add-escape-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup')) && ['add-trail-btn','measure-btn','add-waypoint-btn','export-btn','reset-btn','help-btn','lang-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-list')?.classList.contains('studio-menu-list'))"))
-    check("轨迹组选择拥有独立于轨迹列表的固定区域",
-          evalj("!!document.getElementById('trail-group-panel') && !!document.getElementById('trail-group-list') && !document.querySelector('#trail-list .group-tab-bar')"))
+    check("轨迹组选择拥有独立入口和独立页面",
+          evalj("!!document.getElementById('workbench-activity-groups') && !!document.querySelector('#tab-groups > #trail-group-panel #trail-group-list .group-tab') && !document.querySelector('#tab-trails #trail-group-panel, #trail-list .group-tab-bar')"))
     check("顶部、活动栏和分析栏均绑定语义命令",
           evalj("[...document.querySelectorAll('.studio-command,.studio-activity-button,.studio-bottom-tab')].every(node => node.dataset.commandId && window.__OUTDOOR_ROUTE_STUDIO__?.commands.has(node.dataset.commandId))"))
     check("TypeScript core runtime 已接管关键函数",
@@ -702,6 +702,12 @@ try:
         await Promise.resolve();
         const shortcutCancelled = interactionManager.current.kind === 'idle';
 
+        document.getElementById('workbench-activity-groups').click();
+        await Promise.resolve();
+        const activityOpenedGroups = document.querySelector('.tab[data-tab="groups"]').classList.contains('active')
+          && document.getElementById('workbench-activity-groups').classList.contains('is-active')
+          && !!document.querySelector('#tab-groups .group-tab');
+
         document.getElementById('workbench-activity-itinerary').click();
         await Promise.resolve();
         const activityOpenedItinerary = document.querySelector('.tab[data-tab="days"]').classList.contains('active')
@@ -715,6 +721,7 @@ try:
           topMenuEnteredMeasure,
           measureActionsEmbedded,
           shortcutCancelled,
+          activityOpenedGroups,
           activityOpenedItinerary,
           escapeRoutesMerged,
           events,
@@ -729,7 +736,10 @@ try:
               command_flow.get('shortcutCancelled') == True and 'interaction.cancel' in command_flow['events'],
               str(command_flow))
         check("桌面/移动活动栏分发 workspace 命令",
-              command_flow.get('activityOpenedItinerary') == True and 'workspace.itinerary' in command_flow['events'],
+              command_flow.get('activityOpenedGroups') == True
+              and command_flow.get('activityOpenedItinerary') == True
+              and 'workspace.groups' in command_flow['events']
+              and 'workspace.itinerary' in command_flow['events'],
               str(command_flow))
         check("测距操作嵌入海拔分析区且没有重复 Tab",
               command_flow.get('measureActionsEmbedded') == True and 'panel.log' not in command_flow['events'],
