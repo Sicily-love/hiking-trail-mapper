@@ -10,12 +10,14 @@ const cssPath = path.join(root, 'src/styles/studio.css');
 const mainPath = path.join(root, 'src/main.ts');
 const bootstrapPath = path.join(root, 'src/app/bootstrap.ts');
 const shellPath = path.join(root, 'src/ui/layout/app-shell.ts');
+const runtimePath = path.join(root, 'src/app/runtime/studio.ts');
 const iconSource = fs.readFileSync(iconPath, 'utf8');
 const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
 const css = fs.readFileSync(cssPath, 'utf8');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
 const shellSource = fs.readFileSync(shellPath, 'utf8');
+const runtimeSource = fs.readFileSync(runtimePath, 'utf8');
 
 let iconModule = null;
 let workbenchModule = null;
@@ -87,29 +89,39 @@ test('icon helper renders against a supplied pure DOM document', () => {
   assert.ok(icon.children.length > 1);
 });
 
-test('top menu keeps six grouped menus and separates every View command', () => {
-  const expectedLabels = ['File', 'Edit', 'Measure', 'Plan', 'Waypoint', 'Export'];
-  const expectedZhLabels = ['文件', '编辑', '测距', '规划', '标注', '导出'];
-  const expectedMenuCommands = [
-    'add-trail-btn', 'reverse-btn', 'clear-btn', 'measure-btn', 'segment-btn',
-    'add-escape-btn', 'add-waypoint-btn', 'export-btn',
+test('top toolbar keeps only multi-command menus and flattens direct commands', () => {
+  const expectedLabels = ['Edit', 'Plan'];
+  const expectedZhLabels = ['编辑', '规划'];
+  const expectedMenuCommands = ['reverse-btn', 'clear-btn', 'segment-btn', 'add-escape-btn'];
+  const expectedDirect = [
+    'add-trail-btn', 'measure-btn', 'add-waypoint-btn', 'export-btn',
+    'reset-btn', 'help-btn', 'lang-btn',
   ];
-  const expectedStandalone = ['reset-btn', 'help-btn', 'lang-btn'];
+  const expectedLayout = [
+    'command:add-trail-btn', 'menu:edit', 'command:measure-btn', 'menu:plan',
+    'command:add-waypoint-btn', 'command:export-btn', 'command:reset-btn',
+    'command:help-btn', 'command:lang-btn',
+  ];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.MENU_DEFINITIONS.map(item => item.label), expectedLabels);
     assert.deepStrictEqual(workbenchModule.MENU_DEFINITIONS.map(item => item.labelZh), expectedZhLabels);
     const commandIds = workbenchModule.MENU_DEFINITIONS.flatMap(item => item.commandIds);
     assert.deepStrictEqual([...commandIds].sort(), [...expectedMenuCommands].sort());
-    assert.deepStrictEqual([...workbenchModule.STANDALONE_COMMAND_IDS], expectedStandalone);
+    assert.ok(workbenchModule.MENU_DEFINITIONS.every(item => item.commandIds.length > 1));
+    assert.deepStrictEqual([...workbenchModule.DIRECT_COMMAND_IDS], expectedDirect);
+    assert.deepStrictEqual(
+      workbenchModule.TOOLBAR_LAYOUT.map(item => `${item.kind}:${item.kind === 'menu' ? item.key : item.id}`),
+      expectedLayout,
+    );
     assert.strictEqual(new Set(commandIds).size, commandIds.length);
   } else {
     expectedLabels.forEach(label => assert.ok(workbenchSource.includes(`label: '${label}'`), label));
     expectedZhLabels.forEach(label => assert.ok(workbenchSource.includes(`labelZh: '${label}'`), label));
-    [...expectedMenuCommands, ...expectedStandalone]
+    [...expectedMenuCommands, ...expectedDirect]
       .forEach(id => assert.ok(workbenchSource.includes(`'${id}'`), id));
   }
-  assert.ok(workbenchSource.includes("quickActions.className") || workbenchSource.includes("'studio-quick-actions'"));
-  assert.ok(workbenchSource.includes('toolbar.replaceChildren(brandView.brand, menuList, quickActions)'));
+  assert.strictEqual(workbenchSource.includes('studio-quick-actions'), false);
+  assert.ok(workbenchSource.includes('toolbar.replaceChildren(brandView.brand, menuList)'));
 });
 
 test('activity rail exposes three focused destinations without dead settings', () => {
@@ -133,8 +145,13 @@ test('map modes live at the far-left rail and trails have a dedicated selector',
     expectedModes.forEach(mode => assert.ok(workbenchSource.includes(`mode: '${mode}'`), mode));
   }
   assert.ok(shellSource.indexOf('id="map-mode-controls"') < shellSource.indexOf('id="map"'));
+  assert.ok(shellSource.includes('id="trail-group-panel"'));
+  assert.ok(shellSource.includes('id="trail-group-list"'));
   assert.ok(shellSource.includes('id="trail-selector-panel"'));
   assert.ok(shellSource.includes('id="trail-list"'));
+  assert.ok(runtimeSource.includes("document.getElementById('trail-group-list')"));
+  assert.ok(runtimeSource.includes('groupPanel.hidden = !tabs'));
+  assert.strictEqual(runtimeSource.includes('list.appendChild(tabs)'), false);
   assert.ok(workbenchSource.includes('root.appendChild(modeSwitcher)'));
   assert.ok(workbenchSource.includes("modeSwitcher.className = 'studio-mode-switcher'"));
   assert.ok(css.includes('.studio-mode-button.on'));

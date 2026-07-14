@@ -78,6 +78,13 @@ export const APP_SHELL = `
     </nav>
     <div class="tab-content">
       <section class="tab-pane active" id="tab-trails">
+        <section id="trail-group-panel" class="studio-trail-group-selector" aria-labelledby="trail-group-title" hidden>
+          <header class="studio-trail-selector__header">
+            <h3 id="trail-group-title" data-i18n="trail.groups">轨迹组</h3>
+            <span class="studio-trail-selector__hint" data-i18n="trail.groups.hint">切换当前工作组</span>
+          </header>
+          <div id="trail-group-list"></div>
+        </section>
         <section id="trail-selector-panel" class="studio-trail-selector" aria-labelledby="trail-selector-title">
           <header class="studio-trail-selector__header">
             <h3 id="trail-selector-title" data-i18n="trail.list">轨迹选择</h3>

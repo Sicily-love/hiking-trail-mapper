@@ -93,7 +93,7 @@ html[data-workbench='2'] #map-toolbar.studio-menubar {
   inset:auto !important;
   z-index:auto;
   display:grid !important;
-  grid-template-columns:minmax(210px,260px) minmax(0,1fr) auto;
+  grid-template-columns:minmax(210px,260px) minmax(0,1fr);
   align-items:stretch;
   gap:0;
   width:100% !important;
@@ -184,49 +184,47 @@ html[data-workbench='2'] .studio-menu-list {
   overflow:visible;
 }
 
-html[data-workbench='2'] .studio-quick-actions {
-  display:flex;
-  min-width:0;
-  align-items:stretch;
-  border-left:1px solid var(--studio-line);
-}
-
-html[data-workbench='2'] #map-toolbar .studio-quick-command {
+html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command {
   display:inline-grid;
-  grid-template-columns:18px minmax(0,auto);
+  flex:0 0 auto;
+  grid-template-columns:15px minmax(0,auto);
   width:auto;
-  min-width:66px;
+  min-width:76px;
   height:51px;
   min-height:51px;
-  place-items:center;
-  align-content:center;
+  align-items:center;
   justify-content:center;
   gap:5px;
-  padding:0 9px;
+  padding:0 10px;
   border:0;
   border-bottom:2px solid transparent;
   border-radius:0;
   background:transparent;
   color:var(--studio-text);
-  font:600 10px/1 var(--studio-font);
+  font:600 11px/1 var(--studio-font);
+  text-align:center;
   cursor:pointer;
 }
 
-html[data-workbench='2'] #map-toolbar .studio-quick-command:hover,
-html[data-workbench='2'] #map-toolbar .studio-quick-command.on {
+html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command:hover,
+html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command:focus-visible,
+html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command.on {
   border-bottom-color:var(--studio-orange);
+  border-top-color:transparent;
+  border-right-color:transparent;
+  border-left-color:transparent;
   background:var(--studio-forest-soft);
   color:var(--studio-forest-hover);
 }
 
-html[data-workbench='2'] #map-toolbar .studio-quick-command .studio-command-icon {
-  width:18px;
-  height:18px;
+html[data-workbench='2'] #map-toolbar .studio-toolbar-command .studio-command-icon {
+  width:15px;
+  height:15px;
   color:currentColor;
 }
 
-html[data-workbench='2'] #map-toolbar .studio-quick-command .studio-command-label {
-  font-size:10px;
+html[data-workbench='2'] #map-toolbar .studio-toolbar-command .studio-command-label {
+  font-size:11px;
 }
 
 html[data-workbench='2'] .studio-menu-group {
@@ -547,10 +545,21 @@ html[data-workbench='2'] #primary-card {
   font-family:var(--studio-font);
 }
 
-html[data-workbench='2'] .studio-trail-selector {
+html[data-workbench='2'] .studio-trail-selector,
+html[data-workbench='2'] .studio-trail-group-selector {
   padding:12px 14px 14px;
   border-bottom:1px solid var(--studio-line-strong);
   background:var(--studio-surface);
+}
+
+html[data-workbench='2'] .studio-trail-group-selector {
+  background:var(--studio-surface-muted);
+}
+
+html[data-workbench='2'] .studio-trail-group-selector .group-tab-bar {
+  margin:0;
+  padding:0;
+  border:0;
 }
 
 html[data-workbench='2'] .studio-trail-selector__header {
@@ -850,7 +859,7 @@ html[data-workbench='2'] :where(
 
 @media (max-width: 1440px) {
   html[data-workbench='2'] #map-toolbar.studio-menubar {
-    grid-template-columns:minmax(196px,224px) minmax(0,1fr) auto;
+    grid-template-columns:minmax(196px,224px) minmax(0,1fr);
   }
 
   html[data-workbench='2'] .studio-workspace {
@@ -869,26 +878,36 @@ html[data-workbench='2'] :where(
     min-width:70px;
     padding:0 8px;
   }
+
+  html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command {
+    min-width:70px;
+    padding:0 8px;
+  }
 }
 
 @media (max-width: 1024px) {
   html[data-workbench='2'] #map-toolbar.studio-menubar {
-    grid-template-columns:180px minmax(0,1fr) auto;
+    grid-template-columns:180px minmax(0,1fr);
   }
 
-  html[data-workbench='2'] .studio-menu-trigger {
-    min-width:66px;
-    padding:0 6px;
+  html[data-workbench='2'] .studio-menu-group,
+  html[data-workbench='2'] #map-toolbar .studio-toolbar-command {
+    min-width:0;
+    flex:1 1 0;
   }
 
-  html[data-workbench='2'] #map-toolbar .studio-quick-command {
+  html[data-workbench='2'] .studio-menu-trigger,
+  html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command {
+    flex:1 1 0;
     grid-template-columns:1fr;
-    width:44px;
-    min-width:44px;
+    width:100%;
+    min-width:0;
     padding:0;
   }
 
-  html[data-workbench='2'] .studio-quick-command .studio-command-label {
+  html[data-workbench='2'] .studio-menu-label,
+  html[data-workbench='2'] .studio-menu-caret,
+  html[data-workbench='2'] .studio-toolbar-command .studio-command-label {
     position:absolute;
     width:1px;
     height:1px;
@@ -1317,7 +1336,7 @@ html[data-workbench='2'] .workbench-dialog--danger .workbench-dialog__title {
   }
 
   html[data-workbench='2'] #map-toolbar.studio-menubar {
-    grid-template-columns:44px minmax(0,1fr) 108px;
+    grid-template-columns:44px minmax(0,1fr);
   }
 
   html[data-workbench='2'] #map-toolbar .studio-brand {
@@ -1362,13 +1381,6 @@ html[data-workbench='2'] .workbench-dialog--danger .workbench-dialog__title {
     width:100%;
     min-width:0;
     height:47px;
-    padding:0;
-  }
-
-  html[data-workbench='2'] #map-toolbar .studio-quick-command {
-    grid-template-columns:1fr;
-    width:36px;
-    min-width:36px;
     padding:0;
   }
 
@@ -1506,7 +1518,7 @@ html[data-workbench='2'] .workbench-dialog--danger .workbench-dialog__title {
   }
 
   html[data-workbench='2'] #map-toolbar.studio-menubar {
-    grid-template-columns:44px minmax(0,1fr) 96px;
+    grid-template-columns:44px minmax(0,1fr);
   }
 
   html[data-workbench='2'] #map-toolbar .studio-brand {
@@ -1532,9 +1544,7 @@ html[data-workbench='2'] .workbench-dialog--danger .workbench-dialog__title {
     height:43px;
   }
 
-  html[data-workbench='2'] #map-toolbar .studio-quick-command {
-    width:32px;
-    min-width:32px;
+  html[data-workbench='2'] #map-toolbar .studio-command.studio-toolbar-command {
     height:43px;
     min-height:43px;
   }

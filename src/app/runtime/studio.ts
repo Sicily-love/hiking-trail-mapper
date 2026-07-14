@@ -1587,8 +1587,11 @@ export function startStudioRuntime(
     const list = document.getElementById('trail-list');
     list.innerHTML = '';
 
+    const groupPanel = document.getElementById('trail-group-panel');
+    const groupList = document.getElementById('trail-group-list');
     const tabs = renderGroupTabs();
-    if(tabs) list.appendChild(tabs);
+    if(groupList) groupList.replaceChildren(...(tabs ? [tabs] : []));
+    if(groupPanel) groupPanel.hidden = !tabs;
 
     // v1.20.0：无选中分组时给一个明确提示（而不是"当前组暂无备选轨迹"的误导）
     if(state.activeGroup == null && DATA.trails.length > 0) {

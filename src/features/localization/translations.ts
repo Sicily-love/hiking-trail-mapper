@@ -19,6 +19,8 @@ export const TRANSLATIONS: TranslationCatalog = {
     // 轨迹 tab
     'trail.list': '轨迹选择',
     'trail.selector.hint': '选择主轨迹与叠加轨迹',
+    'trail.groups': '轨迹组',
+    'trail.groups.hint': '切换当前工作组',
     'trail.primary': '★主',
     'trail.show': '✓ 显示',
     'trail.hide': '○ 隐藏',
@@ -164,6 +166,8 @@ export const TRANSLATIONS: TranslationCatalog = {
     'tab.escape': 'Escape',
     'trail.list': 'Trail Selection',
     'trail.selector.hint': 'Choose the primary and overlay trails',
+    'trail.groups': 'Trail Groups',
+    'trail.groups.hint': 'Switch the active workspace group',
     'trail.primary': '★Main',
     'trail.show': '✓ Show',
     'trail.hide': '○ Hide',

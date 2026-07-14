@@ -20,23 +20,19 @@ export const COMMAND_DEFINITIONS = {
   'add-trail-btn': { icon: 'plus', label: 'Add trail', labelZh: '添加轨迹', commandId: STUDIO_COMMANDS.FILE_IMPORT },
   'reverse-btn': { icon: 'rotate', label: 'Reverse trail', labelZh: '反向轨迹', commandId: STUDIO_COMMANDS.TRAIL_REVERSE },
   'clear-btn': { icon: 'trash', label: 'Clear all', labelZh: '清空项目', commandId: STUDIO_COMMANDS.PROJECT_CLEAR },
-  'measure-btn': { icon: 'ruler', label: 'Measure distance', labelZh: '测量距离', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
+  'measure-btn': { icon: 'ruler', label: 'Measure', labelZh: '测距', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
   'segment-btn': { icon: 'calendar', label: 'Plan segments', labelZh: '行程分段', commandId: STUDIO_COMMANDS.SEGMENT_TOGGLE },
   'add-escape-btn': { icon: 'shield', label: 'Add escape route', labelZh: '添加下撤路线', commandId: STUDIO_COMMANDS.ESCAPE_TOGGLE },
-  'add-waypoint-btn': { icon: 'map-pin', label: 'Add waypoint', labelZh: '添加标注点', commandId: STUDIO_COMMANDS.WAYPOINT_TOGGLE },
-  'reset-btn': { icon: 'crosshair', label: 'Reset view', labelZh: '复位视图', commandId: STUDIO_COMMANDS.MAP_RESET },
+  'add-waypoint-btn': { icon: 'map-pin', label: 'Waypoint', labelZh: '标注', commandId: STUDIO_COMMANDS.WAYPOINT_TOGGLE },
+  'reset-btn': { icon: 'crosshair', label: 'Reset', labelZh: '复位', commandId: STUDIO_COMMANDS.MAP_RESET },
   'help-btn': { icon: 'help', label: 'Help', labelZh: '帮助', commandId: STUDIO_COMMANDS.HELP_OPEN },
   'lang-btn': { icon: 'language', label: 'Language', labelZh: '语言', commandId: STUDIO_COMMANDS.LANGUAGE_TOGGLE },
   'export-btn': { icon: 'download', label: 'Export', labelZh: '导出', commandId: STUDIO_COMMANDS.FILE_EXPORT },
 } as const satisfies Record<string, CommandDefinition>;
 
 export const MENU_DEFINITIONS = [
-  { key: 'file', label: 'File', labelZh: '文件', icon: 'file', commandIds: ['add-trail-btn'] },
   { key: 'edit', label: 'Edit', labelZh: '编辑', icon: 'pencil', commandIds: ['reverse-btn', 'clear-btn'] },
-  { key: 'measure', label: 'Measure', labelZh: '测距', icon: 'ruler', commandIds: ['measure-btn'] },
   { key: 'plan', label: 'Plan', labelZh: '规划', icon: 'calendar', commandIds: ['segment-btn', 'add-escape-btn'] },
-  { key: 'waypoint', label: 'Waypoint', labelZh: '标注', icon: 'map-pin', commandIds: ['add-waypoint-btn'] },
-  { key: 'export', label: 'Export', labelZh: '导出', icon: 'download', commandIds: ['export-btn'] },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
@@ -45,11 +41,27 @@ export const MENU_DEFINITIONS = [
   commandIds: ReadonlyArray<keyof typeof COMMAND_DEFINITIONS>;
 }>;
 
-export const STANDALONE_COMMAND_IDS = [
+export const DIRECT_COMMAND_IDS = [
+  'add-trail-btn',
+  'measure-btn',
+  'add-waypoint-btn',
+  'export-btn',
   'reset-btn',
   'help-btn',
   'lang-btn',
 ] as const satisfies ReadonlyArray<keyof typeof COMMAND_DEFINITIONS>;
+
+export const TOOLBAR_LAYOUT = [
+  { kind: 'command', id: 'add-trail-btn' },
+  { kind: 'menu', key: 'edit' },
+  { kind: 'command', id: 'measure-btn' },
+  { kind: 'menu', key: 'plan' },
+  { kind: 'command', id: 'add-waypoint-btn' },
+  { kind: 'command', id: 'export-btn' },
+  { kind: 'command', id: 'reset-btn' },
+  { kind: 'command', id: 'help-btn' },
+  { kind: 'command', id: 'lang-btn' },
+] as const;
 
 export const ACTIVITY_DEFINITIONS = [
   { key: 'trails', label: 'Trails', labelZh: '轨迹', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
@@ -409,7 +421,8 @@ export function upgradeWorkbenchLayout(
   const analysisDock = buildAnalysisDock(document, language);
   const activityRail = buildActivityRail(document, language);
   const menuList = createElement(document, 'div', 'studio-menu-list');
-  const quickActions = createElement(document, 'div', 'studio-quick-actions');
+  const menuGroups = new Map<WorkbenchMenuKey, HTMLElement>();
+  const directButtons = new Map<(typeof DIRECT_COMMAND_IDS)[number], HTMLButtonElement>();
   const menuViews = new Map<WorkbenchMenuKey, MenuView>();
   const commandButtons = new Map<keyof typeof COMMAND_DEFINITIONS, HTMLButtonElement>();
   let activeMenu: WorkbenchMenuKey | null = null;
@@ -417,10 +430,8 @@ export function upgradeWorkbenchLayout(
   const brandView = prepareBrand(document, header, toolbar);
   if(!brandView) return null;
 
-  menuList.setAttribute('role', 'menubar');
-  menuList.setAttribute('aria-label', 'Application menu');
-  quickActions.setAttribute('role', 'toolbar');
-  quickActions.setAttribute('aria-label', language === 'zh' ? '快捷操作' : 'Quick actions');
+  menuList.setAttribute('role', 'toolbar');
+  menuList.setAttribute('aria-label', language === 'zh' ? '工作台操作' : 'Workbench actions');
 
   const dispatchCommand = (commandId: StudioCommandId): void => {
     try {
@@ -442,7 +453,6 @@ export function upgradeWorkbenchLayout(
 
     trigger.type = 'button';
     trigger.dataset.menu = definition.key;
-    trigger.setAttribute('role', 'menuitem');
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-controls', menuId);
@@ -480,18 +490,18 @@ export function upgradeWorkbenchLayout(
 
     if(!panel.children.length) trigger.disabled = true;
     group.append(trigger, panel);
-    menuList.appendChild(group);
+    menuGroups.set(definition.key, group);
     menuViews.set(definition.key, { panel, trigger });
   }
 
-  for(const id of STANDALONE_COMMAND_IDS) {
+  for(const id of DIRECT_COMMAND_IDS) {
     const command = document.getElementById(id) as HTMLButtonElement | null;
     if(!command) continue;
     const definition = COMMAND_DEFINITIONS[id];
     command.type = 'button';
     command.dataset.commandId = definition.commandId;
     decorateControl(document, command, definition, 'command', language);
-    command.classList.add('studio-quick-command');
+    command.classList.add('studio-toolbar-command');
     const onCommandClick = (event: MouseEvent): void => {
       event.preventDefault();
       closeMenus(false);
@@ -499,8 +509,18 @@ export function upgradeWorkbenchLayout(
     };
     command.addEventListener('click', onCommandClick);
     cleanups.push(() => command.removeEventListener('click', onCommandClick));
-    quickActions.appendChild(command);
+    directButtons.set(id, command);
     commandButtons.set(id, command);
+  }
+
+  for(const item of TOOLBAR_LAYOUT) {
+    if(item.kind === 'menu') {
+      const group = menuGroups.get(item.key);
+      if(group) menuList.appendChild(group);
+    } else {
+      const command = directButtons.get(item.id);
+      if(command) menuList.appendChild(command);
+    }
   }
 
   const retainedToolbarNodes = Array.from(toolbar.querySelectorAll<HTMLElement>('[id]'))
@@ -511,7 +531,7 @@ export function upgradeWorkbenchLayout(
 
   toolbar.classList.add('studio-menubar');
   toolbar.setAttribute('aria-label', 'Trail workspace');
-  toolbar.replaceChildren(brandView.brand, menuList, quickActions);
+  toolbar.replaceChildren(brandView.brand, menuList);
   header.classList.add('studio-topbar');
   header.style.removeProperty('display');
   header.removeAttribute('aria-hidden');
@@ -557,7 +577,7 @@ export function upgradeWorkbenchLayout(
       button.dataset.workbenchLabel = label;
       button.setAttribute('aria-label', label);
     }
-    quickActions.setAttribute('aria-label', language === 'zh' ? '快捷操作' : 'Quick actions');
+    menuList.setAttribute('aria-label', language === 'zh' ? '工作台操作' : 'Workbench actions');
     for(const definition of ACTIVITY_DEFINITIONS) {
       const button = activityRail.buttons.get(definition.key);
       const label = localizedLabel(definition, language);

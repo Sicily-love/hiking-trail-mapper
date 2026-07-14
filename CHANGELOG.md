@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.0.3 — 2026-07-14
+
+**中文**
+
+- 将轨迹组选择拆分为独立区域，避免与轨迹列表混排
+- 扁平化顶部工具栏：仅编辑和规划保留下拉菜单，添加轨迹、测距、标注、导出、复位、帮助和语言改为同级操作
+
+**English**
+
+- Moved trail-group selection into a dedicated area instead of mixing it into the trail list
+- Flattened the top toolbar so only Edit and Plan retain menus while Add trail, Measure, Waypoint, Export, Reset, Help, and Language are peer actions
+
 ## v2.0.2 — 2026-07-14
 
 **中文**
