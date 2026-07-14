@@ -47,12 +47,9 @@ export const MENU_DEFINITIONS = [
 }>;
 
 export const ACTIVITY_DEFINITIONS = [
-  { key: 'project', label: 'Project', labelZh: '项目', icon: 'folder', commandId: STUDIO_COMMANDS.WORKSPACE_PROJECT },
   { key: 'trails', label: 'Trails', labelZh: '轨迹', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
   { key: 'itinerary', label: 'Itinerary', labelZh: '行程', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
   { key: 'waypoints', label: 'Waypoints', labelZh: '标注点', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
-  { key: 'escape', label: 'Escape', labelZh: '下撤', icon: 'shield', commandId: STUDIO_COMMANDS.WORKSPACE_ESCAPE },
-  { key: 'statistics', label: 'Statistics', labelZh: '统计', icon: 'chart', commandId: STUDIO_COMMANDS.WORKSPACE_STATISTICS, bottomTab: 'statistics' },
   { key: 'settings', label: 'Settings', labelZh: '设置', icon: 'settings', commandId: STUDIO_COMMANDS.WORKSPACE_SETTINGS, menu: 'view' },
 ] as const satisfies ReadonlyArray<{
   key: string;
@@ -60,28 +57,17 @@ export const ACTIVITY_DEFINITIONS = [
   labelZh: string;
   icon: WorkbenchIconName;
   commandId: StudioCommandId;
-  bottomTab?: string;
   menu?: string;
 }>;
 
-export const BOTTOM_TAB_DEFINITIONS = [
-  { key: 'elevation', label: 'Elevation', labelZh: '海拔', icon: 'mountain', nodeId: 'elev-bar', commandId: STUDIO_COMMANDS.PANEL_ELEVATION },
-  { key: 'statistics', label: 'Statistics', labelZh: '统计', icon: 'chart', nodeId: 'header-stats', commandId: STUDIO_COMMANDS.PANEL_STATISTICS },
-  { key: 'measure', label: 'Measure', labelZh: '测距', icon: 'ruler', nodeId: 'measure-panel', commandId: STUDIO_COMMANDS.PANEL_MEASURE },
-  { key: 'segment', label: 'Segment', labelZh: '分段', icon: 'calendar', nodeId: 'segment-panel', commandId: STUDIO_COMMANDS.PANEL_SEGMENT },
-  { key: 'log', label: 'Log', labelZh: '日志', icon: 'logs', nodeId: null, commandId: STUDIO_COMMANDS.PANEL_LOG },
-] as const satisfies ReadonlyArray<{
-  key: string;
-  label: string;
-  labelZh: string;
-  icon: WorkbenchIconName;
-  nodeId: string | null;
-  commandId: StudioCommandId;
-}>;
+export const MAP_MODE_DEFINITIONS = [
+  { mode: 'elev', label: 'Elevation mode', labelZh: '海拔模式', icon: 'mountain' },
+  { mode: 'waypoint', label: 'Waypoint mode', labelZh: '标注点模式', icon: 'map-pin' },
+] as const satisfies ReadonlyArray<ControlDefinition & { mode: 'elev' | 'waypoint' }>;
 
 export const WORKBENCH_STORAGE_KEYS = {
   activity: 'hiking_workbench2_activity',
-  bottomTab: 'hiking_workbench2_bottom_tab',
+  elevationCollapsed: 'hiking_elevation_dock_collapsed',
 } as const;
 
 const AUXILIARY_CONTROLS = {
@@ -98,23 +84,24 @@ const AUXILIARY_CONTROLS = {
   'addescape-reset': { icon: 'rotate', label: 'Reset escape route', labelZh: '重选下撤路线' },
   'addescape-exit': { icon: 'x', label: 'Exit escape mode', labelZh: '退出下撤' },
   'sidebar-close': { icon: 'panel-left-close', label: 'Close sidebar', labelZh: '收起侧栏' },
-  'sidebar-toggle': { icon: 'panel-left-open', label: 'Open sidebar', labelZh: '展开侧栏' },
 } as const satisfies Record<string, ControlDefinition>;
 
 export type WorkbenchMenuKey = (typeof MENU_DEFINITIONS)[number]['key'];
 export type WorkbenchActivityKey = (typeof ACTIVITY_DEFINITIONS)[number]['key'];
-export type WorkbenchBottomTabKey = (typeof BOTTOM_TAB_DEFINITIONS)[number]['key'];
 export type WorkbenchStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export interface WorkbenchLayoutController {
   activateActivity(activity: WorkbenchActivityKey): void;
-  activateBottomTab(tab: WorkbenchBottomTabKey): void;
   closeMenus(): void;
   setLanguage(language: WorkbenchLanguage): void;
   destroy(): void;
 }
 
 export type WorkbenchLanguage = 'zh' | 'en';
+
+export function shouldCloseSidebarForFit(viewportWidth: number, sidebarCollapsed: boolean): boolean {
+  return viewportWidth <= 760 && !sidebarCollapsed;
+}
 
 function localizedLabel(definition: ControlDefinition, language: WorkbenchLanguage): string {
   return language === 'zh' ? definition.labelZh : definition.label;
@@ -123,14 +110,6 @@ function localizedLabel(definition: ControlDefinition, language: WorkbenchLangua
 interface MenuView {
   panel: HTMLElement;
   trigger: HTMLButtonElement;
-}
-
-interface BottomDockView {
-  log: HTMLElement;
-  panes: Map<WorkbenchBottomTabKey, HTMLElement>;
-  root: HTMLElement;
-  tabList: HTMLElement;
-  tabs: Map<WorkbenchBottomTabKey, HTMLButtonElement>;
 }
 
 const controllers = new WeakMap<Document, WorkbenchLayoutController>();
@@ -210,79 +189,72 @@ function isActivityKey(value: string | null): value is WorkbenchActivityKey {
   return ACTIVITY_DEFINITIONS.some(activity => activity.key === value);
 }
 
-function isBottomTabKey(value: string | null): value is WorkbenchBottomTabKey {
-  return BOTTOM_TAB_DEFINITIONS.some(tab => tab.key === value);
-}
-
-function buildBottomDock(document: Document, language: WorkbenchLanguage): BottomDockView {
+function buildAnalysisDock(document: Document, language: WorkbenchLanguage): HTMLElement {
   const root = createElement(document, 'section', 'studio-bottom-dock');
-  const tabList = createElement(document, 'div', 'studio-bottom-tabs');
   const content = createElement(document, 'div', 'studio-bottom-content');
-  const tabs = new Map<WorkbenchBottomTabKey, HTMLButtonElement>();
-  const panes = new Map<WorkbenchBottomTabKey, HTMLElement>();
-  const log = createElement(document, 'div', 'studio-log-stream');
+  const pane = createElement(document, 'div', 'studio-bottom-pane');
 
-  root.setAttribute('aria-label', 'Workbench panels');
-  tabList.setAttribute('role', 'tablist');
-  tabList.setAttribute('aria-label', 'Workbench panels');
-  log.setAttribute('role', 'log');
-  log.setAttribute('aria-live', 'polite');
-  log.setAttribute('aria-relevant', 'additions text');
+  root.classList.add('studio-bottom-dock--fixed');
+  root.setAttribute('aria-label', language === 'zh' ? '海拔分析' : 'Elevation analysis');
+  pane.id = 'workbench-elevation-analysis';
+  pane.dataset.analysisPanel = 'elevation';
+  pane.setAttribute('role', 'region');
+  pane.setAttribute('aria-label', language === 'zh' ? '海拔剖面' : 'Elevation profile');
 
-  for(const definition of BOTTOM_TAB_DEFINITIONS) {
-    const tab = createElement(document, 'button', 'studio-bottom-tab');
-    const pane = createElement(document, 'div', 'studio-bottom-pane');
-    const label = createElement(document, 'span', 'studio-bottom-tab-label');
-    const tabId = `workbench-bottom-tab-${definition.key}`;
-    const paneId = `workbench-bottom-panel-${definition.key}`;
-
-    tab.type = 'button';
-    tab.id = tabId;
-    tab.dataset.bottomTab = definition.key;
-    tab.dataset.commandId = definition.commandId;
-    const localized = localizedLabel(definition, language);
-    tab.title = localized;
-    tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-controls', paneId);
-    tab.setAttribute('aria-selected', 'false');
-    tab.tabIndex = -1;
-    label.textContent = localized;
-    tab.append(createWorkbenchIcon(document, definition.icon, { size: 15 }), label);
-
-    pane.id = paneId;
-    pane.dataset.bottomPanel = definition.key;
-    pane.setAttribute('role', 'tabpanel');
-    pane.setAttribute('aria-labelledby', tabId);
-    pane.tabIndex = -1;
-    pane.hidden = true;
-
-    if(definition.nodeId) {
-      const existingPanel = document.getElementById(definition.nodeId);
-      if(existingPanel) {
-        existingPanel.classList.add('studio-docked-panel');
-        pane.appendChild(existingPanel);
-      }
-    } else {
-      pane.appendChild(log);
-    }
-
-    tabList.appendChild(tab);
-    content.appendChild(pane);
-    tabs.set(definition.key, tab);
-    panes.set(definition.key, pane);
+  const elevationPanel = document.getElementById('elev-bar');
+  if(elevationPanel) {
+    elevationPanel.classList.add('studio-docked-panel');
+    pane.appendChild(elevationPanel);
+  }
+  const measurePanel = document.getElementById('measure-panel');
+  if(measurePanel) {
+    measurePanel.classList.add('studio-elevation-measure-actions');
+    pane.appendChild(measurePanel);
   }
 
-  root.append(tabList, content);
-  return { log, panes, root, tabList, tabs };
+  content.appendChild(pane);
+  root.append(content);
+  return root;
 }
 
 function buildActivityRail(document: Document, language: WorkbenchLanguage): {
   buttons: Map<WorkbenchActivityKey, HTMLButtonElement>;
+  modeButtons: Map<(typeof MAP_MODE_DEFINITIONS)[number]['mode'], HTMLButtonElement>;
   root: HTMLElement;
 } {
   const root = createElement(document, 'nav', 'studio-activity-rail');
   const buttons = new Map<WorkbenchActivityKey, HTMLButtonElement>();
+  const modeButtons = new Map<(typeof MAP_MODE_DEFINITIONS)[number]['mode'], HTMLButtonElement>();
   root.setAttribute('aria-label', 'Workbench activity');
+
+  const modeSwitcher = document.getElementById('map-mode-controls');
+  if(modeSwitcher) {
+    modeSwitcher.className = 'studio-mode-switcher';
+    modeSwitcher.setAttribute('role', 'group');
+    modeSwitcher.setAttribute('aria-label', language === 'zh' ? '地图显示模式' : 'Map display mode');
+    for(const definition of MAP_MODE_DEFINITIONS) {
+      const button = modeSwitcher.querySelector<HTMLButtonElement>(`[data-mode="${definition.mode}"]`);
+      if(!button) continue;
+      const active = button.classList.contains('on');
+      const label = localizedLabel(definition, language);
+      const labelNode = createElement(document, 'span', 'studio-mode-label');
+      const i18nKey = button.dataset.i18n;
+      button.className = 'studio-mode-button';
+      button.classList.toggle('on', active);
+      button.type = 'button';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.setAttribute('aria-pressed', String(active));
+      labelNode.textContent = label;
+      if(i18nKey) {
+        delete button.dataset.i18n;
+        labelNode.dataset.i18n = i18nKey;
+      }
+      button.replaceChildren(createWorkbenchIcon(document, definition.icon, { size: 17 }), labelNode);
+      modeButtons.set(definition.mode, button);
+    }
+    root.appendChild(modeSwitcher);
+  }
 
   for(const definition of ACTIVITY_DEFINITIONS) {
     const button = createElement(document, 'button', 'studio-activity-button');
@@ -303,7 +275,68 @@ function buildActivityRail(document: Document, language: WorkbenchLanguage): {
     buttons.set(definition.key, button);
   }
 
-  return { buttons, root };
+  return { buttons, modeButtons, root };
+}
+
+function prepareSidebarHeading(
+  document: Document,
+  sidebar: HTMLElement,
+  primaryCard: HTMLElement | null,
+): HTMLElement | null {
+  const existing = sidebar.querySelector<HTMLElement>('.sidebar-heading');
+  if(existing) return existing.querySelector<HTMLElement>('strong');
+  if(!primaryCard) return null;
+  const heading = createElement(document, 'div', 'sidebar-heading');
+  const copy = createElement(document, 'span', 'sidebar-heading-copy');
+  const eyebrow = createElement(document, 'small', 'sidebar-heading-eyebrow');
+  const title = createElement(document, 'strong', 'sidebar-heading-title');
+  const status = createElement(document, 'span', 'sidebar-status');
+  eyebrow.textContent = 'ROUTE LIBRARY';
+  title.textContent = '路线与行程';
+  status.setAttribute('aria-hidden', 'true');
+  copy.append(eyebrow, title);
+  heading.append(copy, status);
+  sidebar.insertBefore(heading, primaryCard);
+  return title;
+}
+
+function prepareElevationToggle(
+  document: Document,
+  panel: HTMLElement,
+  storage: WorkbenchStorage | null | undefined,
+): { render: (language: WorkbenchLanguage) => void; destroy: () => void } {
+  const button = document.getElementById('elev-toggle') as HTMLButtonElement | null
+    ?? createElement(document, 'button', 'elev-toggle');
+  button.id = 'elev-toggle';
+  button.type = 'button';
+  if(!button.isConnected) panel.appendChild(button);
+  panel.classList.toggle(
+    'collapsed',
+    readStorage(storage, WORKBENCH_STORAGE_KEYS.elevationCollapsed) === '1',
+  );
+
+  let language: WorkbenchLanguage = 'zh';
+  const render = (nextLanguage: WorkbenchLanguage): void => {
+    language = nextLanguage;
+    const collapsed = panel.classList.contains('collapsed');
+    const label = language === 'zh'
+      ? (collapsed ? '展开海拔分析' : '收起海拔分析')
+      : (collapsed ? 'Expand elevation analysis' : 'Collapse elevation analysis');
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.classList.toggle('is-collapsed', collapsed);
+    button.replaceChildren(createWorkbenchIcon(document, 'chevron-down', { size: 16 }));
+  };
+  const onClick = (event: MouseEvent): void => {
+    event.stopPropagation();
+    const collapsed = panel.classList.toggle('collapsed');
+    writeStorage(storage, WORKBENCH_STORAGE_KEYS.elevationCollapsed, collapsed ? '1' : '0');
+    render(language);
+    scheduleDocumentResize(document);
+  };
+  button.addEventListener('click', onClick);
+  return {render, destroy:() => button.removeEventListener('click', onClick)};
 }
 
 function prepareBrand(
@@ -367,29 +400,22 @@ export function upgradeWorkbenchLayout(
   const sidebarElement = sidebar;
 
   let language: WorkbenchLanguage = document.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'zh';
-  const dock = buildBottomDock(document, language);
+  const cleanups: Array<() => void> = [];
+  const sidebarTitle = prepareSidebarHeading(document, sidebar, document.getElementById('primary-card'));
+  const elevationToggle = prepareElevationToggle(document, elevationPanel, storage);
+  cleanups.push(elevationToggle.destroy);
+  const analysisDock = buildAnalysisDock(document, language);
   const activityRail = buildActivityRail(document, language);
   const menuList = createElement(document, 'div', 'studio-menu-list');
   const menuViews = new Map<WorkbenchMenuKey, MenuView>();
   const commandButtons = new Map<keyof typeof COMMAND_DEFINITIONS, HTMLButtonElement>();
-  const cleanups: Array<() => void> = [];
   let activeMenu: WorkbenchMenuKey | null = null;
-  let activeBottomTab: WorkbenchBottomTabKey = 'elevation';
-  let activeActivity: WorkbenchActivityKey = 'project';
 
   const brandView = prepareBrand(document, header, toolbar);
   if(!brandView) return null;
 
   menuList.setAttribute('role', 'menubar');
   menuList.setAttribute('aria-label', 'Application menu');
-
-  const writeLog = (message: string): void => {
-    const entry = createElement(document, 'div', 'studio-log-entry');
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    entry.textContent = `${time} ${message}`;
-    dock.log.appendChild(entry);
-    while(dock.log.childElementCount > 50) dock.log.firstElementChild?.remove();
-  };
 
   const dispatchCommand = (commandId: StudioCommandId): void => {
     try {
@@ -453,23 +479,15 @@ export function upgradeWorkbenchLayout(
     menuViews.set(definition.key, { panel, trigger });
   }
 
-  const toolbarMore = document.getElementById('toolbar-more');
   const retainedToolbarNodes = Array.from(toolbar.querySelectorAll<HTMLElement>('[id]'))
-    .filter(node => node !== toolbarMore && node.id !== 'toolbar-context');
-  const legacyAnchors = createElement(document, 'div', 'studio-legacy-anchors');
-  legacyAnchors.hidden = true;
-  if(toolbarMore) {
-    toolbarMore.hidden = true;
-    legacyAnchors.appendChild(toolbarMore);
-  }
-  for(const node of retainedToolbarNodes) {
-    if(!commandButtons.has(node.id as keyof typeof COMMAND_DEFINITIONS)) legacyAnchors.appendChild(node);
-  }
+    .filter(node => node.id !== 'toolbar-context');
+  retainedToolbarNodes
+    .filter(node => !commandButtons.has(node.id as keyof typeof COMMAND_DEFINITIONS))
+    .forEach(node => node.remove());
 
   toolbar.classList.add('studio-menubar');
   toolbar.setAttribute('aria-label', 'Trail workspace');
   toolbar.replaceChildren(brandView.brand, menuList);
-  if(legacyAnchors.children.length) toolbar.appendChild(legacyAnchors);
   header.classList.add('studio-topbar');
   header.style.removeProperty('display');
   header.removeAttribute('aria-hidden');
@@ -523,14 +541,22 @@ export function upgradeWorkbenchLayout(
       if(labelNode) labelNode.textContent = label;
       button.title = label;
     }
-    for(const definition of BOTTOM_TAB_DEFINITIONS) {
-      const tab = dock.tabs.get(definition.key);
+    for(const definition of MAP_MODE_DEFINITIONS) {
+      const button = activityRail.modeButtons.get(definition.mode);
       const label = localizedLabel(definition, language);
-      if(!tab) continue;
-      const labelNode = tab.querySelector<HTMLElement>('.studio-bottom-tab-label');
+      if(!button) continue;
+      const labelNode = button.querySelector<HTMLElement>('.studio-mode-label');
       if(labelNode) labelNode.textContent = label;
-      tab.title = label;
+      button.title = label;
+      button.setAttribute('aria-label', label);
     }
+    const modeSwitcher = document.getElementById('map-mode-controls');
+    modeSwitcher?.setAttribute('aria-label', language === 'zh' ? '地图显示模式' : 'Map display mode');
+    analysisDock.setAttribute('aria-label', language === 'zh' ? '海拔分析' : 'Elevation analysis');
+    analysisDock.querySelector<HTMLElement>('[data-analysis-panel="elevation"]')
+      ?.setAttribute('aria-label', language === 'zh' ? '海拔剖面' : 'Elevation profile');
+    if(sidebarTitle) sidebarTitle.textContent = language === 'zh' ? '路线与行程' : 'Routes & Itinerary';
+    elevationToggle.render(language);
     for(const [id, definition] of Object.entries(AUXILIARY_CONTROLS)) {
       const control = document.getElementById(id);
       const label = localizedLabel(definition, language);
@@ -554,8 +580,10 @@ export function upgradeWorkbenchLayout(
   const workspace = createElement(document, 'div', 'studio-workspace');
   const mapStage = createElement(document, 'main', 'studio-map-stage');
   const addEscapePanel = document.getElementById('addescape-panel');
+  const segmentPanel = document.getElementById('segment-panel');
   mapStage.setAttribute('aria-label', 'Trail map workspace');
-  mapStage.append(map, dock.root);
+  mapStage.append(map, analysisDock);
+  if(segmentPanel) mapStage.appendChild(segmentPanel);
   if(addEscapePanel) mapStage.appendChild(addEscapePanel);
   workspace.append(activityRail.root, sidebarElement, mapStage);
 
@@ -566,7 +594,6 @@ export function upgradeWorkbenchLayout(
   document.documentElement.dataset.ui = 'studio';
 
   const menuKeys = MENU_DEFINITIONS.map(definition => definition.key);
-  const bottomKeys = BOTTOM_TAB_DEFINITIONS.map(definition => definition.key);
   const activityKeys = ACTIVITY_DEFINITIONS.map(definition => definition.key);
 
   function closeMenus(restoreFocus: boolean): void {
@@ -683,60 +710,7 @@ export function upgradeWorkbenchLayout(
     document.removeEventListener('keydown', onDocumentKeydown);
   });
 
-  function setBottomTab(key: WorkbenchBottomTabKey, persist = true): void {
-    activeBottomTab = key;
-    for(const [candidateKey, tab] of dock.tabs) {
-      const active = candidateKey === key;
-      tab.setAttribute('aria-selected', String(active));
-      tab.tabIndex = active ? 0 : -1;
-      tab.classList.toggle('is-active', active);
-      const pane = dock.panes.get(candidateKey);
-      if(pane) {
-        pane.hidden = !active;
-        pane.tabIndex = active ? 0 : -1;
-      }
-    }
-    if(persist) writeStorage(storage, WORKBENCH_STORAGE_KEYS.bottomTab, key);
-    scheduleDocumentResize(document);
-  }
-
-  for(const definition of BOTTOM_TAB_DEFINITIONS) {
-    if(commandRegistry.has(definition.commandId)) continue;
-    cleanups.push(commandRegistry.register({
-      id: definition.commandId,
-      checked: () => activeBottomTab === definition.key,
-      execute: () => setBottomTab(definition.key),
-    }));
-  }
-
-  for(const [key, tab] of dock.tabs) {
-    const definition = BOTTOM_TAB_DEFINITIONS.find(item => item.key === key);
-    const onClick = (): void => {
-      if(definition) dispatchCommand(definition.commandId);
-    };
-    const onKeydown = (event: KeyboardEvent): void => {
-      let nextIndex = bottomKeys.indexOf(key);
-      if(event.key === 'ArrowRight') nextIndex += 1;
-      else if(event.key === 'ArrowLeft') nextIndex -= 1;
-      else if(event.key === 'Home') nextIndex = 0;
-      else if(event.key === 'End') nextIndex = bottomKeys.length - 1;
-      else return;
-      event.preventDefault();
-      const next = bottomKeys[(nextIndex + bottomKeys.length) % bottomKeys.length];
-      const nextDefinition = BOTTOM_TAB_DEFINITIONS.find(item => item.key === next);
-      if(nextDefinition) dispatchCommand(nextDefinition.commandId);
-      dock.tabs.get(next)?.focus();
-    };
-    tab.addEventListener('click', onClick);
-    tab.addEventListener('keydown', onKeydown);
-    cleanups.push(() => {
-      tab.removeEventListener('click', onClick);
-      tab.removeEventListener('keydown', onKeydown);
-    });
-  }
-
   function syncActivitySelection(key: WorkbenchActivityKey, persist = true): void {
-    activeActivity = key;
     sidebarElement.dataset.activity = key;
     for(const [candidateKey, button] of activityRail.buttons) {
       const active = candidateKey === key;
@@ -754,11 +728,7 @@ export function upgradeWorkbenchLayout(
     if(!definition) return;
     syncActivitySelection(key);
     sidebarElement.classList.remove('collapsed');
-    document.getElementById('sidebar-toggle')?.classList.remove('show');
 
-    if('bottomTab' in definition && isBottomTabKey(definition.bottomTab)) {
-      setBottomTab(definition.bottomTab);
-    }
     if('menu' in definition && definition.menu) {
       openMenu(definition.menu as WorkbenchMenuKey, true);
     }
@@ -776,23 +746,11 @@ export function upgradeWorkbenchLayout(
     }
   }
 
-  function commandLabel(commandId: string): string | null {
-    const command = Object.values(COMMAND_DEFINITIONS)
-      .find(definition => definition.commandId === commandId);
-    if(command) return localizedLabel(command, language);
-    const activity = ACTIVITY_DEFINITIONS.find(definition => definition.commandId === commandId);
-    if(activity) return localizedLabel(activity, language);
-    const panel = BOTTOM_TAB_DEFINITIONS.find(definition => definition.commandId === commandId);
-    return panel ? localizedLabel(panel, language) : null;
-  }
-
   const unsubscribeCommands = commandRegistry.subscribe(event => {
     syncCommandButtons(event.id);
     if(event.type !== 'dispatched' || !event.id) return;
     const activity = ACTIVITY_DEFINITIONS.find(definition => definition.commandId === event.id);
     if(activity) setActivity(activity.key);
-    const label = commandLabel(event.id);
-    if(label) writeLog(label);
   });
   cleanups.push(unsubscribeCommands);
   syncCommandButtons();
@@ -823,7 +781,6 @@ export function upgradeWorkbenchLayout(
 
   const MutationObserverConstructor = document.defaultView?.MutationObserver;
   let commandObserver: MutationObserver | null = null;
-  let panelObserver: MutationObserver | null = null;
   if(MutationObserverConstructor) {
     commandObserver = new MutationObserverConstructor(() => {
       for(const [id, button] of commandButtons) {
@@ -834,42 +791,15 @@ export function upgradeWorkbenchLayout(
     });
     commandObserver.observe(toolbar, { childList: true, characterData: true, subtree: true });
 
-    const observedPanels: Array<[HTMLElement, WorkbenchBottomTabKey]> = [];
-    const measurePanel = document.getElementById('measure-panel');
-    const segmentPanel = document.getElementById('segment-panel');
-    if(measurePanel) observedPanels.push([measurePanel, 'measure']);
-    if(segmentPanel) observedPanels.push([segmentPanel, 'segment']);
-    panelObserver = new MutationObserverConstructor(records => {
-      for(const record of records) {
-        const panel = record.target as HTMLElement;
-        const match = observedPanels.find(([candidate]) => candidate === panel);
-        if(!match) continue;
-        const display = panel.style.display;
-        if(display && display !== 'none') setBottomTab(match[1]);
-        else if(display === 'none' && activeBottomTab === match[1]) setBottomTab('elevation');
-      }
-    });
-    for(const [panel] of observedPanels) panelObserver.observe(panel, { attributes: true, attributeFilter: ['style'] });
   }
 
-  const initialBottom = readStorage(storage, WORKBENCH_STORAGE_KEYS.bottomTab);
-  const visibleMeasure = document.getElementById('measure-panel')?.style.display;
-  const visibleSegment = document.getElementById('segment-panel')?.style.display;
-  if(visibleMeasure && visibleMeasure !== 'none') setBottomTab('measure', false);
-  else if(visibleSegment && visibleSegment !== 'none') setBottomTab('segment', false);
-  else setBottomTab(isBottomTabKey(initialBottom) ? initialBottom : 'elevation', false);
-
   const initialActivity = readStorage(storage, WORKBENCH_STORAGE_KEYS.activity);
-  syncActivitySelection(isActivityKey(initialActivity) ? initialActivity : 'project', false);
+  syncActivitySelection(isActivityKey(initialActivity) ? initialActivity : 'trails', false);
   setLanguage(language);
 
   const controller: WorkbenchLayoutController = {
     activateActivity(activity): void {
       const definition = ACTIVITY_DEFINITIONS.find(item => item.key === activity);
-      if(definition) dispatchCommand(definition.commandId);
-    },
-    activateBottomTab(tab): void {
-      const definition = BOTTOM_TAB_DEFINITIONS.find(item => item.key === tab);
       if(definition) dispatchCommand(definition.commandId);
     },
     closeMenus(): void {
@@ -880,7 +810,6 @@ export function upgradeWorkbenchLayout(
     },
     destroy(): void {
       commandObserver?.disconnect();
-      panelObserver?.disconnect();
       cleanups.splice(0).forEach(cleanup => cleanup());
       controllers.delete(document);
     },

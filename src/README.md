@@ -17,8 +17,8 @@ index.html -> main.ts -> bootstrap.ts -> Workbench DOM
 - `app/`：bootstrap、版本、应用状态、`CommandRegistry`、`InteractionManager`、`RenderScheduler`、typed `RuntimeContext`，以及直接启动的 `runtime/studio.ts` 浏览器编排边界。
 - `features/`：单一功能 controller 与数据模块；轨迹、IndexedDB、文件导入/导出、手动标注点、测距、行程分段、Day 预览、下撤路线和 localization 都由模块持有。
 - `adapters/`：Leaflet、IndexedDB、ZIP、Blob、Canvas 导出图与浏览器文件保存副作用。
-- `ui/`：Workbench DOM、桌面七项侧栏、移动五项底栏、海拔坞和 `DialogController`。
-- `styles/` / `vendor/`：由 Vite 收集并在发布时内联的样式与浏览器依赖。
+- `ui/`：唯一的 Workbench 布局、可读的应用 Shell、图标和 `DialogController`；不再保留旧 UI 初始化器。
+- `styles/` / `vendor/`：共享组件样式、Workbench 主题和由 Vite 内联的浏览器依赖。
 
 `runtime/studio.ts` 是普通 TypeScript 模块，由 bootstrap 直接调用；工程中没有 raw import、字符串执行、runtime composer 或 classic globals。它暂时集中成熟的 DOM/Leaflet 编排，新行为应优先进入 typed controller、adapter 或 UI module。只读 runtime inspector 仅在 `?studio-test=1` 下启用，正常发布不会暴露它。
 
@@ -47,8 +47,8 @@ Directory ownership:
 - `app/`: bootstrap, version ownership, app state, `CommandRegistry`, `InteractionManager`, `RenderScheduler`, typed `RuntimeContext`, and the directly started `runtime/studio.ts` browser-orchestration boundary.
 - `features/`: single-feature controllers and data modules for trails, IndexedDB, file import/export, manual waypoints, measurement, itinerary segmentation, Day preview, escape routes, and localization.
 - `adapters/`: Leaflet, IndexedDB, ZIP, Blob, export Canvas, and browser file-save effects.
-- `ui/`: Workbench DOM, seven desktop side actions, five mobile bottom actions, elevation dock, and `DialogController`.
-- `styles/` / `vendor/`: styles and browser dependencies collected by Vite and inlined for release.
+- `ui/`: the single Workbench layout owner, readable application shell, icons, and `DialogController`; no legacy UI initializer remains.
+- `styles/` / `vendor/`: shared component styles, the Workbench theme, and browser dependencies inlined by Vite.
 
 `runtime/studio.ts` is a normal TypeScript module called directly by bootstrap. The project has no raw imports, string execution, runtime composer, or classic globals. It temporarily centralizes mature DOM/Leaflet orchestration; new behavior should start in a typed controller, adapter, or UI module. Its read-only inspector exists only under `?studio-test=1` and is absent from normal releases.
 

@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.1',
+    date: '2026-07-14',
+    items: {
+      zh: ['移除重复的项目、统计和独立下撤入口，同时删除底部 Log、Measure、Segment 重复 Tab；底部区域收敛为海拔分析', '下撤方案合并进行程页，测距操作嵌入海拔区，分段保留专用编辑面板，并移除右上角旧侧栏恢复按钮', '新增完整标注点编辑器：在主轨迹选点后可选择图标与类型、填写文字描述并添加可选图片', '下撤规划新增依据轨迹选择，可在同组其他轨迹上选择 A/B 路段并将方案保存到主轨迹行程；A/B 仅吸附当前依据轨迹', '去除 Day 信息网格中重复的扎营点海拔，保留独立扎营点行；同时修复版本更新说明滚动时关闭按钮离开可视区域的问题', '将海拔/标注点模式切换移至最左侧活动栏，并将主轨迹与叠加轨迹选择整理为侧栏中的独立轨迹选择器', '整理工程结构：删除旧 Field Console 初始化、dev.html 和测试兼容桥，合并 Workbench 状态所有权，重写可读的应用模板并清理失效 CSS 与全局变量'],
+      en: ['Removed duplicate Project, Statistics, and standalone Escape navigation plus the redundant Log, Measure, and Segment bottom tabs; the bottom area now focuses on elevation analysis', 'Merged saved escape routes into Itinerary, embedded Measure actions in the elevation area, retained the focused Segment editor, and removed the legacy top-right sidebar restore button', 'Added a complete waypoint editor for selecting an icon and type, entering a description, and attaching an optional image after choosing a point on the primary trail', 'Added explicit reference-trail selection to Escape planning so A/B can follow another trail in the active group while the saved plan remains attached to the primary itinerary', 'Removed the duplicate camp elevation from the Day metrics grid while retaining the dedicated camp row, and kept changelog actions visible during scrolling', 'Moved the Elevation/Waypoint mode switch to the far-left activity rail and promoted primary/overlay trail selection into a dedicated sidebar selector', 'Cleaned up the project structure by removing the old Field Console initializer, dev.html, and test compatibility bridge; consolidated Workbench state ownership, rewrote the application shell as a readable template, and removed obsolete CSS and globals'],
+    },
+  },
+  {
     version: 'v2.0.0',
     date: '2026-07-14',
     items: {

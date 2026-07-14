@@ -3,7 +3,7 @@
  * Run: node tests/unit/test_storage_core.js
  */
 const assert = require('assert');
-const core = require('./trail_core');
+const core = require('../../src/core/index.ts');
 
 let passed = 0;
 let failed = 0;

@@ -353,7 +353,7 @@ export class InteractionManager<
     return true;
   }
 
-  private dispatchRecord<K extends ActiveInteractionKind, P extends string, E extends object>(
+  private dispatchRecord<E extends object>(
     record: StoredSession,
     event: E,
   ): boolean {

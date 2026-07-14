@@ -80,15 +80,21 @@ T('rejects empty tracks and anchors that snap to one point', () => {
   );
 });
 
-T('snaps only to active trails in the active group and enforces the radius', () => {
+T('snaps only to the selected reference trail in the active group and enforces the radius', () => {
   const first = {id:'a', name:'A', group:'A', track:track(30)};
   const hidden = {id:'b', name:'Hidden', group:'A', track:track(31)};
   const otherGroup = {id:'c', name:'Other', group:'B', track:track(32)};
   const {context, controller} = createHarness([first, hidden, otherGroup]);
+  assert.strictEqual(controller.enter('a'), true);
   context.state.dispatch({type:'active-trail.set', trailId:'b', active:false});
   const hit = controller.nearestPoint(first.track[20][0], first.track[20][1]);
   assert.strictEqual(hit.trailId, 'a');
   assert.strictEqual(hit.trackIdx, 20);
+  assert.strictEqual(controller.setReferenceTrail('b'), true);
+  const hiddenHit = controller.nearestPoint(hidden.track[30][0], hidden.track[30][1]);
+  assert.strictEqual(hiddenHit.trailId, 'b');
+  assert.strictEqual(hiddenHit.trackIdx, 30);
+  assert.strictEqual(controller.setReferenceTrail('c'), false);
   assert.strictEqual(controller.nearestPoint(0, 0), null);
   context.state.dispatch({type:'group.set-active', group:null});
   assert.strictEqual(controller.nearestPoint(first.track[20][0], first.track[20][1]), null);
@@ -101,26 +107,29 @@ T('owns lifecycle, selection, preview, commit, and stale-primary rejection', () 
   const state = controller.state;
   assert.strictEqual(controller.enter('a'), true);
   assert.strictEqual(controller.state, state);
-  controller.selectA(anchor(first, 10));
-  controller.selectB(anchor(first, 300));
+  assert.strictEqual(state.referenceTrailId, 'a');
+  assert.strictEqual(controller.setReferenceTrail('b'), true);
+  controller.selectA(anchor(second, 10));
+  controller.selectB(anchor(second, 300));
   const result = controller.compute();
   assert.strictEqual(result.ok, true);
   assert.ok(state._pending);
   const committed = controller.commit(' Ridge exit ');
   assert.strictEqual(committed.name, 'Ridge exit');
   assert.strictEqual(first.escape_routes.length, 1);
+  assert.strictEqual(committed._anchor.trailId, 'b');
   assert.strictEqual(effects.revisions, 1);
 
-  controller.selectA(anchor(first, 20));
-  controller.selectB(anchor(first, 200));
+  controller.selectA(anchor(second, 20));
+  controller.selectB(anchor(second, 200));
   controller.compute();
   context.state.dispatch({type:'primary-trail.set', trailId:'b'});
   assert.strictEqual(controller.commit('stale'), null);
   assert.strictEqual(effects.revisions, 1);
   controller.exit();
   assert.deepStrictEqual(
-    {active:state.active, trailId:state.trailId, ptA:state.ptA, ptB:state.ptB, pending:state._pending},
-    {active:false, trailId:null, ptA:null, ptB:null, pending:null},
+    {active:state.active, trailId:state.trailId, referenceTrailId:state.referenceTrailId, ptA:state.ptA, ptB:state.ptB, pending:state._pending},
+    {active:false, trailId:null, referenceTrailId:null, ptA:null, ptB:null, pending:null},
   );
 });
 
@@ -142,11 +151,11 @@ T('selects display routes and deletes only manual routes', () => {
 
 T('direct runtime retains escape effects but delegates business state and writes', () => {
   const source = read('src/app/runtime/studio.ts');
-  const directBusinessWrite = /addEscapeState\.(?:active|trailId|ptA|ptB|_pending)\s*(?:=|\+\+)/;
+  const directBusinessWrite = /addEscapeState\.(?:active|trailId|referenceTrailId|ptA|ptB|_pending)\s*(?:=|\+\+)/;
   assert.match(source, /createEscapeController\(runtimeContext/);
   assert.match(source, /const addEscapeState = escapeController\.state/);
   for(const method of [
-    'enter', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute', 'commit',
+    'enter', 'setReferenceTrail', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute', 'commit',
     'deleteRoute', 'selectDisplayedRoute', 'clearDisplayedRoute',
   ]) assert.match(source, new RegExp(`escapeController\\.${method}`), method);
   assert.doesNotMatch(source, directBusinessWrite);

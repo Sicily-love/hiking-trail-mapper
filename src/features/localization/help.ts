@@ -25,11 +25,11 @@ const HELP_SECTIONS: Record<LocalizationLanguage, readonly ContentDialogSection[
     },
     {
       heading:'行程与标注',
-      items:['行程分段支持拖动边界、删除指定天数并保留编辑结果。', '点击 Day 信息会预览该日轨迹并自动适配地图范围。', '右键或长按主轨迹附近可新增手动标注点。', '点击标注点可固定信息卡；点击照片可进入支持缩放和拖动的查看器。'],
+      items:['行程分段支持拖动边界、删除指定天数并保留编辑结果。', '点击 Day 信息会预览该日轨迹并自动适配地图范围。', '进入标注工具后在主轨迹上点击位置，可选择图标与类型、填写描述并添加可选图片。', '点击标注点可固定信息卡；点击照片可进入支持缩放和拖动的查看器。'],
     },
     {
       heading:'下撤与工作台',
-      items:['下撤工具可手动选择 A、B 点生成下撤路段。', 'Project、Trails、Itinerary、Waypoints、Escape 与 Statistics 集中在工作台侧栏。', '收起侧栏后可从地图边缘重新展开，海拔分析坞会随可用空间调整。'],
+      items:['下撤工具可选择同组任一依据轨迹，再在该轨迹上选择 A、B 点；生成的方案仍保存到主轨迹并显示在行程页底部。', '轨迹、行程和标注点集中在工作台左侧活动栏；底部区域只显示海拔分析。', '测距操作按钮会在测距期间出现在海拔区，行程分段使用独立编辑面板；收起侧栏后点击任一活动入口即可重新展开。'],
     },
     {
       heading:'数据与备份',
@@ -59,11 +59,11 @@ const HELP_SECTIONS: Record<LocalizationLanguage, readonly ContentDialogSection[
     },
     {
       heading:'Itinerary and waypoints',
-      items:['Drag itinerary boundaries, remove a selected day, and keep edits between sessions.', 'Select a Day row to preview and fit that segment.', 'Right-click or long-press near the primary trail to add a manual waypoint.', 'Select a waypoint to pin its details; select its photo for a zoomable, draggable viewer.'],
+      items:['Drag itinerary boundaries, remove a selected day, and keep edits between sessions.', 'Select a Day row to preview and fit that segment.', 'Use the Waypoint tool and click the primary trail to choose an icon and type, enter a description, and attach an optional image.', 'Select a waypoint to pin its details; select its photo for a zoomable, draggable viewer.'],
     },
     {
       heading:'Escape and workbench',
-      items:['Use Escape to select A and B manually and create an escape segment.', 'Project, Trails, Itinerary, Waypoints, Escape, and Statistics live in the workbench sidebar.', 'Collapse the sidebar for more map space and reopen it from the map edge; the elevation dock follows the available space.'],
+      items:['Choose any reference trail in the active group for Escape A/B selection; the generated route is still saved under the primary itinerary.', 'Trails, Itinerary, and Waypoints live in the Workbench activity rail, while the bottom area is reserved for elevation analysis.', 'Measure actions appear in the elevation area during measurement and Segment uses its focused editor; select any activity to reopen a collapsed sidebar.'],
     },
     {
       heading:'Data and backups',

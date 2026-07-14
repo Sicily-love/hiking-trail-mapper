@@ -42,8 +42,8 @@ Import routes:
 | Compare routes | Overlay multiple routes, emphasize the current group's primary trail, and de-emphasize supporting trails |
 | Plan daily stages | Segment by day and produce daily distance, ascent, descent, elevation, and camp data |
 | Inspect a section | Pick A/B points on the primary trail, calculate along-track distance, ascent, and descent, and inspect section elevation |
-| Manage waypoints | Auto-classify, filter, rename, and manually add camps, passes, water, supplies, and other waypoint types |
-| Plan escapes | Pick A/B points to create an escape route and inspect it on the map and in the itinerary sidebar |
+| Manage waypoints | Pick a primary-trail point, choose an icon and type, enter notes, and attach an optional image; filtering and renaming remain available |
+| Plan escapes | Choose a reference trail in the active group, select its A/B section, and save the result under the primary itinerary |
 | Move data | Export the current group as KML ZIP and the primary-trail itinerary as Markdown |
 
 See [Features](docs/FEATURES.en.md) for interactions and [Architecture](docs/ARCHITECTURE.en.md) for implementation boundaries.
@@ -52,9 +52,9 @@ See [Features](docs/FEATURES.en.md) for interactions and [Architecture](docs/ARC
 
 The Workbench adapts one command vocabulary to different screen sizes:
 
-- Desktop presents seven primary actions in a side rail with route context.
-- Mobile keeps five thumb-reachable actions in a bottom bar; lower-frequency actions move into More or a bottom sheet.
-- The responsive sidebar contains the route library, primary-trail summary, itinerary, and escape views; the elevation analysis dock can collapse.
+- Desktop and mobile share four clear activities: Trails, Itinerary, Waypoints, and Settings.
+- Trails owns the route library and primary summary; saved escape routes appear directly in Itinerary.
+- The bottom area focuses on elevation analysis, Measure actions appear there when active, and Segment uses a focused editor.
 - Dedicated managers coordinate command state, pointer/keyboard interaction, render invalidation, and modal dialogs so DOM handlers do not each maintain separate state.
 
 ## Data and Privacy
@@ -124,7 +124,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v2.0.0
+Version: v2.0.1
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.

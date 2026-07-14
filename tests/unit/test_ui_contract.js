@@ -1,12 +1,12 @@
-/** Field Console UI source contracts. */
+/** Shared component and Workbench UI source contracts. */
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const root = path.resolve(__dirname, '../..');
-const css = fs.readFileSync(path.join(root, 'src/ui/workbench.css'), 'utf8');
-const ui = fs.readFileSync(path.join(root, 'src/ui/workbench.ts'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'src/styles/components.css'), 'utf8');
+const ui = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const { runtimeSource: runtime } = require('./runtime_source');
-const visual = fs.readFileSync(path.join(root, 'tests/visual/capture_field_console.py'), 'utf8');
+const visual = fs.readFileSync(path.join(root, 'tests/visual/capture_workbench.py'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'hiking-trail-mapper.html'), 'utf8');
 let passed = 0;
 let failed = 0;
@@ -15,14 +15,13 @@ const T = (name, fn) => {
   catch(error) { console.log(`  ✗ ${name}\n    ${error.message}`); failed++; }
 };
 
-console.log('\n▸ Field Console UI contracts');
-T('field-console palette includes neutral, forest, amber, rust, and blue roles', () => {
+console.log('\n▸ Shared component UI contracts');
+T('component palette includes neutral, forest, amber, rust, and blue roles', () => {
   ['--console-surface:', '--console-green:', '--console-amber:', '--console-rust:', '--console-blue:']
     .forEach(token => assert.ok(css.includes(token), token));
 });
 T('desktop toolbar is one grouped command surface with stable controls', () => {
   assert.ok(css.includes('.toolbar-brand {'));
-  assert.ok(css.includes('.toolbar-secondary { padding-left:5px;'));
   assert.ok(css.includes('width:54px;'));
   assert.ok(css.includes('left:52px;'));
   assert.strictEqual((html.match(/class="tb-btn"/g) || []).length, 10);
@@ -32,14 +31,15 @@ T('toolbar brand text is clipped within its own column', () => {
   assert.ok(css.includes('text-overflow:ellipsis;'));
   assert.ok(css.includes('overflow:hidden;'));
 });
-T('command decoration and mobile overflow are owned by TypeScript UI module', () => {
-  assert.ok(ui.includes("more.id = 'toolbar-more'"));
-  assert.ok(ui.includes("toolbar.classList.toggle('secondary-open')"));
-  assert.ok(ui.includes("document.documentElement.dataset.ui = 'field-console'"));
+T('command decoration is owned by the single Workbench UI module', () => {
+  assert.ok(ui.includes('export const COMMAND_DEFINITIONS'));
+  assert.ok(ui.includes('function decorateControl('));
+  assert.ok(ui.includes("document.documentElement.dataset.ui = 'studio'"));
+  assert.strictEqual(ui.includes('secondary-open'), false);
 });
 T('elevation analysis dock can collapse and persists its state', () => {
-  assert.ok(ui.includes("ELEVATION_COLLAPSED_KEY"));
-  assert.ok(ui.includes("dock.classList.toggle('collapsed')"));
+  assert.ok(ui.includes("elevationCollapsed: 'hiking_elevation_dock_collapsed'"));
+  assert.ok(ui.includes("panel.classList.toggle('collapsed')"));
   assert.ok(css.includes('#elev-bar.collapsed'));
 });
 T('sidebar becomes a mobile bottom sheet', () => {
@@ -68,9 +68,9 @@ T('empty primary mini card still cannot cover commands', () => {
   assert.ok(runtime.includes("mini.style.display = 'none';\n      return false;"));
 });
 T('visual fixtures cover real Day, measurement, and segmentation states', () => {
-  assert.ok(visual.includes('field-console-day-cards.png'));
-  assert.ok(visual.includes('field-console-measure.png'));
-  assert.ok(visual.includes('field-console-segment.png'));
+  assert.ok(visual.includes('workbench-day-cards.png'));
+  assert.ok(visual.includes('workbench-measure.png'));
+  assert.ok(visual.includes('workbench-segment.png'));
   assert.ok(visual.includes('toolbarZoomOverlap'));
 });
 

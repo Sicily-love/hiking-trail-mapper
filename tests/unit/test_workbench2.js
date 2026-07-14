@@ -9,13 +9,13 @@ const workbenchPath = path.join(root, 'src/ui/layout/workbench.ts');
 const cssPath = path.join(root, 'src/styles/studio.css');
 const mainPath = path.join(root, 'src/main.ts');
 const bootstrapPath = path.join(root, 'src/app/bootstrap.ts');
-const legacyWorkbenchPath = path.join(root, 'src/ui/workbench.ts');
+const shellPath = path.join(root, 'src/ui/layout/app-shell.ts');
 const iconSource = fs.readFileSync(iconPath, 'utf8');
 const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
 const css = fs.readFileSync(cssPath, 'utf8');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
-const legacyWorkbenchSource = fs.readFileSync(legacyWorkbenchPath, 'utf8');
+const shellSource = fs.readFileSync(shellPath, 'utf8');
 
 let iconModule = null;
 let workbenchModule = null;
@@ -107,8 +107,8 @@ test('top menu has the seven required groups and moves every legacy command', ()
   }
 });
 
-test('activity rail exposes all seven required destinations', () => {
-  const expected = ['Project', 'Trails', 'Itinerary', 'Waypoints', 'Escape', 'Statistics', 'Settings'];
+test('activity rail exposes four focused destinations without duplicate views', () => {
+  const expected = ['Trails', 'Itinerary', 'Waypoints', 'Settings'];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.ACTIVITY_DEFINITIONS.map(item => item.label), expected);
   } else {
@@ -116,25 +116,42 @@ test('activity rail exposes all seven required destinations', () => {
   }
   assert.ok(workbenchSource.includes('aria-controls'));
   assert.ok(workbenchSource.includes("button.setAttribute('aria-current', 'page')"));
+  assert.strictEqual(shellSource.includes('sidebar-toggle'), false);
+  assert.strictEqual(shellSource.includes('tab-escape'), false);
 });
 
-test('bottom dock exposes five tabs backed by existing panel IDs', () => {
-  const expectedLabels = ['Elevation', 'Statistics', 'Measure', 'Segment', 'Log'];
-  const expectedNodes = ['elev-bar', 'header-stats', 'measure-panel', 'segment-panel', null];
+test('map modes live at the far-left rail and trails have a dedicated selector', () => {
+  const expectedModes = ['elev', 'waypoint'];
   if(workbenchModule) {
-    assert.deepStrictEqual(workbenchModule.BOTTOM_TAB_DEFINITIONS.map(item => item.label), expectedLabels);
-    assert.deepStrictEqual(workbenchModule.BOTTOM_TAB_DEFINITIONS.map(item => item.nodeId), expectedNodes);
+    assert.deepStrictEqual(workbenchModule.MAP_MODE_DEFINITIONS.map(item => item.mode), expectedModes);
   } else {
-    expectedLabels.forEach(label => assert.ok(workbenchSource.includes(`label: '${label}'`), label));
-    expectedNodes.filter(Boolean).forEach(id => assert.ok(workbenchSource.includes(`nodeId: '${id}'`), id));
+    expectedModes.forEach(mode => assert.ok(workbenchSource.includes(`mode: '${mode}'`), mode));
   }
-  assert.ok(workbenchSource.includes('pane.hidden = !active'));
-  assert.ok(workbenchSource.includes("tab.setAttribute('aria-selected', String(active))"));
+  assert.ok(shellSource.indexOf('id="map-mode-controls"') < shellSource.indexOf('id="map"'));
+  assert.ok(shellSource.includes('id="trail-selector-panel"'));
+  assert.ok(shellSource.includes('id="trail-list"'));
+  assert.ok(workbenchSource.includes('root.appendChild(modeSwitcher)'));
+  assert.ok(workbenchSource.includes("modeSwitcher.className = 'studio-mode-switcher'"));
+  assert.ok(css.includes('.studio-mode-button.on'));
+  assert.ok(css.includes('.studio-trail-selector #trail-list'));
+});
+
+test('bottom dock is a fixed elevation surface without duplicate navigation tabs', () => {
+  if(workbenchModule) assert.strictEqual(workbenchModule.BOTTOM_TAB_DEFINITIONS, undefined);
+  assert.ok(workbenchSource.includes('function buildAnalysisDock('));
+  assert.ok(workbenchSource.includes("pane.dataset.analysisPanel = 'elevation'"));
+  assert.ok(workbenchSource.includes("elevationPanel.classList.add('studio-docked-panel')"));
+  assert.ok(workbenchSource.includes("measurePanel.classList.add('studio-elevation-measure-actions')"));
+  assert.ok(workbenchSource.includes('root.append(content)'));
+  assert.strictEqual(workbenchSource.includes('PANEL_LOG'), false);
+  assert.strictEqual(workbenchSource.includes('studio-bottom-tab'), false);
 });
 
 test('layout moves existing ID nodes without cloning or HTML string copies', () => {
-  assert.ok(workbenchSource.includes('pane.appendChild(existingPanel)'));
-  assert.ok(workbenchSource.includes('mapStage.append(map, dock.root)'));
+  assert.ok(workbenchSource.includes('pane.appendChild(elevationPanel)'));
+  assert.ok(workbenchSource.includes('pane.appendChild(measurePanel)'));
+  assert.ok(workbenchSource.includes('mapStage.append(map, analysisDock)'));
+  assert.ok(workbenchSource.includes('mapStage.appendChild(segmentPanel)'));
   assert.ok(workbenchSource.includes('workspace.append(activityRail.root, sidebarElement, mapStage)'));
   assert.ok(workbenchSource.includes('main.replaceChildren(header, workspace)'));
   assert.strictEqual(workbenchSource.includes('cloneNode'), false);
@@ -142,13 +159,11 @@ test('layout moves existing ID nodes without cloning or HTML string copies', () 
   assert.strictEqual(workbenchSource.includes('insertAdjacentHTML'), false);
 });
 
-test('activity and panel surfaces dispatch commands while runtime visibility stays synchronized', () => {
+test('activity surfaces dispatch commands without mirrored bottom mode commands', () => {
   assert.ok(workbenchSource.includes('button.dataset.commandId = definition.commandId'));
-  assert.ok(workbenchSource.includes('tab.dataset.commandId = definition.commandId'));
   assert.ok(workbenchSource.includes('dispatchCommand(definition.commandId)'));
   assert.strictEqual(workbenchSource.includes('?.click()'), false);
-  assert.ok(workbenchSource.includes("attributeFilter: ['style']"));
-  assert.ok(workbenchSource.includes("setBottomTab('elevation')"));
+  assert.strictEqual(workbenchSource.includes('setBottomTab('), false);
   assert.ok(workbenchSource.includes("if(kind === 'command') control.removeAttribute('style')"));
   assert.ok(css.includes('> #elev-bar.collapsed .elev-canvas'));
   assert.ok(css.includes('display:block !important;'));
@@ -174,13 +189,12 @@ test('Workbench owns bilingual labels and responds to one language event', () =>
   assert.ok(workbenchSource.includes('labelNode.dataset.i18n = i18nKey'));
 });
 
-test('upgrade is idempotent and persists activity and bottom-tab state', () => {
+test('upgrade is idempotent and persists only meaningful activity state', () => {
   assert.ok(workbenchSource.includes('const controllers = new WeakMap<Document, WorkbenchLayoutController>()'));
   assert.ok(workbenchSource.includes("main?.dataset.workbenchLayout === '2'"));
   assert.ok(workbenchSource.includes("activity: 'hiking_workbench2_activity'"));
-  assert.ok(workbenchSource.includes("bottomTab: 'hiking_workbench2_bottom_tab'"));
   assert.ok(workbenchSource.includes('writeStorage(storage, WORKBENCH_STORAGE_KEYS.activity'));
-  assert.ok(workbenchSource.includes('writeStorage(storage, WORKBENCH_STORAGE_KEYS.bottomTab'));
+  assert.strictEqual(workbenchSource.includes('hiking_workbench2_bottom_tab'), false);
 });
 
 test('bootstrap activates Workbench 2.0 after the direct runtime starts', () => {
@@ -195,16 +209,17 @@ test('bootstrap activates Workbench 2.0 after the direct runtime starts', () => 
   assert.ok(bootstrapSource.includes('architecture: 2'));
 });
 
-test('Studio stylesheet loads after the legacy component stylesheet', () => {
-  const legacyIndex = mainSource.indexOf("import './ui/workbench.css'");
+test('Studio stylesheet loads after the shared component stylesheet', () => {
+  const legacyIndex = mainSource.indexOf("import './styles/components.css'");
   const studioIndex = mainSource.indexOf("import './styles/studio.css'");
   assert.ok(legacyIndex >= 0);
   assert.ok(studioIndex > legacyIndex);
 });
 
-test('legacy chrome cannot downgrade an active Studio workbench', () => {
-  assert.ok(legacyWorkbenchSource.includes("document.documentElement.dataset.workbench === '2'"));
-  assert.ok(legacyWorkbenchSource.includes("document.documentElement.dataset.ui = 'studio'"));
+test('Workbench is the only chrome owner', () => {
+  assert.strictEqual(fs.existsSync(path.join(root, 'src/ui/workbench.ts')), false);
+  assert.ok(workbenchSource.includes('function prepareSidebarHeading('));
+  assert.ok(workbenchSource.includes('function prepareElevationToggle('));
 });
 
 test('Studio palette includes required semantic colors', () => {
@@ -219,9 +234,9 @@ test('Studio palette includes required semantic colors', () => {
 test('Studio CSS owns all four responsive contracts', () => {
   [1440, 1024, 390, 320]
     .forEach(width => assert.ok(css.includes(`@media (max-width: ${width}px)`), `${width}px`));
-  assert.ok(css.includes('grid-template-columns:repeat(7,minmax(0,1fr));'));
-  assert.ok(css.includes(".studio-bottom-pane:not([hidden]) > #measure-panel"));
-  assert.ok(css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"));
+  assert.ok(css.includes('grid-template-columns:repeat(6,minmax(0,1fr));'));
+  assert.ok(css.includes("#measure-panel.studio-elevation-measure-actions"));
+  assert.strictEqual(css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
   assert.ok(css.includes("html[data-workbench='2'] [hidden]"));
 });
 

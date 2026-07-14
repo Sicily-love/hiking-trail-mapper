@@ -57,12 +57,13 @@ T('adds one manual waypoint and commits all dependent views once', () => {
   const point = [30, 100, 1234, 5.67, 200, 2];
   const trail = {id:'a', track:[point], waypoints:[]};
   const {controller, effects} = createHarness([trail]);
-  const waypoint = controller.addManualWaypoint({trailId:'a', trackIndex:0, point}, ' Camp ');
+  const waypoint = controller.addManualWaypoint({trailId:'a', trackIndex:0, point}, {
+    name:' Camp ', tag:'camp', description:'Sheltered site', photo:'data:image/png;base64,test',
+  });
   assert.deepStrictEqual(waypoint, {
-    id:1,
-    name:'Camp [手动]', label:'Camp [手动]', icon:'icon:other', tag:'other',
+    id:1, name:'Camp [手动]', label:'Camp [手动]', icon:'icon:camp', tag:'camp',
     km:5.7, elev:1234, lat:30, lng:100, gps_idx:0, day:2,
-    time:'', photo:'', manuallyAdded:true,
+    time:'', photo:'data:image/png;base64,test', description:'Sheltered site', manuallyAdded:true,
   });
   assert.strictEqual(trail.waypoints[0], waypoint);
   assert.deepStrictEqual(effects, {
@@ -77,9 +78,9 @@ T('rejects stale anchors, blank names, and non-primary trails', () => {
   const a = {id:'a', group:'A', track:[pointA], waypoints:[]};
   const b = {id:'b', group:'A', track:[pointB], waypoints:[]};
   const {controller, effects} = createHarness([a, b]);
-  assert.strictEqual(controller.addManualWaypoint({trailId:'a', trackIndex:0, point:pointA}, ' '), null);
-  assert.strictEqual(controller.addManualWaypoint({trailId:'a', trackIndex:0, point:[...pointA]}, 'Stale'), null);
-  assert.strictEqual(controller.addManualWaypoint({trailId:'b', trackIndex:0, point:pointB}, 'Other'), null);
+  assert.strictEqual(controller.addManualWaypoint({trailId:'a', trackIndex:0, point:pointA}, {name:' ', tag:'other'}), null);
+  assert.strictEqual(controller.addManualWaypoint({trailId:'a', trackIndex:0, point:[...pointA]}, {name:'Stale', tag:'other'}), null);
+  assert.strictEqual(controller.addManualWaypoint({trailId:'b', trackIndex:0, point:pointB}, {name:'Other', tag:'other'}), null);
   assert.strictEqual(effects.revision, 0);
 });
 
@@ -89,6 +90,7 @@ T('direct runtime delegates waypoint state and mutation to the controller', () =
   assert.match(interaction, /createWaypointController\(runtimeContext/);
   assert.match(interaction, /const addWaypointState = waypointController\.state/);
   assert.match(interaction, /waypointController\.addManualWaypoint/);
+  assert.match(interaction, /studioDialogs\.openCustom/);
   assert.match(interaction, /waypointController\.enter/);
   assert.match(interaction, /waypointController\.exit/);
   assert.doesNotMatch(interaction, /main\.waypoints\.push\(/);

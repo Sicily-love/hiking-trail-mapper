@@ -30,8 +30,6 @@ export function startStudioRuntime(
   if(!fflate) throw new Error('fflate runtime is missing');
 
   let DATA = {title:'徒步路线地图', trails:[], calc_method:{}};
-  window.DATA = DATA;
-  window.__HTM_APP_VERSION__ = STUDIO_VERSION;
 
   function dispatchStudioCommand(commandId) {
     try {
@@ -45,8 +43,6 @@ export function startStudioRuntime(
       return undefined;
     }
   }
-  window.__HTM_DISPATCH_COMMAND__ = dispatchStudioCommand;
-  HTM_APP.initializeWorkbenchChrome(document, window.localStorage);
   const haversine = HTM_CORE.haversine;
   const smoothElev = HTM_CORE.smoothElev;
   const accumulatorAscent = HTM_CORE.accumulatorAscent;
@@ -105,7 +101,7 @@ export function startStudioRuntime(
     // 海拔图、主轨迹小卡、模式标注点筛选标题用 JS 拼接，无 data-i18n，需手动刷新
     if(typeof refreshElevBar === 'function') refreshElevBar();
     if(typeof buildPrimaryMini === 'function') buildPrimaryMini();
-    if(typeof buildPrimaryCard === 'function') buildPrimaryCard();
+    if(typeof renderPrimaryCard === 'function') renderPrimaryCard();
     if(typeof updateModeTagTitle === 'function') updateModeTagTitle();
   }
   function applyI18n() {
@@ -117,7 +113,6 @@ export function startStudioRuntime(
     document.querySelectorAll('[data-i18n-title]').forEach(el => {
       el.title = t(el.dataset.i18nTitle);
     });
-    HTM_APP.initializeWorkbenchChrome(document, window.localStorage);
     window.dispatchEvent(new CustomEvent('studio:language-changed', {
       detail:{language:currentLang},
     }));
@@ -637,8 +632,6 @@ export function startStudioRuntime(
         const color = tagColors[wp.tag] || '#aaa';
         const isWpMode = state.mode === 'waypoint';
         const iconText = waypointIcon(wp);
-        const dayBadge = wp.day != null ? '<span class="wp-day-badge">D'+wp.day+'</span>' : '';
-        void dayBadge;
         return HTM_APP.buildWaypointMarkerModel({trail, waypoint:wp, isPrimary, waypointMode:isWpMode, color, iconText});
   }
 
@@ -651,18 +644,24 @@ export function startStudioRuntime(
 
   /* ============ Waypoint Photo Hover ============ */
   const wpPhotoEl = document.getElementById('wp-photo-tip');
+  function escapeUiText(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({
+      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;',
+    })[character]);
+  }
   function pinWpCard(e, wp, trail) {
     // 点击标注点 → 固定显示卡片，卡片中图片可点击放大
     const photoSrc = wp.photo || '';
     const iconText = waypointIcon(wp);
     const photoHtml = photoSrc ? `<img id="pin-card-img" src="${photoSrc}" loading="lazy" style="display:block;max-width:260px;max-height:200px;border-radius:4px;cursor:zoom-in" onerror="this.style.display='none'">` : '';
-    const trailLine = trail ? `<div style="color:${trail.color || '#aaa'};font-size:10px;font-weight:600;margin-bottom:3px">${t('popup.trailLabel')}: ${trail.name}</div>` : '';
-    const descLine = wp.name && wp.name !== wp.label ? `<div style="color:#cfd6e0;font-size:10px;margin-top:3px;line-height:1.4;max-width:260px">${wp.name}</div>` : '';
+    const trailLine = trail ? `<div style="color:${trail.color || '#aaa'};font-size:10px;font-weight:600;margin-bottom:3px">${t('popup.trailLabel')}: ${escapeUiText(trail.name)}</div>` : '';
+    const description = wp.description || (wp.name && wp.name !== wp.label ? wp.name : '');
+    const descLine = description ? `<div style="color:#cfd6e0;font-size:10px;margin-top:3px;line-height:1.4;max-width:260px">${escapeUiText(description)}</div>` : '';
     wpPhotoEl.innerHTML = `
       <button id="pin-card-close" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.4);border:none;color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>
       ${trailLine}
       ${photoHtml}
-      <div style="color:#cfd6e0;font-size:11px;margin-top:${photoHtml ? '4px' : '0'};padding:0 2px">${iconText} <b>${wp.label}</b> · ${wp.km}${t('header.km')} · ${wp.elev}m</div>
+      <div style="color:#cfd6e0;font-size:11px;margin-top:${photoHtml ? '4px' : '0'};padding:0 2px">${iconText} <b>${escapeUiText(wp.label)}</b> · ${wp.km}${t('header.km')} · ${wp.elev}m</div>
       ${descLine}
       ${photoSrc ? `<div style="color:var(--text-dim);font-size:9px;margin-top:3px">${t('popup.clickPhotoZoom')}</div>` : ''}
     `;
@@ -759,7 +758,7 @@ export function startStudioRuntime(
     document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
   }
   /* ============ Build sidebar ============ */
-  function buildHeaderStats() {
+  function renderPrimaryCard() {
     const card = document.getElementById('primary-card');
     const toolbarContext = document.getElementById('toolbar-context');
     if(!card) return;
@@ -829,7 +828,7 @@ export function startStudioRuntime(
       });
       if(newLink !== null) {
         main.source = newLink.trim();
-        saveToStorage(); buildHeaderStats();
+        saveToStorage(); renderPrimaryCard();
       }
     });
     // 同步小卡（侧栏收起时显示）
@@ -1727,6 +1726,7 @@ export function startStudioRuntime(
       empty.style.cssText = 'padding:12px;color:var(--text-muted);font-size:11px;line-height:1.6';
       empty.innerHTML = '尚未设置每日行程。<br>点工具栏 <b>📅 分段</b> 在主轨迹上选点标记每天。';
       tab.appendChild(empty);
+      appendEscapeRoutes(tab, trail);
       return;
     }
 
@@ -1774,10 +1774,8 @@ export function startStudioRuntime(
               <span class="lab">当日下降</span><span class="val">${Math.round(dayDesc)} m</span>
               <span class="lab">最高海拔</span><span class="val">${Math.round(dayMax)} m</span>
               <span class="lab">最低海拔</span><span class="val">${Math.round(dayMin)} m</span>
-              <span class="lab">扎营点</span><span class="val">${campElevText}</span>
             </div>
             <div class="day-camp"><span>🏕</span><span>扎营点</span><b>${campName}</b><em>${campElevText}</em></div>
-            <button class="day-evac-btn" data-trail="${trail.id}" data-day="${dm.d}">⚡ 下撤方案</button>
             <div class="wp-list"></div>
           </div>
         `;
@@ -1813,15 +1811,18 @@ export function startStudioRuntime(
           list.appendChild(item);
         });
       });
+    appendEscapeRoutes(tab, trail);
     // 函数体结束（移除原 trails forEach 闭合）
   }
-  function buildEscapeTab() {
-    const tab = document.getElementById('tab-escape');
-    tab.innerHTML = '<div class="section" style="padding-bottom:0"><h3>主轨迹下撤方案</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">点击任意方案在地图上高亮，再次点击退出</div></div>';
-    const trail = DATA.trails.find(t => t.id === state.primaryTrailId);
-    if(!trail) return;
+  function appendEscapeRoutes(container, trail) {
+    const section = document.createElement('section');
+    section.className = 'itinerary-escape-section';
+    section.innerHTML = '<div class="section" style="padding-bottom:0"><h3>下撤方案</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">点击任意方案在地图上高亮，再次点击退出</div></div>';
     if(!trail.escape_routes || trail.escape_routes.length === 0) {
-      tab.innerHTML += '<div style="color:var(--text-muted);font-size:11px;padding:8px 12px">暂无下撤方案（需含营地标注点，或手动添加）</div>';
+      const empty = document.createElement('div');
+      empty.className = 'itinerary-escape-empty';
+      empty.textContent = '暂无下撤方案（可手动添加）';
+      section.appendChild(empty);
     } else {
       trail.escape_routes.forEach(r => {
         const item = document.createElement('div');
@@ -1854,7 +1855,7 @@ export function startStudioRuntime(
             if(escapeController.deleteRoute(trail.id, delId)) {
               if(wasActive) clearEscape();
               saveToStorage();
-              buildEscapeTab();
+              buildDaysTab();
             }
             return;
           }
@@ -1866,7 +1867,7 @@ export function startStudioRuntime(
             showEscape(trail.id, r.id);
           }
         });
-        tab.appendChild(item);
+        section.appendChild(item);
       });
     }
     // 手动添加按钮
@@ -1877,7 +1878,8 @@ export function startStudioRuntime(
     addBtn.addEventListener('mouseleave', () => addBtn.style.background = 'rgba(127,29,29,0.3)');
     addBtn.dataset.commandId = STUDIO_COMMANDS.ESCAPE_TOGGLE;
     addBtn.addEventListener('click', () => dispatchStudioCommand(STUDIO_COMMANDS.ESCAPE_TOGGLE));
-    tab.appendChild(addBtn);
+    section.appendChild(addBtn);
+    container.appendChild(section);
   }
   function buildLegend() {
     const lg = document.getElementById('legend');
@@ -1908,7 +1910,6 @@ export function startStudioRuntime(
   const sidebarTabCommands = {
     trails:STUDIO_COMMANDS.WORKSPACE_TRAILS,
     days:STUDIO_COMMANDS.WORKSPACE_ITINERARY,
-    escape:STUDIO_COMMANDS.WORKSPACE_ESCAPE,
   };
 
   function activateSidebarTab(tabName) {
@@ -1945,16 +1946,11 @@ export function startStudioRuntime(
     }
   });
 
-  // day evac button
-  document.addEventListener('click', e => {
-    if(e.target.classList && e.target.classList.contains('day-evac-btn')) {
-      dispatchStudioCommand(STUDIO_COMMANDS.WORKSPACE_ESCAPE);
-    }
-  });
-
   function setMapMode(mode, opts = {}) {
     document.querySelectorAll('[data-mode]').forEach(x => {
-      x.classList.toggle('on', x.dataset.mode === mode);
+      const active = x.dataset.mode === mode;
+      x.classList.toggle('on', active);
+      x.setAttribute('aria-pressed', String(active));
     });
     dispatchState({type:'mode.set', mode});
     if(mode !== 'day') lastNonDayMode = mode;
@@ -2941,11 +2937,63 @@ export function startStudioRuntime(
   }
   /* ============ 手动添加下撤路线 ============ */
 
+  function escapeReferenceTrails() {
+    if(state.activeGroup == null) return [];
+    return DATA.trails.filter(trail => trailGroup(trail) === state.activeGroup && trail.track && trail.track.length);
+  }
+
+  function ensureEscapeTrailSelector() {
+    let select = document.getElementById('addescape-trail-select');
+    if(select) return select;
+    const panel = document.getElementById('addescape-panel');
+    const hint = document.getElementById('addescape-hint');
+    if(!panel || !hint) return null;
+    const row = document.createElement('div');
+    row.className = 'form-row escape-reference-row';
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.htmlFor = 'addescape-trail-select';
+    label.textContent = currentLang === 'zh' ? '依据轨迹：' : 'Reference trail:';
+    select = document.createElement('select');
+    select.id = 'addescape-trail-select';
+    select.className = 'form-input';
+    row.append(label, select);
+    panel.insertBefore(row, hint);
+    return select;
+  }
+
+  function refreshEscapeTrailSelector() {
+    const select = ensureEscapeTrailSelector();
+    if(!select) return;
+    const label = select.previousElementSibling;
+    if(label) label.textContent = currentLang === 'zh' ? '依据轨迹：' : 'Reference trail:';
+    const selectedId = addEscapeState.referenceTrailId || state.primaryTrailId || '';
+    select.replaceChildren();
+    escapeReferenceTrails().forEach(trail => {
+      const option = document.createElement('option');
+      option.value = trail.id;
+      option.textContent = trail.name + (trail.id === state.primaryTrailId
+        ? (currentLang === 'zh' ? '（主轨迹）' : ' (Primary)')
+        : '');
+      option.selected = trail.id === selectedId;
+      select.append(option);
+    });
+    select.disabled = select.options.length < 2;
+  }
+
+  function resetEscapeSelectionHint() {
+    const hint = document.getElementById('addescape-hint');
+    if(!hint) return;
+    hint.innerHTML = currentLang === 'zh'
+      ? '在所选依据轨迹上点击 <b style="color:#22c55e">起点 A</b>，再点击 <b style="color:#ef4444">终点 B</b>。<br><span style="font-size:10px">A/B 只会吸附到当前选择的轨迹。</span>'
+      : 'Click <b style="color:#22c55e">point A</b>, then <b style="color:#ef4444">point B</b> on the selected reference trail.<br><span style="font-size:10px">A/B snap only to that trail.</span>';
+  }
+
   function handleEscapeInteractionEvent(event, session) {
     if(event.type !== 'tap') return;
     const hit = escapeController.nearestPoint(event.latlng.lat, event.latlng.lng);
     if(!hit) {
-      showToast('请点击轨迹附近（2km 内）', 'error');
+      showToast(currentLang === 'zh' ? '请点击所选依据轨迹附近（2km 内）' : 'Click within 2 km of the selected reference trail', 'error');
       return;
     }
     if(session.phase === 'select-a') {
@@ -2974,14 +3022,14 @@ export function startStudioRuntime(
       onCancel: opts => addEscapeExit(opts),
     });
     if(!escapeController.enter(main.id)) return;
+    refreshEscapeTrailSelector();
     const btn = document.getElementById('add-escape-btn');
     if(btn) btn.classList.add('on');
     if(!addEscapeState.layer) addEscapeState.layer = L.layerGroup().addTo(map);
     addEscapeState.layer.clearLayers();
     document.getElementById('addescape-panel').style.display = 'block';
     document.getElementById('addescape-result').style.display = 'none';
-    document.getElementById('addescape-hint').innerHTML =
-      '在地图上点击 <b style="color:#22c55e">起点 A</b>，再点击 <b style="color:#ef4444">终点 B</b>。<br><span style="font-size:10px">系统自动找最近的轨迹段作为路线依据。</span>';
+    resetEscapeSelectionHint();
     map.getContainer().style.cursor = 'crosshair';
   }
 
@@ -2999,8 +3047,7 @@ export function startStudioRuntime(
     escapeController.reset();
     if(addEscapeState.layer) addEscapeState.layer.clearLayers();
     document.getElementById('addescape-result').style.display = 'none';
-    document.getElementById('addescape-hint').innerHTML =
-      '在地图上点击 <b style="color:#22c55e">起点 A</b>，再点击 <b style="color:#ef4444">终点 B</b>。<br><span style="font-size:10px">系统自动找最近的轨迹段作为路线依据。</span>';
+    resetEscapeSelectionHint();
     setRuntimeInteractionPhase('escape', 'select-a');
   }
 
@@ -3056,12 +3103,28 @@ export function startStudioRuntime(
       return;
     }
     saveToStorage();
-    buildEscapeTab();
+    buildDaysTab();
     showToast(`✓ 下撤路线「${route.name}」已保存`);
     addEscapeExit({reason:'committed'});
   }
 
   // 按钮绑定
+  const escapeTrailSelect = ensureEscapeTrailSelector();
+  if(escapeTrailSelect) escapeTrailSelect.addEventListener('change', event => {
+    const trailId = event.target.value;
+    if(!escapeController.setReferenceTrail(trailId)) {
+      refreshEscapeTrailSelector();
+      return;
+    }
+    if(!state.activeTrails.has(trailId)) {
+      dispatchState({type:'active-trail.set', trailId, active:true});
+      drawTracks();
+    }
+    if(addEscapeState.layer) addEscapeState.layer.clearLayers();
+    document.getElementById('addescape-result').style.display = 'none';
+    resetEscapeSelectionHint();
+    setRuntimeInteractionPhase('escape', 'select-a');
+  });
   document.getElementById('addescape-close').addEventListener('click', addEscapeExit);
   document.getElementById('addescape-exit').addEventListener('click', addEscapeExit);
   document.getElementById('addescape-reset').addEventListener('click', addEscapeReset);
@@ -3963,13 +4026,12 @@ export function startStudioRuntime(
   }
   function renderSidebarNow() {
     buildTrailList();
-    buildHeaderStats();
+    renderPrimaryCard();
     buildFilterGrid();
   }
 
   function renderDaysNow() {
     buildDaysTab();
-    buildEscapeTab();
   }
 
   function renderLegendNow() {
@@ -4555,15 +4617,12 @@ export function startStudioRuntime(
   // Sidebar collapse
   const _sidebar = document.getElementById('sidebar');
   const _sbClose = document.getElementById('sidebar-close');
-  const _sbToggle = document.getElementById('sidebar-toggle');
   function toggleSidebar(open) {
     if(open === undefined) open = _sidebar.classList.contains('collapsed');
     if(open) {
       _sidebar.classList.remove('collapsed');
-      if(_sbToggle) _sbToggle.classList.remove('show');
     } else {
       _sidebar.classList.add('collapsed');
-      if(_sbToggle) _sbToggle.classList.add('show');
     }
     // 触发地图重排
     setTimeout(() => {
@@ -4583,7 +4642,6 @@ export function startStudioRuntime(
     }
   }
   if(_sbClose) _sbClose.addEventListener('click', () => toggleSidebar(false));
-  if(_sbToggle) _sbToggle.addEventListener('click', () => toggleSidebar(true));
   const waypointController = HTM_APP.createWaypointController(runtimeContext, {
     iconForTag:waypointIcon,
     markRevision:markTrailRevision,
@@ -4614,6 +4672,136 @@ export function startStudioRuntime(
     return { idx: bestI, point: main.track[bestI], dist: bestD, trail: main };
   }
 
+  function readWaypointPhoto(file) {
+    return new Promise((resolve, reject) => {
+      if(!file) { resolve(''); return; }
+      if(!file.type.startsWith('image/')) {
+        reject(new Error(currentLang === 'zh' ? '请选择图片文件' : 'Choose an image file'));
+        return;
+      }
+      if(file.size > 5 * 1024 * 1024) {
+        reject(new Error(currentLang === 'zh' ? '图片不能超过 5 MB' : 'Image must be 5 MB or smaller'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener('load', () => resolve(typeof reader.result === 'string' ? reader.result : ''));
+      reader.addEventListener('error', () => reject(new Error(currentLang === 'zh' ? '图片读取失败' : 'Could not read image')));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openWaypointEditorDialog() {
+    const isZh = currentLang === 'zh';
+    return studioDialogs.openCustom({
+      title:isZh ? '新增标注点' : 'Add waypoint',
+      size:'wide',
+      initialFocus:'#manual-waypoint-name',
+      render:({form, body, actions, close, cancel}) => {
+        const createField = (labelText, control) => {
+          const label = document.createElement('label');
+          label.className = 'workbench-dialog__field';
+          const caption = document.createElement('span');
+          caption.className = 'workbench-dialog__label';
+          caption.textContent = labelText;
+          label.append(caption, control);
+          body.append(label);
+        };
+
+        const name = document.createElement('input');
+        name.id = 'manual-waypoint-name';
+        name.className = 'workbench-dialog__input';
+        name.type = 'text';
+        name.required = true;
+        name.maxLength = 80;
+        name.placeholder = isZh ? '例如：营地、水源、岔路口' : 'For example: camp, water, junction';
+        createField(isZh ? '名称' : 'Name', name);
+
+        const tag = document.createElement('select');
+        tag.id = 'manual-waypoint-tag';
+        tag.className = 'workbench-dialog__input workbench-dialog__select';
+        ['other','camp','water','supply','pass','fork','warn','shelter','village','bridge','river','start','end'].forEach(value => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = `${waypointIcon(value)} ${t('tag.'+value) || value}`;
+          tag.append(option);
+        });
+        createField(isZh ? '图标与类型' : 'Icon and type', tag);
+
+        const description = document.createElement('textarea');
+        description.id = 'manual-waypoint-description';
+        description.className = 'workbench-dialog__input workbench-dialog__textarea';
+        description.maxLength = 500;
+        description.placeholder = isZh ? '可选：路况、补给、注意事项等' : 'Optional: conditions, supplies, notes';
+        createField(isZh ? '文字描述（可选）' : 'Description (optional)', description);
+
+        const photo = document.createElement('input');
+        photo.id = 'manual-waypoint-photo';
+        photo.className = 'workbench-dialog__file';
+        photo.type = 'file';
+        photo.accept = 'image/*';
+        const preview = document.createElement('img');
+        preview.className = 'workbench-dialog__image-preview';
+        preview.alt = isZh ? '图片预览' : 'Image preview';
+        preview.hidden = true;
+        const photoWrap = document.createElement('div');
+        photoWrap.className = 'workbench-dialog__photo-field';
+        photoWrap.append(photo, preview);
+        createField(isZh ? '图片（可选，最大 5 MB）' : 'Image (optional, 5 MB max)', photoWrap);
+
+        const error = document.createElement('p');
+        error.className = 'workbench-dialog__error';
+        error.setAttribute('role', 'alert');
+        body.append(error);
+        let photoData = '';
+        let photoRead = Promise.resolve('');
+        photo.addEventListener('change', () => {
+          error.textContent = '';
+          photoData = '';
+          preview.hidden = true;
+          photoRead = readWaypointPhoto(photo.files && photo.files[0]).then(data => {
+            photoData = data;
+            if(data) { preview.src = data; preview.hidden = false; }
+            return data;
+          }).catch(readError => {
+            photo.value = '';
+            error.textContent = readError.message;
+            return '';
+          });
+        });
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'workbench-dialog__button';
+        cancelButton.textContent = isZh ? '取消' : 'Cancel';
+        cancelButton.addEventListener('click', cancel);
+        const addButton = document.createElement('button');
+        addButton.type = 'submit';
+        addButton.className = 'workbench-dialog__button workbench-dialog__button--primary';
+        addButton.textContent = isZh ? '添加标注点' : 'Add waypoint';
+        actions.append(cancelButton, addButton);
+
+        form.addEventListener('submit', event => {
+          event.preventDefault();
+          const cleanName = name.value.trim();
+          if(!cleanName) {
+            error.textContent = isZh ? '请输入标注点名称' : 'Enter a waypoint name';
+            name.setAttribute('aria-invalid', 'true');
+            name.focus();
+            return;
+          }
+          addButton.disabled = true;
+          void photoRead.then(() => close({
+            name:cleanName,
+            tag:tag.value,
+            description:description.value.trim(),
+            photo:photoData,
+          }));
+        });
+        name.addEventListener('input', () => { error.textContent = ''; name.removeAttribute('aria-invalid'); });
+      },
+    });
+  }
+
   async function addManualWaypointAt(latlng, opts = {}) {
     const { requireNear = false, isCurrent = null } = opts;
     const anchor = findWaypointAnchorOnPrimary(latlng, requireNear);
@@ -4622,21 +4810,14 @@ export function startStudioRuntime(
       return false;
     }
     const main = anchor.trail;
-    const name = await studioDialogs.prompt({
-      title:currentLang === 'zh' ? '新增标注点' : 'Add waypoint',
-      inputLabel:currentLang === 'zh' ? '标注点名称' : 'Waypoint name',
-      required:true,
-      placeholder:currentLang === 'zh' ? '名称将标记为手动添加' : 'Saved as a manual waypoint',
-      confirmLabel:currentLang === 'zh' ? '添加' : 'Add',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-    });
-    if(!name || !name.trim()) return false;
+    const input = await openWaypointEditorDialog();
+    if(!input) return false;
     if(typeof isCurrent === 'function' && !isCurrent()) return false;
     return !!waypointController.addManualWaypoint({
       trailId:main.id,
       trackIndex:anchor.idx,
       point:anchor.point,
-    }, name);
+    }, input);
   }
 
   function handleWaypointInteractionEvent(event, session) {
@@ -4834,15 +5015,12 @@ export function startStudioRuntime(
       register(STUDIO_COMMANDS.MODE_WAYPOINT, () => setMapMode('waypoint'), {
         checked:() => state.mode === 'waypoint',
       }),
-      register(STUDIO_COMMANDS.WORKSPACE_PROJECT, () => activateSidebarTab('trails')),
       register(STUDIO_COMMANDS.WORKSPACE_TRAILS, () => activateSidebarTab('trails')),
       register(STUDIO_COMMANDS.WORKSPACE_ITINERARY, () => activateSidebarTab('days')),
       register(STUDIO_COMMANDS.WORKSPACE_WAYPOINTS, () => {
         activateSidebarTab('trails');
         setMapMode('waypoint');
       }),
-      register(STUDIO_COMMANDS.WORKSPACE_ESCAPE, () => activateSidebarTab('escape')),
-      register(STUDIO_COMMANDS.WORKSPACE_STATISTICS, () => undefined),
       register(STUDIO_COMMANDS.WORKSPACE_SETTINGS, () => undefined),
     ];
     window.__HTM_RUNTIME_COMMAND_DISPOSERS__ = disposers;
@@ -4925,9 +5103,8 @@ export function startStudioRuntime(
       "buildDayPreviewRenderModel": {enumerable:true, get:() => buildDayPreviewRenderModel},
       "buildDaysTab": {enumerable:true, get:() => buildDaysTab},
       "buildEscapeRoutes": {enumerable:true, get:() => buildEscapeRoutes},
-      "buildEscapeTab": {enumerable:true, get:() => buildEscapeTab},
       "buildFilterGrid": {enumerable:true, get:() => buildFilterGrid},
-      "buildHeaderStats": {enumerable:true, get:() => buildHeaderStats},
+      "renderPrimaryCard": {enumerable:true, get:() => renderPrimaryCard},
       "buildKmlParseModel": {enumerable:true, get:() => buildKmlParseModel},
       "buildLegend": {enumerable:true, get:() => buildLegend},
       "buildMeasureSegmentRenderModel": {enumerable:true, get:() => buildMeasureSegmentRenderModel},

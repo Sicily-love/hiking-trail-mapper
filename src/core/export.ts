@@ -11,6 +11,7 @@ export interface ExportWaypoint {
   label?: string;
   icon?: string;
   tag?: string;
+  description?: string;
 }
 
 export interface ExportTrailStats {
@@ -75,7 +76,7 @@ function waypointKml(waypoint: ExportWaypoint, indent = '    '): string {
   if(!Number.isFinite(waypoint.lat) || !Number.isFinite(waypoint.lng)) return '';
   return `${indent}<Placemark>
 ${indent}  <name><![CDATA[${cdata(waypointName(waypoint))}]]></name>
-${indent}  <description><![CDATA[${cdata(waypoint.tag || '')} | ${waypoint.elev || 0}m | ${waypoint.km || 0}km]]></description>
+${indent}  <description><![CDATA[${cdata(waypoint.description || waypoint.tag || '')} | ${waypoint.elev || 0}m | ${waypoint.km || 0}km]]></description>
 ${indent}  <Point><coordinates>${waypoint.lng},${waypoint.lat},${waypoint.elev || 0}</coordinates></Point>
 ${indent}</Placemark>
 `;

@@ -17,7 +17,7 @@ import websocket
 ROOT = Path(__file__).resolve().parents[2]
 HTML = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
 SAMPLE = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
-OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.gettempdir()) / "hiking-field-console"
+OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.gettempdir()) / "outdoor-route-studio"
 
 
 def chrome_bin():
@@ -143,7 +143,7 @@ try:
         state.activeTrails = new Set();
         const bytes = Uint8Array.from(atob('{sample_b64}'), c => c.charCodeAt(0));
         const file = {{
-          name: 'field-console-sample.kml',
+          name: 'workbench-sample.kml',
           text: async () => new TextDecoder().decode(bytes),
           arrayBuffer: async () => bytes.buffer,
         }};
@@ -211,7 +211,7 @@ try:
         hide_transient_ui()
         wait_for_map_tiles()
         screenshot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-        (OUTPUT / f"field-console-{width}x{height}.png").write_bytes(base64.b64decode(screenshot["result"]["data"]))
+        (OUTPUT / f"workbench-{width}x{height}.png").write_bytes(base64.b64decode(screenshot["result"]["data"]))
 
     cdp("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False})
     evaluate("""
@@ -228,7 +228,7 @@ try:
     hide_transient_ui()
     wait_for_map_tiles()
     day_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-    (OUTPUT / "field-console-day-cards.png").write_bytes(base64.b64decode(day_shot["result"]["data"]))
+    (OUTPUT / "workbench-day-cards.png").write_bytes(base64.b64decode(day_shot["result"]["data"]))
 
     evaluate("""
       (() => {
@@ -245,14 +245,17 @@ try:
     hide_transient_ui()
     wait_for_map_tiles()
     measure_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-    (OUTPUT / "field-console-measure.png").write_bytes(base64.b64decode(measure_shot["result"]["data"]))
+    (OUTPUT / "workbench-measure.png").write_bytes(base64.b64decode(measure_shot["result"]["data"]))
 
     evaluate("""
       (() => {
         measureExit();
         segmentEnter();
         const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
-        segmentState.points = segmentIndexesToPoints(main, [0, Math.floor(main.track.length * 0.46), main.track.length - 1]);
+        segmentState.points = HTM_CORE.segmentIndexesToPoints(
+          main.track,
+          [0, Math.floor(main.track.length * 0.46), main.track.length - 1],
+        );
         updateSegmentUI();
       })()
     """)
@@ -261,7 +264,7 @@ try:
     hide_transient_ui()
     wait_for_map_tiles()
     segment_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-    (OUTPUT / "field-console-segment.png").write_bytes(base64.b64decode(segment_shot["result"]["data"]))
+    (OUTPUT / "workbench-segment.png").write_bytes(base64.b64decode(segment_shot["result"]["data"]))
 
     evaluate("""
       (() => {
@@ -294,7 +297,7 @@ try:
       })()
     """)
     dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-    (OUTPUT / "field-console-dialog.png").write_bytes(base64.b64decode(dialog_shot["result"]["data"]))
+    (OUTPUT / "workbench-dialog.png").write_bytes(base64.b64decode(dialog_shot["result"]["data"]))
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
     time.sleep(0.1)
 
@@ -304,7 +307,7 @@ try:
     hide_transient_ui()
     wait_for_map_tiles()
     sheet = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-    (OUTPUT / "field-console-390x844-sheet.png").write_bytes(base64.b64decode(sheet["result"]["data"]))
+    (OUTPUT / "workbench-390x844-sheet.png").write_bytes(base64.b64decode(sheet["result"]["data"]))
     evaluate("""
       (() => {
         toggleSidebar(false);
@@ -335,7 +338,7 @@ try:
       })()
     """)
     mobile_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
-    (OUTPUT / "field-console-dialog-mobile.png").write_bytes(base64.b64decode(mobile_dialog_shot["result"]["data"]))
+    (OUTPUT / "workbench-dialog-mobile.png").write_bytes(base64.b64decode(mobile_dialog_shot["result"]["data"]))
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
     time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

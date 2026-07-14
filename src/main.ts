@@ -1,5 +1,5 @@
 import './styles/leaflet.css';
-import './ui/workbench.css';
+import './styles/components.css';
 import './styles/studio.css';
 import { bootstrapOutdoorRouteStudio } from './app/bootstrap.ts';
 

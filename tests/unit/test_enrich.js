@@ -3,7 +3,7 @@
  * 运行：node tests/unit/test_enrich.js
  */
 const assert = require('assert');
-const { enrichWaypoints, trailContentHash, haversine } = require('./trail_core');
+const { enrichWaypoints, trailContentHash, haversine } = require('../../src/core/index.ts');
 
 let passed = 0, failed = 0;
 const T = (name, fn) => {

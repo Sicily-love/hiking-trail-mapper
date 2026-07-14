@@ -38,7 +38,7 @@ npm run test:visual:capture
 - `unit/`: deterministic Node tests for core, app, all four managers, Workbench, entry, and release contracts.
 - `browser/`: real-Chrome static/functional checks for the small shell, direct TypeScript runtime, and generated single HTML.
 - `e2e/`: user workflows for import, groups, measurement, segmentation, persistence, export, and `file://`.
-- `visual/`: real-KML screenshots and geometry assertions for seven desktop side actions, five mobile bottom actions, sidebar/bottom sheets, elevation dock, and dialogs.
+- `visual/`: real-KML screenshots and geometry assertions for four focused desktop/mobile activities, sidebar panels, the elevation dock, and dialogs.
 - `run_full_check.sh`: shared full entrypoint for local and release preparation.
 
 Common commands:

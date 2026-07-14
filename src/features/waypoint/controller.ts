@@ -23,6 +23,7 @@ export interface WaypointRecord {
   day?: number | null;
   time?: string;
   photo?: string;
+  description?: string;
   manuallyAdded?: boolean;
   [key: string]: unknown;
 }
@@ -45,6 +46,13 @@ export interface ManualWaypointAnchor {
   point: WaypointTrackPoint;
 }
 
+export interface ManualWaypointInput {
+  name: string;
+  tag: string;
+  description?: string;
+  photo?: string;
+}
+
 export interface WaypointControllerDependencies {
   iconForTag: (tag: string) => string;
   markRevision: (trail: WaypointTrail) => unknown;
@@ -60,7 +68,7 @@ export interface WaypointController {
   enter: (trailId: string) => boolean;
   exit: () => void;
   nextId: (trail: WaypointTrail) => number;
-  addManualWaypoint: (anchor: ManualWaypointAnchor, name: string) => WaypointRecord | null;
+  addManualWaypoint: (anchor: ManualWaypointAnchor, input: ManualWaypointInput) => WaypointRecord | null;
 }
 
 /** Owns manual-waypoint state and project mutations without Leaflet or DOM access. */
@@ -90,8 +98,8 @@ export function createWaypointController(
     return ids.length ? Math.max(...ids) + 1 : 1;
   };
 
-  const addManualWaypoint = (anchor: ManualWaypointAnchor, name: string): WaypointRecord | null => {
-    const cleanName = name.trim();
+  const addManualWaypoint = (anchor: ManualWaypointAnchor, input: ManualWaypointInput): WaypointRecord | null => {
+    const cleanName = input.name.trim();
     if(!cleanName) return null;
     const trail = context.project.trails.find(candidate => candidate.id === anchor.trailId);
     const appState = context.state.snapshot();
@@ -104,8 +112,8 @@ export function createWaypointController(
       id:nextId(trail),
       name:displayName,
       label:displayName,
-      icon:dependencies.iconForTag('other'),
-      tag:'other',
+      icon:dependencies.iconForTag(input.tag),
+      tag:input.tag,
       km:Number.parseFloat((point[3] || 0).toFixed(1)),
       elev:Math.round(point[2] || 0),
       lat:point[0],
@@ -113,7 +121,8 @@ export function createWaypointController(
       gps_idx:anchor.trackIndex,
       day:point[5] || null,
       time:'',
-      photo:'',
+      photo:input.photo || '',
+      description:input.description?.trim() || '',
       manuallyAdded:true,
     };
     (trail.waypoints ||= []).push(waypoint);

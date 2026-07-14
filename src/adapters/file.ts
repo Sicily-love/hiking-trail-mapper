@@ -157,7 +157,7 @@ export function renderDayElevationChart(
 
   context.beginPath();
   context.moveTo(left, top + plotHeight);
-  points.forEach((point, index) => context.lineTo(x(index), y(elevations[index])));
+  points.forEach((_, index) => context.lineTo(x(index), y(elevations[index])));
   context.lineTo(left + plotWidth, top + plotHeight);
   context.closePath();
   const match = color.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
@@ -169,7 +169,7 @@ export function renderDayElevationChart(
   context.fill();
 
   context.beginPath();
-  points.forEach((point, index) => index === 0
+  points.forEach((_, index) => index === 0
     ? context.moveTo(x(index), y(elevations[index]))
     : context.lineTo(x(index), y(elevations[index])));
   context.strokeStyle = color;

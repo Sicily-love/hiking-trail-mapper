@@ -10,7 +10,7 @@ const {
   computeCumulativeDistance,
   computeTrailStats,
   generateNextTrailId,
-} = require('./trail_core');
+} = require('../../src/core/index.ts');
 
 let passed = 0, failed = 0;
 const T = (name, fn) => {

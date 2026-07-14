@@ -77,12 +77,12 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_render_scheduler.js` | Dirty-mask coalescing, fixed flush order, next-frame re-entry, and fit epochs |
 | `test_render_runtime.js` | Seven-phase runtime wiring, elevation downsampling, marker diffs, and final-reset protection |
 | `test_command_dialog.js` | Command registration/state/dispatch, four-surface wiring, and native-dialog safety, focus, and Escape |
-| `test_ui_contract.js` | Responsive Workbench, seven-side/five-bottom layout, sidebar, elevation dock, and accessibility |
+| `test_ui_contract.js` | Responsive Workbench, four focused activities, sidebar, elevation dock, and accessibility |
 | `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, direct runtime, and single-file build |
 | `test_release_pipeline.js` | Reproducible builds, release metadata, version tools, and the GitHub Pages workflow |
 | `verify_alignment.js` | Generated release behavior uses `src/core` without restoring duplicate core fallbacks |
 
-`tests/unit/trail_core.js` is only an import bridge for older CommonJS tests, not a second implementation.
+All Node unit tests import `src/core/index.ts` directly; no test mirror or compatibility import bridge remains.
 
 ### Phase 3: Release Metadata
 
@@ -172,7 +172,7 @@ After all six phases, the script performs a read-only release-consistency check:
 
 Cover at least wide desktop, narrow desktop, 390px, and 320px:
 
-- Desktop presents seven primary actions in the side rail; mobile presents five in the bottom bar.
+- Desktop side rail and mobile bottom bar expose the same four non-duplicated activities.
 - Crossing breakpoints does not clone command handlers or double-dispatch.
 - More/bottom sheets do not obscure critical map controls.
 - Route sidebar, elevation dock, and tool panels do not overlap incoherently.

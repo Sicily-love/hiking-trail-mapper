@@ -33,9 +33,9 @@ T('index.html is a minimal shell with one TypeScript entry', () => {
 T('main.ts owns the one bootstrap path and ordered stylesheet imports', () => {
   const main = read('src/main.ts');
   assert.ok(main.includes("import './styles/leaflet.css'"));
-  assert.ok(main.includes("import './ui/workbench.css'"));
+  assert.ok(main.includes("import './styles/components.css'"));
   assert.ok(main.includes("import './styles/studio.css'"));
-  assert.ok(main.indexOf("import './ui/workbench.css'") < main.indexOf("import './styles/studio.css'"));
+  assert.ok(main.indexOf("import './styles/components.css'") < main.indexOf("import './styles/studio.css'"));
   assert.ok(main.includes("import { bootstrapOutdoorRouteStudio } from './app/bootstrap.ts'"));
   assert.strictEqual((main.match(/bootstrapOutdoorRouteStudio\(/g) || []).length, 1);
 });

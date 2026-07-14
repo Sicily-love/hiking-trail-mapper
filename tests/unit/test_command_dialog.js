@@ -162,6 +162,9 @@ test('content dialogs render structured sections with responsive wide styling', 
   assert.ok(studioCss.includes('.workbench-dialog--wide .workbench-dialog__surface'));
   assert.ok(studioCss.includes('.workbench-dialog__metrics'));
   assert.ok(studioCss.includes(".workbench-dialog__section[data-tone='warning']"));
+  assert.match(studioCss, /\.workbench-dialog__surface\s*\{[^}]*overflow:hidden;/s);
+  assert.match(studioCss, /\.workbench-dialog__body\s*\{[^}]*overflow:auto;/s);
+  assert.match(studioCss, /\.workbench-dialog__actions\s*\{[^}]*flex:0 0 auto;/s);
 });
 
 test('dialog strings use textContent and never HTML injection sinks', () => {

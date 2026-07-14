@@ -4,7 +4,6 @@
  */
 const assert = require('assert');
 const core = require('../../src/core/index.ts');
-const bridge = require('./trail_core');
 
 let passed = 0;
 let failed = 0;
@@ -64,14 +63,6 @@ T('exports expected pure functions', () => {
     'buildDayMetaFromSegments',
     'buildDayMetaFromTrackDays',
   ].forEach(name => assert.strictEqual(typeof core[name], 'function', name));
-});
-
-T('CommonJS bridge points at TypeScript core', () => {
-  assert.strictEqual(bridge.haversine, core.haversine);
-  assert.strictEqual(bridge.computeTrailStats, core.computeTrailStats);
-  assert.strictEqual(bridge.enrichWaypoints, core.enrichWaypoints);
-  assert.strictEqual(bridge.computeSegmentStats, core.computeSegmentStats);
-  assert.strictEqual(bridge.restoreSegmentIndexes, core.restoreSegmentIndexes);
 });
 
 T('core functions compose across modules', () => {

@@ -163,10 +163,12 @@ try:
     check("File/文件菜单可由真实鼠标点击展开",
           evalj("document.querySelector('[data-menu=\"file\"]')?.getAttribute('aria-expanded') === 'true' && !document.getElementById('workbench-menu-file')?.hidden"))
     evalj("window.__OUTDOOR_ROUTE_STUDIO__.workbench.closeMenus()")
-    check("左侧 7 个活动入口已渲染",
-          evalj("document.querySelectorAll('.studio-activity-button').length === 7"))
-    check("底部 5 个分析 Tab 已渲染",
-          evalj("document.querySelectorAll('.studio-bottom-tab').length === 5"))
+    check("左侧 4 个互不重复的活动入口已渲染",
+          evalj("document.querySelectorAll('.studio-activity-button').length === 4"))
+    check("Workbench 已移除右上角旧侧栏恢复按钮",
+          evalj("!document.getElementById('sidebar-toggle')"))
+    check("底部已收敛为无重复 Tab 的海拔分析区",
+          evalj("document.querySelectorAll('.studio-bottom-tab').length === 0 && !!document.querySelector('[data-analysis-panel=\"elevation\"] #elev-bar') && !!document.querySelector('[data-analysis-panel=\"elevation\"] #measure-panel')"))
     language_flow = evalj("""
       (async () => {
         const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
@@ -195,16 +197,45 @@ try:
     check("Workbench 中文标签完整且不混用英文",
           isinstance(language_flow, dict)
           and language_flow.get('zh', {}).get('menu') == ['文件','编辑','测距','规划','标注','视图','导出']
-          and language_flow.get('zh', {}).get('activity') == ['项目','轨迹','行程','标注点','下撤','统计','设置']
-          and language_flow.get('zh', {}).get('bottom') == ['海拔','统计','测距','分段','日志']
+          and language_flow.get('zh', {}).get('activity') == ['轨迹','行程','标注点','设置']
+          and language_flow.get('zh', {}).get('bottom') == []
           and language_flow.get('zh', {}).get('context') == '尚未加载轨迹', str(language_flow))
     check("Workbench 英文标签完整并可切回中文",
           isinstance(language_flow, dict)
           and language_flow.get('en', {}).get('menu') == ['File','Edit','Measure','Plan','Waypoint','View','Export']
-          and language_flow.get('en', {}).get('activity') == ['Project','Trails','Itinerary','Waypoints','Escape','Statistics','Settings']
-          and language_flow.get('en', {}).get('bottom') == ['Elevation','Statistics','Measure','Segment','Log']
+          and language_flow.get('en', {}).get('activity') == ['Trails','Itinerary','Waypoints','Settings']
+          and language_flow.get('en', {}).get('bottom') == []
           and language_flow.get('en', {}).get('context') == 'No trail loaded'
           and language_flow.get('finalLang') == 'zh-CN', str(language_flow))
+    check("独立统计与下撤导航已移除",
+          evalj("!document.querySelector('[data-activity=\"statistics\"], [data-activity=\"escape\"]') && !document.getElementById('tab-escape')"))
+    evalj("document.getElementById('version-tag-link')?.click()")
+    time.sleep(0.1)
+    changelog_scroll_contract = evalj("""
+      (() => {
+        const surface = document.querySelector('dialog[open] .workbench-dialog__surface');
+        const body = surface?.querySelector('.workbench-dialog__body');
+        const actions = surface?.querySelector('.workbench-dialog__actions');
+        if(!surface || !body || !actions) return null;
+        const before = actions.getBoundingClientRect().top;
+        body.scrollTop = body.scrollHeight;
+        const after = actions.getBoundingClientRect().top;
+        return {
+          surfaceOverflow: getComputedStyle(surface).overflow,
+          bodyOverflowY: getComputedStyle(body).overflowY,
+          actionShift: Math.abs(after - before),
+          actionVisible: actions.getBoundingClientRect().bottom <= surface.getBoundingClientRect().bottom + 1,
+        };
+      })()
+    """)
+    check("版本说明仅滚动内容且关闭栏始终可见",
+          isinstance(changelog_scroll_contract, dict)
+          and changelog_scroll_contract.get('surfaceOverflow') == 'hidden'
+          and changelog_scroll_contract.get('bodyOverflowY') == 'auto'
+          and changelog_scroll_contract.get('actionShift', 99) < 1
+          and changelog_scroll_contract.get('actionVisible') is True,
+          str(changelog_scroll_contract))
+    evalj("document.querySelector('dialog[open] .workbench-dialog__button')?.click()")
     check("Studio 主题变量已生效",
           evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
     check("旧命令节点已无损迁移到 Workbench 菜单",
@@ -423,7 +454,16 @@ try:
     check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
           source_has('function schedulePrimaryMiniPositionApply', 'setTimeout', 'function toggleSidebar', 'schedulePrimaryMiniPositionApply'))
     check("地图标注点显示分段 D 天数",
-          source_has('function addWpMarker', 'wp-day-badge', 'function segmentApply', 'segmentController.apply'))
+          evalj("""
+            (() => {
+              const model = HTM_APP.buildWaypointMarkerModel({
+                trail:{id:'test', name:'Test', color:'#123456', track:[]},
+                waypoint:{id:1, lat:30, lng:100, day:2, km:1.5, elev:3200, tag:'camp', label:'Camp'},
+                isPrimary:true, waypointMode:true, color:'#123456', iconText:'C',
+              });
+              return model.iconHtml.includes('wp-day-badge') && model.iconHtml.includes('D2');
+            })()
+          """) and source_has('function addWpMarker', 'function segmentApply', 'segmentController.apply'))
     check("标注点图标按 tag 统一渲染",
           evalj("waypointIcon('supply') === '🏪'") and source_has('waypointIcon(wp)', 'waypointIcon(tag)'))
     check("Workbench 顶栏含品牌和完整菜单命令",
@@ -467,9 +507,11 @@ try:
     check("测距面板保留重新选点/反向/退出，测距信息拆散融入海拔图",
           evalj("""
             (() => {
-              const panelButtons = [...document.querySelectorAll('#measure-panel button')]
-                .map(btn => btn.textContent.trim().replace(/\\s+/g, ' '));
-              return panelButtons.join('|') === '🔄 重新选点|⇄ 反向|✕ 退出'
+              const panelButtons = [...document.querySelectorAll('#measure-panel button')];
+              const buttonIds = panelButtons.map(btn => btn.id);
+              const buttonLabels = panelButtons.map(btn => btn.textContent.trim().replace(/\\s+/g, ' '));
+              return buttonIds.join('|') === 'measure-reset|measure-reverse|measure-exit'
+                && buttonLabels.every(label => label.length > 0)
                 && !document.getElementById('measure-elev-overlay')
                 && !document.getElementById('measure-result')
                 && !!document.getElementById('measure-distance')
@@ -518,15 +560,22 @@ try:
     check("天数模式入口移到行程页并可恢复原显示模式",
           evalj("""
             (() => {
-              const trailModes = [...document.querySelectorAll('#tab-trails [data-mode]')].map(btn => btn.dataset.mode);
+              const modeSwitcher = document.querySelector('.studio-activity-rail > #map-mode-controls');
+              const trailModes = [...document.querySelectorAll('#map-mode-controls [data-mode]')].map(btn => btn.dataset.mode);
               const noDayButton = trailModes.join('|') === 'elev|waypoint'
-                && !document.querySelector('#tab-trails [data-mode="day"]');
-              setMapMode('waypoint');
+                && !!modeSwitcher
+                && !document.querySelector('#map-mode-controls [data-mode="day"]')
+                && !document.querySelector('#tab-trails [data-mode]')
+                && !!document.querySelector('#trail-selector-panel > #trail-list');
+              document.querySelector('#map-mode-controls [data-mode="waypoint"]').click();
+              const directSwitchWorks = state.mode === 'waypoint'
+                && document.querySelector('#map-mode-controls [data-mode="waypoint"]').getAttribute('aria-pressed') === 'true';
               document.querySelector('.tab[data-tab="days"]').click();
               const entersDay = state.mode === 'day';
               document.querySelector('.tab[data-tab="trails"]').click();
               const restores = state.mode === 'waypoint';
               return noDayButton
+                && directSwitchWorks
                 && entersDay
                 && restores
                 && buildDaysTab.toString().includes('days-summary')
@@ -636,6 +685,7 @@ try:
         measureButton.click();
         await Promise.resolve();
         const topMenuEnteredMeasure = interactionManager.current.kind === 'measure';
+        const measureActionsEmbedded = document.getElementById('measure-panel')?.parentElement?.dataset.analysisPanel === 'elevation';
 
         document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
         await Promise.resolve();
@@ -645,18 +695,17 @@ try:
         await Promise.resolve();
         const activityOpenedItinerary = document.querySelector('.tab[data-tab="days"]').classList.contains('active')
           && document.getElementById('workbench-activity-itinerary').classList.contains('is-active');
-
-        document.querySelector('[data-bottom-tab="log"]').click();
-        await Promise.resolve();
-        const bottomOpenedLog = document.querySelector('[data-bottom-tab="log"]').getAttribute('aria-selected') === 'true';
+        const escapeRoutesMerged = !!document.querySelector('#tab-days .itinerary-escape-section')
+          && !document.getElementById('tab-escape');
 
         document.getElementById('workbench-activity-trails').click();
         unsubscribe();
         return {
           topMenuEnteredMeasure,
+          measureActionsEmbedded,
           shortcutCancelled,
           activityOpenedItinerary,
-          bottomOpenedLog,
+          escapeRoutesMerged,
           events,
         };
       })()
@@ -671,8 +720,11 @@ try:
         check("桌面/移动活动栏分发 workspace 命令",
               command_flow.get('activityOpenedItinerary') == True and 'workspace.itinerary' in command_flow['events'],
               str(command_flow))
-        check("底部分析栏分发 panel 命令",
-              command_flow.get('bottomOpenedLog') == True and 'panel.log' in command_flow['events'],
+        check("测距操作嵌入海拔分析区且没有重复 Tab",
+              command_flow.get('measureActionsEmbedded') == True and 'panel.log' not in command_flow['events'],
+              str(command_flow))
+        check("下撤方案直接合并进行程页",
+              command_flow.get('escapeRoutesMerged') == True,
               str(command_flow))
     else:
         check("Command 2.0 统一分发", False, str(command_flow))
@@ -750,16 +802,21 @@ try:
         });
         await new Promise(resolve => setTimeout(resolve, 0));
         const waypointDialog = document.querySelector('dialog[open]');
-        const waypointInput = waypointDialog?.querySelector('input');
+        const waypointInput = waypointDialog?.querySelector('#manual-waypoint-name');
         if(waypointInput) {
           waypointInput.value = '状态机标注';
           waypointInput.dispatchEvent(new Event('input', {bubbles:true}));
+          waypointDialog.querySelector('#manual-waypoint-tag').value = 'camp';
+          waypointDialog.querySelector('#manual-waypoint-description').value = '状态机描述';
           waypointDialog.querySelector('form').requestSubmit();
         }
         await new Promise(resolve => setTimeout(resolve, 0));
+        const addedWaypoint = main.waypoints.at(-1);
         summary.waypointCommitted = interactionManager.current.kind === 'idle'
           && !addWaypointState.active
-          && main.waypoints.length === waypointBefore + 1;
+          && main.waypoints.length === waypointBefore + 1
+          && addedWaypoint.tag === 'camp'
+          && addedWaypoint.description === '状态机描述';
 
         addEscapeEnter();
         dispatchRuntimeInteraction('escape', {
@@ -777,6 +834,11 @@ try:
         const day = main.day_meta?.[0] || {
           d:1, km:main.stats.distance_km, i_start:0, i_end:main.track.length - 1,
         };
+        buildDaysTab();
+        const dayMetricLabels = [...document.querySelectorAll('#tab-days .day-stats .lab')]
+          .map(element => element.textContent.trim());
+        summary.campNotDuplicated = !dayMetricLabels.includes('扎营点')
+          && !!document.querySelector('#tab-days .day-camp');
         showDaySegmentPreview(main, day);
         summary.dayReplacedEscape = interactionManager.current.kind === 'day-preview'
           && interactionManager.current.phase === 'preview'
@@ -807,6 +869,7 @@ try:
             ('segmentDrag', '分段边界拖动经过 dragging 并回到 editing'),
             ('waypointCommitted', '标注提交后自动回到 idle'),
             ('escapePreview', '下撤 A/B 选择进入 preview'),
+            ('campNotDuplicated', 'Day 统计不再重复扎营点信息'),
             ('dayReplacedEscape', 'Day 预览替换下撤'),
             ('dayToggleExit', '再次点击 Day 退出预览'),
             ('escapeKey', 'Escape 键统一取消当前模式'),

@@ -180,9 +180,4 @@ export {
   buildStorageDialogModel,
   type StorageInfoSnapshot,
 } from '../features/localization/storage-content.ts';
-export {
-  COMMANDS,
-  ELEVATION_COLLAPSED_KEY,
-  initializeWorkbenchChrome,
-  shouldCloseSidebarForFit,
-} from '../ui/workbench.ts';
+export { shouldCloseSidebarForFit } from '../ui/layout/workbench.ts';

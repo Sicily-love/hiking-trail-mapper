@@ -4,7 +4,6 @@ import { haversine } from '../../core/geo.ts';
 import type {
   EscapeAnchorPoint,
   EscapeRoute,
-  EscapeRoutePreview,
   EscapeRoutePreviewResult,
 } from '../../core/escape.ts';
 import type { TrackTuple } from '../../core/types.ts';
@@ -21,6 +20,7 @@ export interface EscapeTrail {
 export interface EscapeInteractionState {
   active: boolean;
   trailId: string | null;
+  referenceTrailId: string | null;
   ptA: EscapeAnchorPoint | null;
   ptB: EscapeAnchorPoint | null;
   layer: unknown;
@@ -35,6 +35,7 @@ export interface EscapeControllerDependencies {
 export interface EscapeController {
   readonly state: Readonly<EscapeInteractionState>;
   enter: (trailId: string) => boolean;
+  setReferenceTrail: (trailId: string) => boolean;
   exit: () => void;
   reset: () => void;
   nearestPoint: (lat: number, lng: number, maxDistanceM?: number) => EscapeAnchorPoint | null;
@@ -48,7 +49,7 @@ export interface EscapeController {
 }
 
 export function createEscapeInteractionState(): EscapeInteractionState {
-  return {active:false, trailId:null, ptA:null, ptB:null, layer:null, _pending:null};
+  return {active:false, trailId:null, referenceTrailId:null, ptA:null, ptB:null, layer:null, _pending:null};
 }
 
 /** Owns escape-route interaction and project mutations without Leaflet or DOM access. */
@@ -75,6 +76,19 @@ export function createEscapeController(
     if(!trail?.track.length || context.state.snapshot().primaryTrailId !== trailId) return false;
     state.active = true;
     state.trailId = trailId;
+    state.referenceTrailId = trailId;
+    reset();
+    return true;
+  };
+
+  const setReferenceTrail = (trailId: string): boolean => {
+    if(!state.active) return false;
+    const trail = findTrail(trailId);
+    const appState = context.state.snapshot();
+    if(!trail?.track.length || appState.activeGroup == null || (trail.group || '默认') !== appState.activeGroup) {
+      return false;
+    }
+    state.referenceTrailId = trailId;
     reset();
     return true;
   };
@@ -82,6 +96,7 @@ export function createEscapeController(
   const exit = (): void => {
     state.active = false;
     state.trailId = null;
+    state.referenceTrailId = null;
     reset();
   };
 
@@ -91,7 +106,7 @@ export function createEscapeController(
     let best: EscapeAnchorPoint | null = null;
     let bestDistance = Infinity;
     for(const trail of context.project.trails) {
-      if((trail.group || '默认') !== appState.activeGroup || !appState.activeTrails.has(trail.id)) continue;
+      if(trail.id !== state.referenceTrailId || (trail.group || '默认') !== appState.activeGroup) continue;
       for(let index = 0; index < trail.track.length; index += 1) {
         const point = trail.track[index];
         const distance = haversine(lat, lng, point[0], point[1]);
@@ -121,7 +136,10 @@ export function createEscapeController(
     const pointA = state.ptA;
     const pointB = state.ptB;
     if(!pointA || !pointB) return {ok:false, reason:'empty-track'};
-    const referenceTrail = findTrail(pointA.trailId);
+    if(pointA.trailId !== state.referenceTrailId || pointB.trailId !== state.referenceTrailId) {
+      return {ok:false, reason:'empty-track'};
+    }
+    const referenceTrail = findTrail(state.referenceTrailId);
     if(!referenceTrail?.track.length) return {ok:false, reason:'empty-track'};
     const result = buildManualEscapeRoute(referenceTrail, pointA, pointB, createRouteId());
     state._pending = result.ok ? result.preview.route : null;
@@ -175,6 +193,7 @@ export function createEscapeController(
   return Object.freeze({
     state,
     enter,
+    setReferenceTrail,
     exit,
     reset,
     nearestPoint,
