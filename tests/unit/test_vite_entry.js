@@ -42,23 +42,19 @@ T('main.ts owns the one bootstrap path and ordered stylesheet imports', () => {
 
 T('bootstrap mounts the shell and activates source modules once', () => {
   const bootstrap = read('src/app/bootstrap.ts');
-  assert.ok(bootstrap.includes("import * as core from '../core/index.ts'"));
   assert.ok(bootstrap.includes("import * as app from './index.ts'"));
-  assert.ok(bootstrap.includes("import runtimeTemplate from './runtime.ts?raw'"));
-  assert.ok(bootstrap.includes("import { composeClassicRuntime } from './runtime/compose.ts'"));
-  assert.ok(bootstrap.includes("import fileRuntimeSource from '../features/files/runtime.ts?raw'"));
-  assert.ok(bootstrap.includes("import appClassicRuntimeSource from './runtime/classic.ts?raw'"));
-  assert.ok(bootstrap.includes("import measureRuntimeSource from '../features/measure/runtime.ts?raw'"));
-  assert.ok(bootstrap.includes('const runtimeSource = composeClassicRuntime(runtimeTemplate'));
+  assert.ok(bootstrap.includes("import { startStudioRuntime"));
+  assert.ok(bootstrap.includes("import '../vendor/leaflet.js'"));
+  assert.ok(bootstrap.includes("import '../vendor/polyline-decorator.js'"));
+  assert.ok(bootstrap.includes("import '../vendor/fflate.js'"));
   assert.ok(bootstrap.includes('mountAppShell(root)'));
-  assert.ok(bootstrap.includes('window.HikingTrailCore = core'));
-  assert.ok(bootstrap.includes('window.HikingTrailApp = app'));
-  assert.ok(bootstrap.includes('window.__HTM_COMMAND_REGISTRY__ = commands'));
-  assert.ok(bootstrap.includes('window.__HTM_DIALOG_CONTROLLER__ = dialogs'));
-  assert.ok(bootstrap.includes("executeClassicScript(document, runtimeSource, 'runtime.js')"));
+  assert.ok(bootstrap.includes('startStudioRuntime({ document, commands, dialogs })'));
+  assert.strictEqual(bootstrap.includes('?raw'), false);
+  assert.strictEqual(bootstrap.includes('executeClassicScript'), false);
+  assert.strictEqual(bootstrap.includes('composeClassicRuntime'), false);
   assert.ok(bootstrap.includes('resolveWorkbenchStorage(document),\n    commands,'));
   assert.ok(
-    bootstrap.indexOf("executeClassicScript(document, runtimeSource, 'runtime.js')")
+    bootstrap.indexOf('startStudioRuntime({ document, commands, dialogs })')
       < bootstrap.indexOf('resolveWorkbenchStorage(document),\n    commands,'),
   );
 });
@@ -69,6 +65,9 @@ T('Vite has one production HTML input with relative assets', () => {
   assert.ok(config.includes("input: 'index.html'"));
   assert.ok(!config.includes("dev: 'dev.html'"));
   assert.ok(config.includes("outDir: 'dist'"));
+  assert.ok(config.includes("name: 'vendored-browser-globals'"));
+  assert.ok(config.includes("id.endsWith('/src/vendor/fflate.js')"));
+  assert.ok(config.includes("'!function(f){globalThis.fflate=f()}'"));
 });
 
 T('package dev command opens the sole Vite HTML', () => {
@@ -77,9 +76,9 @@ T('package dev command opens the sole Vite HTML', () => {
   assert.ok(!scripts.dev.includes('dev.html'));
 });
 
-T('release builder consumes Vite output and runtime.ts', () => {
+T('release builder consumes Vite output and version data', () => {
   const script = read('scripts/build/build_release.mjs');
-  assert.ok(script.includes("path.join(root, 'src/app/runtime.ts')"));
+  assert.ok(script.includes("path.join(root, 'src/app/version.ts')"));
   assert.ok(script.includes('inlineViteAssets'));
   assert.ok(script.includes('data-studio-bundle'));
   assert.ok(script.includes("sourceEntry: 'index.html'"));

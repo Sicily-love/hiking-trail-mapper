@@ -2,7 +2,7 @@
 
 **[中文](TESTING.md) · [English](TESTING.en.md)**
 
-The test system protects modular source, the transitional runtime, real-browser behavior, and the Vite single-file release.
+The test system protects modular source, the direct runtime, real-browser behavior, and the Vite single-file release.
 
 ## Common Commands
 
@@ -26,9 +26,9 @@ Visual and real-Chrome checks require an environment that can launch a browser. 
 
 1. `src/` is the behavior source of truth; tests do not treat generated HTML as editable implementation.
 2. `index.html` and `hiking-trail-mapper.html` have different roles and must no longer be asserted byte-identical.
-3. `runtime.ts` is boot/command compatibility glue; tests enforce its 400-line cap and unique named fragments.
+3. Bootstrap must import `runtime/studio.ts` directly; tests reject raw imports, composers, script-execution bridges, and deleted owners.
 4. Pure functions use Node unit tests; DOM/Canvas/Leaflet behavior uses browser tests; complete user workflows use E2E.
-5. When behavior moves out of `runtime.ts`, preserve the old behavior test first, switch the owner, then delete the old path.
+5. When behavior moves out of the direct runtime, preserve its behavior test, connect the typed controller/adapter, then delete the old implementation in the same change.
 
 ## Full Check
 
@@ -48,7 +48,7 @@ Build contracts:
 - The Vite entry is the root `index.html` shell.
 - `index.html` contains only `#app`, product metadata, and `/src/main.ts`.
 - `src/main.ts` imports styles and calls `bootstrapOutdoorRouteStudio()`.
-- Bootstrap mounts the Workbench before vendors and typed modules, then composes vertical owners into the one classic runtime.
+- Bootstrap mounts the Workbench, loads vendors and typed modules through the Vite graph, then calls `startStudioRuntime()` directly.
 - Temporary `.vite-build/index.html` references no external JavaScript/CSS assets.
 - `.vite-build/hiking-trail-mapper.html` is an identical compatibility alias.
 - `.vite-build/release.json` records product, version, date, hash, and entrypoints.
@@ -62,23 +62,23 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_math.js` / `test_enrich.js` | Distance, elevation, stats, waypoint snapping, and content hashes |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` exports, KML coordinates, `gx:Track`, waypoints, and import models |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshots and commit timing, Set serialization, per-group primary trails, and legacy restore |
-| `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and classic adapter boundaries |
-| `test_file_export_controller.js` | KML/Markdown models, ZIP/Blob adapters, export controller, and classic DOM boundary |
-| `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and classic adapter boundary |
-| `test_segment_controller.js` | Typed segment editing, camp renumbering, Day commit, and classic adapter boundary |
+| `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and direct-runtime boundaries |
+| `test_file_export_controller.js` | KML/Markdown models, ZIP/Blob adapters, export controller, and direct DOM boundary |
+| `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and direct-runtime boundary |
+| `test_segment_controller.js` | Typed segment editing, camp renumbering, Day commit, and direct-runtime boundary |
 | `test_day_preview_controller.js` | Typed Day-preview planning, selection lifecycle, and core/runtime boundary |
-| `test_escape_controller.js` | Escape A/B snapping, direction-aware stats, thinning, commit/delete, and classic adapter boundary |
+| `test_escape_controller.js` | Escape A/B snapping, direction-aware stats, thinning, commit/delete, and direct-runtime boundary |
 | `test_measure_itinerary.js` | A/B measurement, segmentation, Day ranges, elevation layout, and render models |
 | `test_performance_core.js` | Elevation segmentation, Canvas min/max downsampling, waypoint diffs, and track revisions |
 | `test_app_architecture.js` | App state, feature controllers, adapters, and Workbench fit planning |
-| `test_runtime_composition.js` | The 400-line boot-glue guardrail, vertical-fragment ownership, and missing/duplicate/unused rejection |
+| `test_runtime_composition.js` | Direct-runtime startup contract and rejection of raw/composer/deleted-owner paths |
 | `test_interaction_manager.js` | Session exclusivity, owner/session guards, AbortController, and timer/RAF cleanup |
 | `test_interaction_runtime.js` | Runtime contracts wiring all five map modes to the unified interaction state machine |
 | `test_render_scheduler.js` | Dirty-mask coalescing, fixed flush order, next-frame re-entry, and fit epochs |
 | `test_render_runtime.js` | Seven-phase runtime wiring, elevation downsampling, marker diffs, and final-reset protection |
 | `test_command_dialog.js` | Command registration/state/dispatch, four-surface wiring, and native-dialog safety, focus, and Escape |
 | `test_ui_contract.js` | Responsive Workbench, seven-side/five-bottom layout, sidebar, elevation dock, and accessibility |
-| `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, transitional runtime, and single-file build |
+| `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, direct runtime, and single-file build |
 | `test_release_pipeline.js` | Reproducible builds, release metadata, version tools, and the GitHub Pages workflow |
 | `verify_alignment.js` | Generated release behavior uses `src/core` without restoring duplicate core fallbacks |
 
@@ -88,7 +88,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 
 `python3 scripts/release/check_release_metadata.py` should verify:
 
-- `package.json` / lockfile, runtime `APP_VERSION`, localization CHANGELOG, and README versions agree;
+- `package.json` / lockfile, `src/app/version.ts`, localization CHANGELOG, and README versions agree;
 - the product name is Outdoor Route Studio;
 - the shell title, runtime release metadata, and generated HTML comment agree;
 - `release.json` matches the single-HTML hash and byte count;
@@ -104,7 +104,7 @@ This phase validates only and must not rewrite business source.
 - matching Chinese and English i18n keys;
 - Leaflet / fflate are present in the generated single file;
 - no external script or style dependencies remain;
-- the generated release contains Outdoor Route Studio boot markers and the compatibility runtime.
+- the generated release contains Outdoor Route Studio boot markers and the direct runtime.
 
 ### Phase 5: Real-Chrome Functionality
 
@@ -212,7 +212,7 @@ Use this judgment order:
 
 - Pure calculations: add Node units around the relevant `src/core` module.
 - Managers: inject scheduler/RAF/document fakes and assert public contracts without real time.
-- DOM and compatibility runtime: use `tests/browser`.
+- DOM and direct runtime: use `tests/browser`.
 - Multi-step user workflows: use `tests/e2e`.
 - Layout, occlusion, and breakpoints: use `tests/visual`.
 

@@ -6,9 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const app = require(path.join(root, 'src/app/index.ts'));
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
-const localizationRuntime = read('src/features/localization/runtime.ts');
-const orchestrationRuntime = read('src/ui/orchestration/runtime.ts');
-const storageRuntime = read('src/features/storage/runtime.ts');
+const studioRuntime = read('src/app/runtime/studio.ts');
 
 let passed = 0;
 let failed = 0;
@@ -85,19 +83,22 @@ T('storage content represents quota, persistence, errors, and actions', () => {
   assert.deepStrictEqual(unsupported.actions, []);
 });
 
-T('classic transition modals delegate to one dialog controller without HTML assembly', () => {
-  assert.ok(localizationRuntime.includes('buildChangelogDialogModel'));
-  assert.ok(orchestrationRuntime.includes('buildHelpDialogModel'));
-  assert.ok(storageRuntime.includes('buildStorageDialogModel'));
+T('direct runtime transition modals delegate to one dialog controller without HTML assembly', () => {
+  assert.ok(studioRuntime.includes('buildChangelogDialogModel'));
+  assert.ok(studioRuntime.includes('buildHelpDialogModel'));
+  assert.ok(studioRuntime.includes('buildStorageDialogModel'));
   const transitionSources = [
-    localizationRuntime.slice(localizationRuntime.indexOf('function showChangelog')),
-    orchestrationRuntime.slice(
-      orchestrationRuntime.indexOf('function showHelp'),
-      orchestrationRuntime.indexOf('/* @runtime-fragment ui.lightbox'),
+    studioRuntime.slice(
+      studioRuntime.indexOf('function showChangelog'),
+      studioRuntime.indexOf('async function showStorageInfo'),
     ),
-    storageRuntime.slice(
-      storageRuntime.indexOf('async function showStorageInfo'),
-      storageRuntime.indexOf('/* @runtime-fragment storage.persistence'),
+    studioRuntime.slice(
+      studioRuntime.indexOf('function showHelp'),
+      studioRuntime.indexOf('function addWpMarker'),
+    ),
+    studioRuntime.slice(
+      studioRuntime.indexOf('async function showStorageInfo'),
+      studioRuntime.indexOf('const appStateStore'),
     ),
   ];
   for(const source of transitionSources) {
@@ -105,6 +106,12 @@ T('classic transition modals delegate to one dialog controller without HTML asse
     assert.strictEqual(source.includes('modal-mask'), false);
     assert.strictEqual(source.includes('innerHTML'), false);
   }
+});
+
+T('direct runtime publishes language changes for Workbench-owned labels', () => {
+  assert.ok(studioRuntime.includes("document.documentElement.lang = currentLang === 'en' ? 'en' : 'zh-CN'"));
+  assert.ok(studioRuntime.includes("new CustomEvent('studio:language-changed'"));
+  assert.ok(studioRuntime.includes('detail:{language:currentLang}'));
 });
 
 console.log(`\nResult: ${passed}/${passed + failed} passed`);

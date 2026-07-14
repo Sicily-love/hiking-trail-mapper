@@ -1,9 +1,7 @@
 /* polylineDecorator JS (embedded) */
 (function (global, factory) {
-	typeof exports === 'object' && typeof module !== 'undefined' ? factory(require('leaflet')) :
-	typeof define === 'function' && define.amd ? define(['leaflet'], factory) :
-	(factory(global.L));
-}(this, (function (L$1) { 'use strict';
+	factory(global.L);
+}(globalThis, (function (L$1) { 'use strict';
 
 L$1 = L$1 && L$1.hasOwnProperty('default') ? L$1['default'] : L$1;
 

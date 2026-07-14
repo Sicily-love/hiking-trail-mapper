@@ -45,7 +45,9 @@ def main() -> int:
 
     source_html_path = ROOT / "index.html"
     release_html_path = ROOT / "hiking-trail-mapper.html"
-    runtime_path = ROOT / "src" / "app" / "runtime.ts"
+    version_path = ROOT / "src" / "app" / "version.ts"
+    studio_runtime_path = ROOT / "src" / "app" / "runtime" / "studio.ts"
+    bootstrap_path = ROOT / "src" / "app" / "bootstrap.ts"
     changelog_path = ROOT / "src" / "features" / "localization" / "changelog.ts"
     package_path = ROOT / "package.json"
     lock_path = ROOT / "package-lock.json"
@@ -59,7 +61,9 @@ def main() -> int:
 
     source_html = read_text(source_html_path)
     release_html = read_text(release_html_path)
-    runtime = read_text(runtime_path)
+    version_source = read_text(version_path)
+    studio_runtime = read_text(studio_runtime_path)
+    bootstrap = read_text(bootstrap_path)
     changelog_source = read_text(changelog_path)
     package_json = json.loads(read_text(package_path))
     lock_json = json.loads(read_text(lock_path))
@@ -72,7 +76,7 @@ def main() -> int:
     workflow = read_text(workflow_path) if workflow_path.exists() else ""
     gitignore_entries = set(read_text(ROOT / ".gitignore").splitlines())
 
-    runtime_version = extract(r"const APP_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", runtime)
+    runtime_version = extract(r"STUDIO_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", version_source)
     runtime_changelog_version = extract(
         r"export const CHANGELOG = \[\s*\{\s*version:\s*'(v[0-9]+\.[0-9]+\.[0-9]+)'",
         changelog_source,
@@ -86,12 +90,6 @@ def main() -> int:
     )
     release_build_date = extract(
         r"BUILD_DATE:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", release_html
-    )
-    release_runtime_version = extract(
-        r"const APP_VERSION = '(v[0-9]+\.[0-9]+\.[0-9]+)'", release_html
-    )
-    version_tag = extract(
-        r'id="version-tag-link"[^>]*>(v[0-9]+\.[0-9]+\.[0-9]+)<', release_html
     )
     readme_version = extract(
         r"(?m)^版本：\s*(v[0-9]+\.[0-9]+\.[0-9]+)", read_text(ROOT / "README.md")
@@ -110,12 +108,10 @@ def main() -> int:
     lock_root_version = f"v{lock_json.get('packages', {}).get('', {}).get('version', '')}"
 
     print("\n▸ Release 2.0 metadata")
-    runner.check("runtime.ts APP_VERSION exists", bool(expected_version), expected_version)
+    runner.check("version.ts STUDIO_VERSION exists", bool(expected_version), expected_version)
     version_sources = {
         "changelog module top": runtime_changelog_version,
         "release comment": release_comment_version,
-        "release runtime": release_runtime_version,
-        "floating version tag": version_tag,
         "CHANGELOG.md": changelog_version,
         "README.md": readme_version,
         "README.en.md": readme_en_version,
@@ -197,14 +193,14 @@ def main() -> int:
     runner.check("tsconfig includes vite.config.mts", "vite.config.mts" in tsconfig.get("include", []))
     runner.check("Vite production input is index.html", "input: 'index.html'" in vite_config)
     runner.check("Vite uses relative asset base", "base: './'" in vite_config)
-    runner.check("release build reads runtime.ts", "src/app/runtime.ts" in build_script)
+    runner.check("release build reads version.ts", "src/app/version.ts" in build_script)
     runner.check(
         "release build reads changelog module",
         "src/features/localization/changelog.ts" in build_script,
     )
     runner.check("release build emits release.json", "release.json" in build_script)
     runner.check("release sync uses the Vite build", "npm run build" in sync_script)
-    runner.check("version bump updates runtime.ts", "src/app/runtime.ts" in bump_script)
+    runner.check("version bump updates version.ts", "src/app/version.ts" in bump_script)
     runner.check(
         "version bump updates changelog module",
         "src/features/localization/changelog.ts" in bump_script,
@@ -216,9 +212,20 @@ def main() -> int:
         ROOT / "scripts" / "build" / "sync_core_bundle.mjs",
         ROOT / "scripts" / "maintenance" / "prune_runtime_fallbacks.mjs",
         ROOT / "src" / "app" / "runtime.js",
+        ROOT / "src" / "app" / "runtime.ts",
+        ROOT / "src" / "app" / "runtime" / "classic.ts",
+        ROOT / "src" / "app" / "runtime" / "compose.ts",
     ):
         runner.check(f"retired path absent: {retired_path.name}", not retired_path.exists())
-    runner.check("runtime.ts exists", runtime_path.exists())
+    runner.check("direct Studio runtime exists", studio_runtime_path.exists())
+    runner.check("bootstrap imports direct runtime", "startStudioRuntime" in bootstrap)
+    runner.check("bootstrap has no raw runtime imports", "?raw" not in bootstrap)
+    runner.check("bootstrap has no script execution bridge", "executeClassicScript" not in bootstrap)
+    runner.check("Studio runtime has no composer markers", "@runtime-slice" not in studio_runtime and "@runtime-fragment" not in studio_runtime)
+    runner.check(
+        "floating version tag binds the version module",
+        'id="version-tag-link"' in studio_runtime and "${APP_VERSION}</a>" in studio_runtime,
+    )
     runner.check("browser tests are grouped", (ROOT / "tests/browser/test_v1_31.py").exists())
     runner.check("release HTML remains tracked", "hiking-trail-mapper.html" not in gitignore_entries)
     for entry in ("node_modules/", "dist/", ".vite-build/"):

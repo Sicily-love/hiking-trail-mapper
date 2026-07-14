@@ -64,8 +64,8 @@ T('keyboard focus and reduced-motion states are explicit', () => {
   assert.ok(css.includes('@media (prefers-reduced-motion:reduce)'));
 });
 T('empty primary mini card still cannot cover commands', () => {
-  assert.ok(html.includes("mini.style.display = hasPrimary ? 'block' : 'none'"));
-  assert.ok(html.includes("mini.style.display = 'none';\n    return false;"));
+  assert.ok(runtime.includes("mini.style.display = hasPrimary ? 'block' : 'none'"));
+  assert.ok(runtime.includes("mini.style.display = 'none';\n      return false;"));
 });
 T('visual fixtures cover real Day, measurement, and segmentation states', () => {
   assert.ok(visual.includes('field-console-day-cards.png'));

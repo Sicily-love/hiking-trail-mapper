@@ -108,6 +108,7 @@ html[data-workbench='2'] #map-toolbar.studio-menubar {
   background:var(--studio-surface);
   box-shadow:none;
   backdrop-filter:none;
+  pointer-events:auto;
 }
 
 html[data-workbench='2'] #map-toolbar .studio-brand {
@@ -205,6 +206,7 @@ html[data-workbench='2'] .studio-menu-trigger {
   color:var(--studio-text);
   font:600 11px/1 var(--studio-font);
   cursor:pointer;
+  pointer-events:auto;
   white-space:nowrap;
 }
 

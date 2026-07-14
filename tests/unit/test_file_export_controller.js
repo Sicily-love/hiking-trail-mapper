@@ -193,8 +193,8 @@ function createHarness(trails, overrides = {}) {
     assert.match(effects.saves[0].text, /# Main Itinerary/);
   });
 
-  await T('classic files owner keeps only DOM wrappers around typed adapters', () => {
-    const source = read('src/features/files/runtime.ts');
+  await T('direct runtime keeps only DOM wrappers around typed file adapters', () => {
+    const source = read('src/app/runtime/studio.ts');
     assert.match(source, /createFileArchiveAdapter/);
     assert.match(source, /createBrowserFileAdapter/);
     assert.match(source, /createFileExportController\(runtimeContext/);

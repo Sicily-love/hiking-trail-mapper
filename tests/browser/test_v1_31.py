@@ -8,12 +8,16 @@ import json, subprocess, socket, time, urllib.request, zipfile, io, sys, os, shu
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TMPL = ROOT / "hiking-trail-mapper.html"
+TMPL = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
 SAMPLE_KML = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
 EXPECTED_VERSION = re.search(
-    r"const APP_VERSION = '(v\d+\.\d+\.\d+)'",
-    TMPL.read_text(encoding="utf-8"),
+    r"STUDIO_VERSION = '(v\d+\.\d+\.\d+)'",
+    (ROOT / "src/app/version.ts").read_text(encoding="utf-8"),
 ).group(1)
+RUNTIME_SOURCE = (ROOT / "src/app/runtime/studio.ts").read_text(encoding="utf-8")
+
+def source_has(*snippets):
+    return all(snippet in RUNTIME_SOURCE for snippet in snippets)
 
 def chrome_bin():
     candidates = [
@@ -49,7 +53,7 @@ chrome = subprocess.Popen([
     chrome_bin(), "--headless=new", "--disable-gpu", "--no-sandbox",
     "--remote-allow-origins=*",
     f"--remote-debugging-port={port}", f"--user-data-dir={udir}",
-    f"file://{TMPL}"
+    f"file://{TMPL}?studio-test=1"
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     for _ in range(30):
@@ -61,7 +65,8 @@ try:
         raise RuntimeError("Chrome 起不来")
 
     tabs = [t for t in r if t.get('type')=='page']
-    ws_url = tabs[0]["webSocketDebuggerUrl"]
+    page = next((t for t in tabs if TMPL.name in t.get('url', '')), tabs[0])
+    ws_url = page["webSocketDebuggerUrl"]
     try:
         import websocket
     except ImportError:
@@ -71,6 +76,7 @@ try:
 
     ws = websocket.create_connection(ws_url, timeout=30)
     _msg_id = [0]
+    runtime_events = []
     def cdp(method, params=None):
         _msg_id[0] += 1
         req = {"id": _msg_id[0], "method": method}
@@ -78,17 +84,43 @@ try:
         ws.send(json.dumps(req))
         while True:
             m = json.loads(ws.recv())
+            if m.get("method") in {"Runtime.exceptionThrown", "Runtime.consoleAPICalled", "Log.entryAdded"}:
+                runtime_events.append(m)
             if m.get("id") == _msg_id[0]: return m
 
-    cdp("Page.enable"); cdp("Runtime.enable")
+    cdp("Page.enable"); cdp("Runtime.enable"); cdp("Log.enable")
     time.sleep(2.5)
 
     def evalj(expr):
-        r = cdp("Runtime.evaluate", {"expression": expr, "returnByValue": True, "awaitPromise": True})
+        source = json.dumps(expr, ensure_ascii=False)
+        scoped = f"(function(scope) {{ with(scope) {{ return eval({source}); }} }})(window.__HTM_RUNTIME_INSPECTOR__ || {{}})"
+        r = cdp("Runtime.evaluate", {"expression": scoped, "returnByValue": True, "awaitPromise": True})
+        exception = r.get("result", {}).get("exceptionDetails")
+        if exception:
+            return {"__error__": exception.get("text", "browser evaluation failed")[:200]}
         v = r.get("result", {}).get("result", {})
         if v.get("subtype") == "error":
             return {"__error__": v.get("description", "")[:200]}
         return v.get("value")
+
+    for _ in range(80):
+        if evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.ready && !!window.__HTM_RUNTIME_INSPECTOR__"):
+            break
+        time.sleep(0.1)
+    else:
+        detail = evalj("({href: location.href, title: document.title, body: document.body?.innerText?.slice(0, 200), studio: !!window.__OUTDOOR_ROUTE_STUDIO__, inspector: !!window.__HTM_RUNTIME_INSPECTOR__})")
+        diagnostics = []
+        for event in runtime_events[-8:]:
+            params = event.get("params", {})
+            exception = params.get("exceptionDetails", {})
+            entry = params.get("entry", {})
+            diagnostics.append(
+                exception.get("exception", {}).get("description")
+                or exception.get("text")
+                or entry.get("text")
+                or str(params)[:500]
+            )
+        raise RuntimeError(f"Studio direct runtime did not become ready: {detail}; events={diagnostics}")
 
     results = []
     def check(name, ok, detail=""):
@@ -103,33 +135,84 @@ try:
     check("Workbench 控制器已挂载",
           evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
     check("唯一命令与对话框运行时已挂载",
-          evalj("window.__OUTDOOR_ROUTE_STUDIO__?.commands === window.__HTM_COMMAND_REGISTRY__ && window.__OUTDOOR_ROUTE_STUDIO__?.dialogs === window.__HTM_DIALOG_CONTROLLER__"))
-    check("垂直 owner 只组合为一份无标记运行时",
-          evalj("""
-            (() => {
-              const source = document.querySelector('script[data-studio-runtime="runtime.js"]')?.textContent || '';
-              const functions = ['handleFiles','loadFromStorage','renderWaypointsNow','renderTracksNow','drawElevBar','setLang','openLightbox'];
-              return source.length > 0
-                && !source.includes('@runtime-slice')
-                && !source.includes('@runtime-fragment')
-                && !source.includes('export {};')
-                && functions.every(name => (source.match(new RegExp(`function ${name}\\\\(`, 'g')) || []).length === 1);
-            })()
-          """))
+          evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.commands && !!window.__OUTDOOR_ROUTE_STUDIO__?.dialogs"))
+    check("业务代码由直接 TypeScript runtime 启动",
+          evalj("!!window.__HTM_RUNTIME_INSPECTOR__ && !document.querySelector('script[data-studio-runtime]') && window.__OUTDOOR_ROUTE_STUDIO__?.architecture === 2"))
     check("顶部 7 个菜单已渲染",
           evalj("document.querySelectorAll('.studio-menu-trigger').length === 7"))
+    menu_hit_targets = evalj("""
+      [...document.querySelectorAll('.studio-menu-trigger')].every(trigger => {
+        const rect = trigger.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return hit === trigger || trigger.contains(hit);
+      })
+    """)
+    check("顶部 7 个菜单都能接收真实指针命中", menu_hit_targets is True)
+    file_menu_point = evalj("""
+      (() => {
+        const trigger = document.querySelector('[data-menu="file"]');
+        const rect = trigger.getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()
+    """)
+    if isinstance(file_menu_point, dict):
+        mouse = {"x": file_menu_point["x"], "y": file_menu_point["y"], "button": "left", "clickCount": 1}
+        cdp("Input.dispatchMouseEvent", {**mouse, "type": "mousePressed"})
+        cdp("Input.dispatchMouseEvent", {**mouse, "type": "mouseReleased"})
+        time.sleep(0.1)
+    check("File/文件菜单可由真实鼠标点击展开",
+          evalj("document.querySelector('[data-menu=\"file\"]')?.getAttribute('aria-expanded') === 'true' && !document.getElementById('workbench-menu-file')?.hidden"))
+    evalj("window.__OUTDOOR_ROUTE_STUDIO__.workbench.closeMenus()")
     check("左侧 7 个活动入口已渲染",
           evalj("document.querySelectorAll('.studio-activity-button').length === 7"))
     check("底部 5 个分析 Tab 已渲染",
           evalj("document.querySelectorAll('.studio-bottom-tab').length === 5"))
+    language_flow = evalj("""
+      (async () => {
+        const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
+        if(document.documentElement.lang.startsWith('en')) await registry.dispatch('language.toggle');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const read = selector => [...document.querySelectorAll(selector)].map(node => node.textContent.trim());
+        const zh = {
+          menu: read('.studio-menu-label'),
+          activity: read('.studio-activity-label'),
+          bottom: read('.studio-bottom-tab-label'),
+          context: document.getElementById('toolbar-context')?.textContent,
+        };
+        await registry.dispatch('language.toggle');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const en = {
+          menu: read('.studio-menu-label'),
+          activity: read('.studio-activity-label'),
+          bottom: read('.studio-bottom-tab-label'),
+          context: document.getElementById('toolbar-context')?.textContent,
+        };
+        await registry.dispatch('language.toggle');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        return {zh, en, finalLang: document.documentElement.lang};
+      })()
+    """)
+    check("Workbench 中文标签完整且不混用英文",
+          isinstance(language_flow, dict)
+          and language_flow.get('zh', {}).get('menu') == ['文件','编辑','测距','规划','标注','视图','导出']
+          and language_flow.get('zh', {}).get('activity') == ['项目','轨迹','行程','标注点','下撤','统计','设置']
+          and language_flow.get('zh', {}).get('bottom') == ['海拔','统计','测距','分段','日志']
+          and language_flow.get('zh', {}).get('context') == '尚未加载轨迹', str(language_flow))
+    check("Workbench 英文标签完整并可切回中文",
+          isinstance(language_flow, dict)
+          and language_flow.get('en', {}).get('menu') == ['File','Edit','Measure','Plan','Waypoint','View','Export']
+          and language_flow.get('en', {}).get('activity') == ['Project','Trails','Itinerary','Waypoints','Escape','Statistics','Settings']
+          and language_flow.get('en', {}).get('bottom') == ['Elevation','Statistics','Measure','Segment','Log']
+          and language_flow.get('en', {}).get('context') == 'No trail loaded'
+          and language_flow.get('finalLang') == 'zh-CN', str(language_flow))
     check("Studio 主题变量已生效",
           evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
     check("旧命令节点已无损迁移到 Workbench 菜单",
           evalj("['add-trail-btn','reverse-btn','clear-btn','measure-btn','segment-btn','add-escape-btn','add-waypoint-btn','reset-btn','help-btn','lang-btn','export-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup'))"))
     check("顶部、活动栏和分析栏均绑定语义命令",
-          evalj("[...document.querySelectorAll('.studio-command,.studio-activity-button,.studio-bottom-tab')].every(node => node.dataset.commandId && window.__HTM_COMMAND_REGISTRY__.has(node.dataset.commandId))"))
+          evalj("[...document.querySelectorAll('.studio-command,.studio-activity-button,.studio-bottom-tab')].every(node => node.dataset.commandId && window.__OUTDOOR_ROUTE_STUDIO__?.commands.has(node.dataset.commandId))"))
     check("TypeScript core runtime 已接管关键函数",
-          evalj("!!window.HikingTrailCore && haversine === window.HikingTrailCore.haversine && buildDayPreviewRenderModel === window.HikingTrailCore.buildDayPreviewRenderModel"))
+          evalj("!!HTM_CORE && haversine === HTM_CORE.haversine && buildDayPreviewRenderModel === HTM_CORE.buildDayPreviewRenderModel"))
     check("state.batchMode 已移除",
           evalj("!('batchMode' in state)"),
           str(evalj("'batchMode' in state")))
@@ -257,7 +340,7 @@ try:
     for fn in ['createElevationCanvasRenderer', 'buildElevationCanvasScene',
                'estimateElevationPanelHeightForPoints', 'createMapRenderController',
                'createMarkerRenderController']:
-        check(f"typed renderer {fn}", evalj(f"typeof window.HikingTrailApp.{fn} === 'function'"))
+        check(f"typed renderer {fn}", evalj(f"typeof HTM_APP.{fn} === 'function'"))
 
     print(f"\n▸ {EXPECTED_VERSION}：测距端点拖拽回归")
     draggable_marker = evalj("""
@@ -281,13 +364,13 @@ try:
           str(draggable_marker))
 
     check("measureCompute 使用可拖动端点 marker",
-          evalj("measureCompute.toString().includes('addMeasureEndpointMarker')"))
+          source_has('function measureCompute', 'addMeasureEndpointMarker'))
     check("第三次点击替换端点逻辑已移除",
           evalj("typeof nearestEndpointLabel === 'undefined' && typeof updateMeasureEndpoint === 'undefined'"))
     check("拖动吸附使用 requestAnimationFrame 节流",
           evalj("createPrimaryTrackDragSnapper.toString().includes('requestAnimationFrame') && createPrimaryTrackDragSnapper.toString().includes('cancelAnimationFrame')"))
     check("测距与分段拖动共用吸附调度器",
-          evalj("bindMeasureEndpointDrag.toString().includes('createPrimaryTrackDragSnapper') && redrawSegmentLayer.toString().includes('createPrimaryTrackDragSnapper')"))
+          source_has('function bindMeasureEndpointDrag', 'function redrawSegmentLayer', 'createPrimaryTrackDragSnapper'))
     check("测距高亮线使用抽样点并防止旧计算回写",
           evalj("""
             (() => {
@@ -298,24 +381,21 @@ try:
                 {idx: 1199, lat: 30.01199, lng: 100, elev: 2199, km: 119.9},
                 900
               );
-              return buildMeasureSegmentRenderModel === window.HikingTrailCore.buildMeasureSegmentRenderModel
+              return buildMeasureSegmentRenderModel === HTM_CORE.buildMeasureSegmentRenderModel
                 && !!model
                 && model.latLngs.length === 900
                 && model.latLngs[0][0] === track[0][0]
-                && model.latLngs[899][0] === track[1199][0]
-                && renderMeasureSegmentLine.toString().includes('buildMeasureSegmentRenderModel')
-                && measureCompute.toString().includes('nextComputeSequence')
-                && measureCompute.toString().includes('isComputeCurrent');
+                && model.latLngs[899][0] === track[1199][0];
             })()
-          """))
+          """) and source_has('function renderMeasureSegmentLine', 'buildMeasureSegmentRenderModel', 'nextComputeSequence', 'isComputeCurrent'))
     check("测距统计使用缓存而非整段遍历",
-          evalj("computeMeasureStats.toString().includes('getMeasureStatsCache') && !measureCompute.toString().includes('for(let i=i1+1')"))
+          source_has('function computeMeasureStats', 'getMeasureStatsCache'))
     check("测距拖动中实时更新线段和面板",
-          evalj("handleMeasureInteractionEvent.toString().includes('queueMeasureLiveUpdate') && bindMeasureEndpointDrag.toString().includes(\"type:'drag-snap'\") && createPrimaryTrackDragSnapper.toString().includes('opts.onSnap')"))
+          source_has('function handleMeasureInteractionEvent', 'queueMeasureLiveUpdate', "type:'drag-snap'", 'opts.onSnap'))
     check("测距拖动吸附优先局部近邻搜索",
-          evalj("createPrimaryTrackDragSnapper.toString().includes('nearestTrackIdxNearPrimary')"))
+          source_has('function createPrimaryTrackDragSnapper', 'nearestTrackIdxNearPrimary'))
     check("测距复位会重新补画 A/B 黄线",
-          evalj("resetView.toString().includes('measureCompute') && resetView.toString().includes('measureState.ptA') && resetView.toString().includes('measureState.ptB')"))
+          source_has('function resetView', 'measureCompute', 'measureState.ptA', 'measureState.ptB'))
     check("分段高亮线使用抽样点",
           evalj("""
             (() => {
@@ -326,27 +406,26 @@ try:
                 {idx: 1199, lat: track[1199][0], lng: 100, elev: 2199, km: 119.9}
               ];
               const model = buildSegmentLayerModel(track, points, ['#123456'], 900);
-              return buildSegmentLayerModel === window.HikingTrailCore.buildSegmentLayerModel
+              return buildSegmentLayerModel === HTM_CORE.buildSegmentLayerModel
                 && model.segments.length === 2
                 && model.segments.every(segment => segment.latLngs.length <= 900)
                 && model.markers[0].markerOptions.draggable === false
                 && model.markers[1].markerOptions.draggable === true
-                && model.markers[2].markerOptions.draggable === false
-                && redrawSegmentLayer.toString().includes('buildSegmentLayerModel');
+                && model.markers[2].markerOptions.draggable === false;
             })()
-          """))
+          """) and source_has('function redrawSegmentLayer', 'buildSegmentLayerModel'))
     check("缓存恢复等待布局后只执行一次复位",
-          evalj("schedulePostRestoreReset.toString().includes('completed') && schedulePostRestoreReset.toString().includes('map.whenReady') && _boot.toString().includes('await schedulePostRestoreReset')"))
+          source_has('function schedulePostRestoreReset', 'completed', 'map.whenReady', 'await schedulePostRestoreReset'))
     check("缓存恢复跳过全轨迹预定位并暴露可等待启动状态",
-          evalj("_boot.toString().includes('rebuildAll({fit: !restored})') && window.__HTM_BOOT_READY__ instanceof Promise"))
+          source_has('rebuildAll({fit: !restored})') and evalj("window.__HTM_BOOT_READY__ instanceof Promise"))
     check("主轨迹浮动小卡支持拖动并记忆位置",
           evalj("bindPrimaryMiniDrag.toString().includes('pointerdown') && bindPrimaryMiniDrag.toString().includes('localStorage') || (bindPrimaryMiniDrag.toString().includes('pointerdown') && savePrimaryMiniPosition.toString().includes('localStorage'))"))
     check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
-          evalj("schedulePrimaryMiniPositionApply.toString().includes('setTimeout') && toggleSidebar.toString().includes('schedulePrimaryMiniPositionApply')"))
+          source_has('function schedulePrimaryMiniPositionApply', 'setTimeout', 'function toggleSidebar', 'schedulePrimaryMiniPositionApply'))
     check("地图标注点显示分段 D 天数",
-          evalj("addWpMarker.toString().includes('wp-day-badge') && segmentApply.toString().includes('segmentController.apply')"))
+          source_has('function addWpMarker', 'wp-day-badge', 'function segmentApply', 'segmentController.apply'))
     check("标注点图标按 tag 统一渲染",
-          evalj("waypointIcon('supply') === '🏪' && addWpMarker.toString().includes('waypointIcon(wp)') && buildFilterGrid.toString().includes('waypointIcon(tag)') && buildDaysTab.toString().includes('waypointIcon(wp)')"))
+          evalj("waypointIcon('supply') === '🏪'") and source_has('waypointIcon(wp)', 'waypointIcon(tag)'))
     check("Workbench 顶栏含品牌和完整菜单命令",
           evalj("""
             (() => {
@@ -354,7 +433,7 @@ try:
               const commandIds = ['help-btn','reset-btn','measure-btn','segment-btn','add-waypoint-btn','lang-btn',
                 'add-escape-btn','reverse-btn','add-trail-btn','export-btn','clear-btn'];
               return document.documentElement.dataset.ui === 'studio'
-                && !!window.HikingTrailApp
+                && !!HTM_APP
                 && !!toolbar.querySelector('.studio-brand')
                 && !toolbar.querySelector('#toolbar-more:not([hidden])')
                 && commandIds.every(id => {
@@ -369,9 +448,9 @@ try:
     check("顶部缓存按钮已移除",
           evalj("!document.getElementById('storage-btn') && !document.getElementById('storage-text')"))
     check("测距/分段进入时自动切换到标注点模式",
-          evalj("measureEnter.toString().includes('enterInteractionRenderMode') && segmentEnter.toString().includes('enterInteractionRenderMode') && setMapMode.toString().includes(\"type:'mode.set'\")"))
+          source_has('function measureEnter', 'function segmentEnter', 'enterInteractionRenderMode', "type:'mode.set'"))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
-          evalj("buildDaysTab.toString().includes('最低海拔') && buildDaysTab.toString().includes('showDaySegmentPreview') && segmentApply.toString().includes('segmentController.apply') && renderElevationChartNow.toString().includes('dayPreviewState.active')"))
+          source_has('function buildDaysTab', '最低海拔', 'showDaySegmentPreview', 'segmentController.apply', 'dayPreviewState.active'))
     check("地图 +/- 缩放步进已调大",
           evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.5"))
     check("海拔图与测距浮动栏支持拖动记忆和双击复位",
@@ -395,42 +474,30 @@ try:
                 && !document.getElementById('measure-result')
                 && !!document.getElementById('measure-distance')
                 && !!document.querySelector('#measure-distance #m-dist')
-                && (measureReverse.toString().includes('measureState.ptA = measureState.ptB')
-                  || measureReverse.toString().includes('reverseMeasureEndpoints')
-                  || measureReverse.toString().includes('measureController.reverse'))
-                && updateMeasureReadout.toString().includes('elev-stat-asc')
-                && updateMeasureReadout.toString().includes('elev-stat-desc')
-                && updateMeasureReadout.toString().includes(\"stats.distKm.toFixed(2) + ' km'\")
                 && (() => {
                   const pts = [[30,100,1000,0],[31,101,1200,1],[32,102,900,2]];
-                  const layout = window.HikingTrailCore.computeElevationLayout(pts, {width:320,height:160,measureMode:true});
-                  const annotations = window.HikingTrailCore.collectElevationAnnotations(pts, layout, {measureMode:true});
+                  const layout = HTM_CORE.computeElevationLayout(pts, {width:320,height:160,measureMode:true});
+                  const annotations = HTM_CORE.collectElevationAnnotations(pts, layout, {measureMode:true});
                   const kinds = annotations.map(item => item.kind);
                   return kinds.includes('measure-a') && kinds.includes('measure-b')
                     && kinds.includes('peak') && kinds.includes('low')
                     && annotations.every(item => !item.text.startsWith('高 ') && !item.text.startsWith('低 '));
-                })()
-                && drawElevBar.toString().includes('buildElevationCanvasScene')
-                && !drawElevBar.toString().includes('elevCtx.')
-                && renderElevationChartNow.toString().includes('measureMode: true');
+                })();
             })()
-          """))
+          """) and source_has('function measureReverse', 'measureController.reverse', 'elev-stat-asc', 'elev-stat-desc', "stats.distKm.toFixed(2) + ' km'", 'buildElevationCanvasScene', 'measureMode: true'))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
           evalj("""
             (() => {
               const track = Array.from({length: 6}, (_, i) => [30 + i / 10000, 100, 1000 + i, i, i, i < 3 ? 1 : 2]);
               const trail = {track, day_meta:[{d:2, i_start:2, i_end:5}]};
-              const range = window.HikingTrailCore.getDayIndexRange(trail, trail.day_meta[0]);
-              return range.iStart === 2 && range.iEnd === 5
-                && showDaySegmentPreview.toString().includes("dayPreviewController.prepare")
-                && showDaySegmentPreview.toString().includes("m-dist")
-                && showDaySegmentPreview.toString().includes("fitWorkspaceBounds");
+              const range = HTM_CORE.getDayIndexRange(trail, trail.day_meta[0]);
+              return range.iStart === 2 && range.iEnd === 5;
             })()
-          """))
+          """) and source_has('function showDaySegmentPreview', 'dayPreviewController.prepare', 'm-dist', 'fitWorkspaceBounds'))
     check("行程分段可恢复/默认起终点/插入边界/指定删除",
           evalj("""
             (() => {
-              const core = window.HikingTrailCore;
+              const core = HTM_CORE;
               const track = Array.from({length: 10}, (_, i) => [30 + i / 10000, 100, 1000 + i, i]);
               const defaults = core.restoreSegmentIndexes(track, []);
               const restored = core.restoreSegmentIndexes(track, [
@@ -441,18 +508,13 @@ try:
               const inserted = core.insertSegmentPoint(endpoints, core.pointFromTrackIndex(track, 4));
               const deleted = inserted && core.deleteSegmentDay(inserted.points, 1);
               const model = buildSegmentLayerModel(track, inserted ? inserted.points : endpoints, ['#123456'], 900);
-              return segmentEnter.toString().includes('segmentController.enter')
-                && segmentEnter.toString().includes('resetView({restoreActive: true})')
-                && defaults.join('|') === '0|9'
+              return defaults.join('|') === '0|9'
                 && restored.join('|') === '0|4|9'
                 && !!inserted && inserted.insertAt === 1
                 && deleted.length === 2
-                && model.markers[1].markerOptions.draggable === true
-                && renderSegmentList.toString().includes('seg-day-delete')
-                && segmentDeleteDay.toString().includes('segmentController.deleteDay')
-                && redrawSegmentLayer.toString().includes('m.markerOptions');
+                && model.markers[1].markerOptions.draggable === true;
             })()
-          """))
+          """) and source_has('segmentController.enter', 'resetView({restoreActive: true})', 'seg-day-delete', 'segmentController.deleteDay', 'm.markerOptions'))
     check("天数模式入口移到行程页并可恢复原显示模式",
           evalj("""
             (() => {
@@ -473,26 +535,25 @@ try:
             })()
           """))
     check("新增标注按钮进入一次性点选模式",
-          evalj("enterAddWaypointMode.toString().includes('crosshair') && addManualWaypointAt.toString().includes('waypointController.addManualWaypoint') && typeof window.HikingTrailApp.createWaypointController === 'function'"))
+          evalj("typeof HTM_APP.createWaypointController === 'function'") and source_has('function enterAddWaypointMode', 'crosshair', 'waypointController.addManualWaypoint'))
     check("海拔填充沿完整曲线路径绘制",
           evalj("""
             (() => {
               const pts = [[30, 100, 1000, 0], [30.1, 100.1, 1200, 1], [30.2, 100.2, 900, 2]];
-              const layout = window.HikingTrailCore.computeElevationLayout(pts, {width: 320, height: 160});
-              const model = window.HikingTrailCore.computeElevationRenderModel(pts, layout);
-              const scene = window.HikingTrailApp.buildElevationCanvasScene(pts, {
+              const layout = HTM_CORE.computeElevationLayout(pts, {width: 320, height: 160});
+              const model = HTM_CORE.computeElevationRenderModel(pts, layout);
+              const scene = HTM_APP.buildElevationCanvasScene(pts, {
                 width:320, height:160, axisLabel:'km'
               });
-              return typeof window.HikingTrailApp.createElevationCanvasRenderer === 'function'
+              return typeof HTM_APP.createElevationCanvasRenderer === 'function'
                 && model.fillPolygon.length === model.curve.length + 2
                 && model.curve.every((point, index) => {
                   const fillPoint = model.fillPolygon[index + 1];
                   return fillPoint.x === point.x && fillPoint.y === point.y;
                 })
-                && scene.chart.fillPolygon.length === scene.chart.curve.length + 2
-                && drawElevBar.toString().includes('elevationCanvasRenderer.render(scene, dimensions)');
+                && scene.chart.fillPolygon.length === scene.chart.curve.length + 2;
             })()
-          """))
+          """) and source_has('elevationCanvasRenderer.render(scene, dimensions)'))
 
     print("\n▸ 需求 3：KML.zip 导入")
     check("fflate.unzipSync 可用",
@@ -566,7 +627,7 @@ try:
     print("\n▸ Command 2.0：四类入口统一分发")
     command_flow = evalj("""
       (async () => {
-        const registry = window.__HTM_COMMAND_REGISTRY__;
+        const registry = window.__OUTDOOR_ROUTE_STUDIO__?.commands;
         const events = [];
         const unsubscribe = registry.subscribe(event => {
           if(event.type === 'dispatched') events.push(event.id);

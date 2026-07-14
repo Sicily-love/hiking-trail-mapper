@@ -83,9 +83,9 @@ T('rejects stale anchors, blank names, and non-primary trails', () => {
   assert.strictEqual(effects.revision, 0);
 });
 
-T('classic waypoint owner delegates state and mutation to the controller', () => {
-  const source = read('src/features/waypoint/runtime.ts');
-  const interaction = source.slice(source.indexOf('/* @runtime-fragment waypoint.interaction */'));
+T('direct runtime delegates waypoint state and mutation to the controller', () => {
+  const source = read('src/app/runtime/studio.ts');
+  const interaction = source.slice(source.indexOf('const waypointController'));
   assert.match(interaction, /createWaypointController\(runtimeContext/);
   assert.match(interaction, /const addWaypointState = waypointController\.state/);
   assert.match(interaction, /waypointController\.addManualWaypoint/);

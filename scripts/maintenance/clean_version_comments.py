@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""清理 classic runtime 模板和垂直 owner 中过时的版本标记注释。"""
+"""清理 direct Studio runtime 中过时的版本标记注释。"""
 
 import re
 from pathlib import Path
@@ -7,10 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = [
-    ROOT / "src" / "app" / "runtime.ts",
-    ROOT / "src" / "app" / "runtime" / "classic.ts",
-    *sorted((ROOT / "src" / "features").glob("*/runtime.ts")),
-    ROOT / "src" / "ui" / "orchestration" / "runtime.ts",
+    ROOT / "src" / "app" / "runtime" / "studio.ts",
 ]
 KEEP_VERSIONS = {"v1.14.1", "v1.15.0", "v1.16.0"}
 LINE_PATTERN = re.compile(r"^(\s*)//\s*(v1\.[0-9]+(?:\.[0-9]+)?)[:：]\s*(.*)$")

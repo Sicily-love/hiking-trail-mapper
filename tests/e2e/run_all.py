@@ -20,7 +20,7 @@ from pathlib import Path
 # 路径与样本准备
 # ═══════════════════════════════════════════════════════════════
 ROOT = Path(__file__).resolve().parents[2]  # → github-release/hiking-trail-mapper
-HTML = ROOT / "hiking-trail-mapper.html"
+HTML = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
 SAMPLE_KML = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
 
 assert HTML.exists(), f"未找到 HTML: {HTML}"
@@ -65,7 +65,7 @@ chrome = subprocess.Popen([
     chrome_bin(), "--headless=new", "--disable-gpu", "--no-sandbox",
     "--remote-allow-origins=*",
     f"--remote-debugging-port={port}", f"--user-data-dir={udir}",
-    f"file://{HTML}"
+    f"file://{HTML}?studio-test=1"
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 results = []
@@ -85,7 +85,8 @@ try:
         raise RuntimeError("Chrome 起不来")
 
     tabs = [t for t in r if t.get('type') == 'page']
-    ws_url = tabs[0]["webSocketDebuggerUrl"]
+    page = next((t for t in tabs if HTML.name in t.get('url', '')), tabs[0])
+    ws_url = page["webSocketDebuggerUrl"]
 
     import websocket
     ws = websocket.create_connection(ws_url, timeout=30)
@@ -104,11 +105,24 @@ try:
     time.sleep(3.0)
 
     def evalj(expr):
-        r = cdp("Runtime.evaluate", {"expression": expr, "returnByValue": True, "awaitPromise": True})
+        source = json.dumps(expr, ensure_ascii=False)
+        scoped = f"(function(scope) {{ with(scope) {{ return eval({source}); }} }})(window.__HTM_RUNTIME_INSPECTOR__ || {{}})"
+        r = cdp("Runtime.evaluate", {"expression": scoped, "returnByValue": True, "awaitPromise": True})
+        exception = r.get("result", {}).get("exceptionDetails")
+        if exception:
+            return {"__error__": exception.get("text", "browser evaluation failed")[:200]}
         v = r.get("result", {}).get("result", {})
         if v.get("subtype") == "error":
             return {"__error__": v.get("description", "")[:200]}
         return v.get("value")
+
+    for _ in range(80):
+        if evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.ready && !!window.__HTM_RUNTIME_INSPECTOR__"):
+            break
+        time.sleep(0.1)
+    else:
+        detail = evalj("({href: location.href, title: document.title, body: document.body?.innerText?.slice(0, 200), studio: !!window.__OUTDOOR_ROUTE_STUDIO__, inspector: !!window.__HTM_RUNTIME_INSPECTOR__})")
+        raise RuntimeError(f"Studio direct runtime did not become ready: {detail}")
 
     def wait_for_render():
         return evalj("""
@@ -131,9 +145,9 @@ try:
     print("\n▸ E1 · 空 workspace 启动")
     check("APP_VERSION 存在", isinstance(evalj("APP_VERSION"), str))
     check("TypeScript core runtime 已内联并激活",
-          evalj("!!window.HikingTrailCore && computeElevationRenderModel === window.HikingTrailCore.computeElevationRenderModel"))
+          evalj("!!HTM_CORE && computeElevationRenderModel === HTM_CORE.computeElevationRenderModel"))
     check("TypeScript app runtime 已内联并激活",
-          evalj("!!window.HikingTrailApp && document.documentElement.dataset.ui === 'studio' && document.documentElement.dataset.workbench === '2' && !!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
+          evalj("!!HTM_APP && document.documentElement.dataset.ui === 'studio' && document.documentElement.dataset.workbench === '2' && !!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
     check("state 对象已初始化", evalj("typeof state === 'object' && state !== null"))
     check("DATA 对象已初始化", evalj("typeof DATA === 'object' && Array.isArray(DATA.trails)"))
     check("Leaflet map 已实例化", evalj("typeof map === 'object' && !!map"))

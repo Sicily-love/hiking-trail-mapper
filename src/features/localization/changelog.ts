@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.0',
+    date: '2026-07-14',
+    items: {
+      zh: ['删除 executeClassicScript、runtime composer、raw runtime import 和 13 个 classic owner，生产启动链改为直接 TypeScript 模块', '将版本真源迁移到 src/app/version.ts，第三方库纳入 Vite 模块图，并保留自包含单 HTML 与 GitHub Pages 发布', '重构测试为 direct runtime 契约，并通过仅测试模式 inspector 保持真实 Chrome、E2E 与视觉回归覆盖', '修复 Workbench 顶部七个菜单无法接收指针点击的问题，并统一菜单、活动栏、分析 Tab 和辅助控件的中英文切换'],
+      en: ['Removed executeClassicScript, the runtime composer, raw runtime imports, and all 13 classic owners; production now boots through a direct TypeScript module', 'Moved version ownership to src/app/version.ts, loaded vendors through the Vite module graph, and retained the self-contained single-HTML and GitHub Pages release', 'Reworked tests around direct-runtime contracts and preserved real-Chrome, E2E, and visual coverage through a test-only inspector', 'Fixed pointer interaction across all seven Workbench menus and unified Chinese/English switching for menus, activity rail, analysis tabs, and auxiliary controls'],
+    },
+  },
+  {
     version: 'v1.32.2',
     date: '2026-07-11',
     items: {

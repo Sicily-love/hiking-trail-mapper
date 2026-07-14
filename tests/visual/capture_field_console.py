@@ -15,7 +15,7 @@ from pathlib import Path
 import websocket
 
 ROOT = Path(__file__).resolve().parents[2]
-HTML = ROOT / "hiking-trail-mapper.html"
+HTML = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
 SAMPLE = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
 OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.gettempdir()) / "hiking-field-console"
 
@@ -53,7 +53,7 @@ process = subprocess.Popen([
     "--remote-allow-origins=*",
     f"--remote-debugging-port={port}",
     f"--user-data-dir={profile}",
-    f"file://{HTML}",
+    f"file://{HTML}?studio-test=1",
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 try:
@@ -67,7 +67,8 @@ try:
             time.sleep(0.2)
     if not targets:
         raise RuntimeError("Chrome did not expose a page target")
-    page = next(target for target in targets if target.get("type") == "page")
+    pages = [target for target in targets if target.get("type") == "page"]
+    page = next((target for target in pages if HTML.name in target.get("url", "")), pages[0])
     ws = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=30)
     message_id = 0
 
@@ -86,6 +87,8 @@ try:
                 return response
 
     def evaluate(expression):
+        source = json.dumps(expression, ensure_ascii=False)
+        expression = f"(function(scope) {{ with(scope) {{ return eval({source}); }} }})(window.__HTM_RUNTIME_INSPECTOR__ || {{}})"
         response = cdp("Runtime.evaluate", {
             "expression": expression,
             "returnByValue": True,
@@ -95,6 +98,14 @@ try:
         if result.get("subtype") == "error":
             raise RuntimeError(result.get("description", "browser evaluation failed"))
         return result.get("value")
+
+    for _ in range(80):
+        if evaluate("!!window.__OUTDOOR_ROUTE_STUDIO__?.ready && !!window.__HTM_RUNTIME_INSPECTOR__"):
+            break
+        time.sleep(0.1)
+    else:
+        detail = evaluate("({href: location.href, studio: !!window.__OUTDOOR_ROUTE_STUDIO__, inspector: !!window.__HTM_RUNTIME_INSPECTOR__})")
+        raise RuntimeError(f"Studio direct runtime did not become ready: {detail}")
 
     def hide_transient_ui():
         evaluate("document.getElementById('toast')?.style.setProperty('display', 'none', 'important')")
@@ -190,7 +201,7 @@ try:
               elevationOutOfViewport:!elevation || elevation.left < 0 || elevation.right > innerWidth || elevation.top < 0 || elevation.bottom > innerHeight,
               bodyOverflowX:document.documentElement.scrollWidth > innerWidth,
               buttonOverflow:buttons.some(button => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight),
-              appRuntime:!!window.HikingTrailApp,
+              appRuntime:!!HTM_APP,
               mobileResetClosesSidebar:innerWidth > 760 || document.getElementById('sidebar')?.classList.contains('collapsed'),
             };
           })()
@@ -255,7 +266,7 @@ try:
     evaluate("""
       (() => {
         segmentExit();
-        window.__visualDialogPromise = window.__HTM_DIALOG_CONTROLLER__.prompt({
+        window.__visualDialogPromise = window.__OUTDOOR_ROUTE_STUDIO__?.dialogs.prompt({
           title:'Rename trail',
           message:'Update the route name used across the workspace.',
           inputLabel:'Trail name',
@@ -297,7 +308,7 @@ try:
     evaluate("""
       (() => {
         toggleSidebar(false);
-        window.__visualMobileDialogPromise = window.__HTM_DIALOG_CONTROLLER__.confirm({
+        window.__visualMobileDialogPromise = window.__OUTDOOR_ROUTE_STUDIO__?.dialogs.confirm({
           title:'Clear project?',
           message:'This removes every trail, waypoint, and itinerary from the current workspace.',
           confirmLabel:'Clear project',

@@ -181,16 +181,16 @@ test('dialog contract restores focus and handles Escape and danger state', () =>
   assert.ok(dialogSource.includes("normalized.danger ? 'danger' : 'primary'"));
 });
 
-test('bootstrap creates one command and dialog runtime before classic execution', () => {
+test('bootstrap injects commands and dialogs into the direct runtime', () => {
   const commandIndex = bootstrapSource.indexOf('new app.CommandRegistry<void>()');
   const dialogIndex = bootstrapSource.indexOf('app.createDialogController(document)');
-  const runtimeIndex = bootstrapSource.indexOf("executeClassicScript(document, runtimeSource, 'runtime.js')");
+  const runtimeIndex = bootstrapSource.indexOf('startStudioRuntime({ document, commands, dialogs })');
   const workbenchIndex = bootstrapSource.indexOf('resolveWorkbenchStorage(document),\n    commands,');
   assert.ok(commandIndex >= 0 && commandIndex < runtimeIndex);
   assert.ok(dialogIndex >= 0 && dialogIndex < runtimeIndex);
   assert.ok(workbenchIndex > runtimeIndex);
-  assert.ok(bootstrapSource.includes('window.__HTM_COMMAND_REGISTRY__ = commands'));
-  assert.ok(bootstrapSource.includes('window.__HTM_DIALOG_CONTROLLER__ = dialogs'));
+  assert.strictEqual(bootstrapSource.includes('executeClassicScript'), false);
+  assert.strictEqual(bootstrapSource.includes('?raw'), false);
 });
 
 test('Workbench command surfaces only dispatch semantic commands', () => {

@@ -89,17 +89,20 @@ test('icon helper renders against a supplied pure DOM document', () => {
 
 test('top menu has the seven required groups and moves every legacy command', () => {
   const expectedLabels = ['File', 'Edit', 'Measure', 'Plan', 'Waypoint', 'View', 'Export'];
+  const expectedZhLabels = ['文件', '编辑', '测距', '规划', '标注', '视图', '导出'];
   const expectedCommands = [
     'add-trail-btn', 'reverse-btn', 'clear-btn', 'measure-btn', 'segment-btn',
     'add-escape-btn', 'add-waypoint-btn', 'reset-btn', 'help-btn', 'lang-btn', 'export-btn',
   ];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.MENU_DEFINITIONS.map(item => item.label), expectedLabels);
+    assert.deepStrictEqual(workbenchModule.MENU_DEFINITIONS.map(item => item.labelZh), expectedZhLabels);
     const commandIds = workbenchModule.MENU_DEFINITIONS.flatMap(item => item.commandIds);
     assert.deepStrictEqual([...commandIds].sort(), [...expectedCommands].sort());
     assert.strictEqual(new Set(commandIds).size, commandIds.length);
   } else {
     expectedLabels.forEach(label => assert.ok(workbenchSource.includes(`label: '${label}'`), label));
+    expectedZhLabels.forEach(label => assert.ok(workbenchSource.includes(`labelZh: '${label}'`), label));
     expectedCommands.forEach(id => assert.ok(workbenchSource.includes(`'${id}'`), id));
   }
 });
@@ -158,6 +161,17 @@ test('menus support keyboard navigation, Escape, and outside-click close', () =>
   assert.ok(workbenchSource.includes("document.addEventListener('keydown', onDocumentKeydown)"));
   assert.ok(workbenchSource.includes("trigger.setAttribute('aria-haspopup', 'menu')"));
   assert.ok(workbenchSource.includes("trigger.setAttribute('aria-expanded', 'false')"));
+  assert.ok(css.includes("#map-toolbar.studio-menubar"));
+  assert.ok(css.includes('pointer-events:auto;'));
+});
+
+test('Workbench owns bilingual labels and responds to one language event', () => {
+  assert.ok(workbenchSource.includes("export type WorkbenchLanguage = 'zh' | 'en'"));
+  assert.ok(workbenchSource.includes("addEventListener('studio:language-changed'"));
+  assert.ok(workbenchSource.includes('setLanguage(nextLanguage)'));
+  assert.strictEqual(workbenchSource.includes("context.textContent = language === 'zh'"), false);
+  assert.ok(workbenchSource.includes('delete control.dataset.i18n'));
+  assert.ok(workbenchSource.includes('labelNode.dataset.i18n = i18nKey'));
 });
 
 test('upgrade is idempotent and persists activity and bottom-tab state', () => {
@@ -169,15 +183,16 @@ test('upgrade is idempotent and persists activity and bottom-tab state', () => {
   assert.ok(workbenchSource.includes('writeStorage(storage, WORKBENCH_STORAGE_KEYS.bottomTab'));
 });
 
-test('bootstrap activates Workbench 2.0 after the legacy runtime is bound', () => {
-  const runtimeIndex = bootstrapSource.indexOf("executeClassicScript(document, runtimeSource, 'runtime.js')");
+test('bootstrap activates Workbench 2.0 after the direct runtime starts', () => {
+  const runtimeIndex = bootstrapSource.indexOf('startStudioRuntime({ document, commands, dialogs })');
   const workbenchIndex = bootstrapSource.indexOf(
     'resolveWorkbenchStorage(document),\n    commands,',
   );
   assert.ok(runtimeIndex >= 0);
   assert.ok(workbenchIndex > runtimeIndex);
   assert.ok(bootstrapSource.includes("throw new Error('Outdoor Route Studio could not mount the Workbench layout')"));
-  assert.ok(bootstrapSource.includes('{ version: 2, ready, commands, dialogs, workbench }'));
+  assert.ok(bootstrapSource.includes('version: STUDIO_VERSION'));
+  assert.ok(bootstrapSource.includes('architecture: 2'));
 });
 
 test('Studio stylesheet loads after the legacy component stylesheet', () => {

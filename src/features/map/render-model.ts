@@ -48,7 +48,7 @@ export interface MapRenderController {
   buildTracks(options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount'>): TrackRenderModel;
 }
 
-/** Reads map state through RuntimeContext so the classic runtime does not mirror selection rules. */
+/** Reads map state through RuntimeContext so browser orchestration does not mirror selection rules. */
 export function createMapRenderController(
   context: RuntimeContext<TrackRenderTrail>,
 ): MapRenderController {

@@ -122,8 +122,8 @@ function createContext(trails = [{id:'a', group:'A'}]) {
     assert.strictEqual(operation.kind, 'delete');
   });
 
-  await T('classic storage owner remains a UI and migration adapter', () => {
-    const source = read('src/features/storage/runtime.ts');
+  await T('direct runtime remains a UI and migration adapter for typed storage', () => {
+    const source = read('src/app/runtime/studio.ts');
     assert.match(source, /createStorageController\(runtimeContext/);
     assert.match(source, /storageController\.scheduleSave\(\)/);
     assert.match(source, /storageController\.load\(state\.activeGroup\)/);

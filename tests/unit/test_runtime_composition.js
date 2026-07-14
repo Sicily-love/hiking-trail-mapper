@@ -1,11 +1,8 @@
+/** Direct-runtime architecture contracts after removal of the classic composer. */
 const assert = require('assert');
-const { composeClassicRuntime } = require('../../src/app/runtime/compose.ts');
-const {
-  read,
-  runtimeSource,
-  runtimeTemplate,
-  sliceFiles,
-} = require('./runtime_source');
+const fs = require('fs');
+const path = require('path');
+const { read, root, runtimeSource } = require('./runtime_source');
 
 let passed = 0;
 let failed = 0;
@@ -20,72 +17,60 @@ const test = (name, fn) => {
   }
 };
 
-console.log('\nVertical classic-runtime composition');
+console.log('\nDirect TypeScript runtime');
 
-test('runtime template is startup glue below 400 lines', () => {
-  assert.ok(runtimeTemplate.split('\n').length <= 400);
-  assert.ok(runtimeSource.split('\n').length > runtimeTemplate.split('\n').length);
+test('bootstrap imports and starts one direct runtime module', () => {
+  const bootstrap = read('src/app/bootstrap.ts');
+  assert.ok(bootstrap.includes("import { startStudioRuntime"));
+  assert.strictEqual((bootstrap.match(/startStudioRuntime\(/g) || []).length, 1);
+  assert.strictEqual(bootstrap.includes('?raw'), false);
+  assert.strictEqual(bootstrap.includes('executeClassicScript'), false);
+  assert.strictEqual(bootstrap.includes('composeClassicRuntime'), false);
 });
 
-test('all vertical owners are present and composed exactly once', () => {
-  assert.strictEqual(sliceFiles.length, 13);
-  sliceFiles.forEach(name => assert.ok(read(name).includes('@runtime-fragment'), name));
+test('classic template, composer, and vertical runtime owners are absent', () => {
+  const retired = [
+    'src/app/runtime.ts',
+    'src/app/runtime/classic.ts',
+    'src/app/runtime/compose.ts',
+    'src/features/files/runtime.ts',
+    'src/features/storage/runtime.ts',
+    'src/features/waypoint/runtime.ts',
+    'src/features/map/runtime.ts',
+    'src/features/elevation/runtime.ts',
+    'src/features/localization/runtime.ts',
+    'src/features/escape/runtime.ts',
+    'src/features/itinerary/runtime.ts',
+    'src/features/measure/runtime.ts',
+    'src/features/segment/runtime.ts',
+    'src/features/trails/runtime.ts',
+    'src/ui/orchestration/runtime.ts',
+  ];
+  retired.forEach(name => assert.strictEqual(fs.existsSync(path.join(root, name)), false, name));
+});
+
+test('runtime has no fragment slots or dynamic script execution', () => {
   assert.strictEqual(runtimeSource.includes('@runtime-slice'), false);
   assert.strictEqual(runtimeSource.includes('@runtime-fragment'), false);
-  assert.strictEqual(runtimeSource.includes('export {};'), false);
+  assert.strictEqual(runtimeSource.includes('createElement(\'script\')'), false);
+  assert.strictEqual(runtimeSource.includes('new Function'), false);
+  assert.strictEqual(runtimeSource.includes('eval('), false);
+  assert.ok(runtimeSource.includes('export function startStudioRuntime'));
 });
 
-test('migrated implementations no longer live in runtime.ts', () => {
+test('all browser capabilities remain present exactly once', () => {
   for(const functionName of [
-    'handleFiles',
-    'loadFromStorage',
-    'renderWaypointsNow',
-    'renderTracksNow',
-    'drawElevBar',
-    'setLang',
-    'openLightbox',
-    'beginRuntimeInteraction',
-    'buildTrailList',
-    'showDaySegmentPreview',
-    'measureEnter',
-    'addEscapeEnter',
-    'segmentEnter',
-    'resetView',
-    'addManualWaypointAt',
+    'handleFiles', 'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow',
+    'drawElevBar', 'setLang', 'openLightbox', 'beginRuntimeInteraction',
+    'buildTrailList', 'showDaySegmentPreview', 'measureEnter', 'addEscapeEnter',
+    'segmentEnter', 'resetView', 'addManualWaypointAt',
   ]) {
-    assert.strictEqual(runtimeTemplate.includes(`function ${functionName}(`), false, functionName);
     assert.strictEqual(
       (runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length,
       1,
       functionName,
     );
   }
-});
-
-test('composer rejects missing, duplicate, and unused fragments', () => {
-  assert.throws(
-    () => composeClassicRuntime('/* @runtime-slice a.main */', []),
-    /Missing runtime fragment/,
-  );
-  const fragment = '/* @runtime-fragment a.main */\nconst value = 1;';
-  assert.throws(
-    () => composeClassicRuntime(
-      '/* @runtime-slice a.main */\n/* @runtime-slice a.main */',
-      [{ name: 'one', source: fragment }],
-    ),
-    /slot is duplicated/,
-  );
-  assert.throws(
-    () => composeClassicRuntime('const value = 1;', [{ name: 'one', source: fragment }]),
-    /Unused runtime fragments/,
-  );
-  assert.throws(
-    () => composeClassicRuntime('/* @runtime-slice a.main */', [
-      { name: 'one', source: fragment },
-      { name: 'two', source: fragment },
-    ]),
-    /exists in both/,
-  );
 });
 
 console.log(`\nResult: ${passed}/${passed + failed} passed`);

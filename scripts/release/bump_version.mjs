@@ -38,12 +38,12 @@ function shanghaiDate() {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-const runtimePath = path.join(root, 'src/app/runtime.ts');
+const versionPath = path.join(root, 'src/app/version.ts');
 const changelogPath = path.join(root, 'src/features/localization/changelog.ts');
-let runtime = await readFile(runtimePath, 'utf8');
+let versionSource = await readFile(versionPath, 'utf8');
 let changelogSource = await readFile(changelogPath, 'utf8');
-const current = runtime.match(/const APP_VERSION = 'v(\d+\.\d+\.\d+)'/)?.[1];
-if(!current) throw new Error('Cannot find current APP_VERSION');
+const current = versionSource.match(/STUDIO_VERSION = 'v(\d+\.\d+\.\d+)'/)?.[1];
+if(!current) throw new Error('Cannot find current STUDIO_VERSION');
 const next = nextVersion(current, bump);
 const nextTag = `v${next}`;
 const date = shanghaiDate();
@@ -60,14 +60,15 @@ if(!zhItems.length || !enItems.length) {
 
 const changelogEntry = `  {\n    version: '${nextTag}',\n    date: '${date}',\n    items: {\n      zh: [${zhItems.map(item => `'${escapeJsString(item)}'`).join(', ')}],\n      en: [${enItems.map(item => `'${escapeJsString(item)}'`).join(', ')}],\n    },\n  },\n`;
 
-runtime = runtime
-  .replace(/const APP_VERSION = 'v\d+\.\d+\.\d+';/, `const APP_VERSION = '${nextTag}';`)
-  .replace(/(<a href="javascript:void\(0\)" id="version-tag-link"[^>]*>)v\d+\.\d+\.\d+(<\/a>)/, `$1${nextTag}$2`);
+versionSource = versionSource.replace(
+  /STUDIO_VERSION = 'v\d+\.\d+\.\d+';/,
+  `STUDIO_VERSION = '${nextTag}';`,
+);
 changelogSource = changelogSource.replace(
   'export const CHANGELOG = [\n',
   `export const CHANGELOG = [\n${changelogEntry}`,
 );
-await writeFile(runtimePath, runtime);
+await writeFile(versionPath, versionSource);
 await writeFile(changelogPath, changelogSource);
 
 for(const name of ['package.json', 'package-lock.json']) {

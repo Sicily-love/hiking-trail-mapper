@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const sourceHtml = read('index.html');
 const releaseHtml = read('hiking-trail-mapper.html');
-const runtime = read('src/app/runtime.ts');
+const versionSource = read('src/app/version.ts');
 const changelogSource = read('src/features/localization/changelog.ts');
 const packageJson = JSON.parse(read('package.json'));
 
@@ -26,9 +26,9 @@ function T(name, fn) {
 
 console.log('\n▸ Vite source ↔ single-file release alignment');
 
-T('package, runtime, and release versions match', () => {
+T('package, version module, and release versions match', () => {
   const expected = `v${packageJson.version}`;
-  const runtimeVersion = runtime.match(/const APP_VERSION = '(v\d+\.\d+\.\d+)'/)?.[1];
+  const runtimeVersion = versionSource.match(/STUDIO_VERSION = '(v\d+\.\d+\.\d+)'/)?.[1];
   const releaseVersion = releaseHtml.match(/APP_VERSION:\s*(v\d+\.\d+\.\d+)/)?.[1];
   assert.strictEqual(runtimeVersion, expected);
   assert.strictEqual(releaseVersion, expected);

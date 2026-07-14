@@ -2,299 +2,88 @@
 
 **[中文](ARCHITECTURE.md) · [English](ARCHITECTURE.en.md)**
 
-This document describes source ownership, the boot chain, Workbench contracts, runtime managers, and single-file delivery after Milestone 6.
+## Current Baseline
 
-## Current State
-
-Outdoor Route Studio uses modular TypeScript source with a self-contained single-HTML release:
-
-- `src/` is the only source of truth for application implementation.
-- Root `index.html` is a stable, minimal Vite entry shell containing only page metadata, `#app`, and `src/main.ts`.
-- `src/app/bootstrap.ts` is the browser boot orchestrator.
-- `src/app/runtime.ts` is an approximately 340-line boot/command compatibility template. Thirteen vertical owners hold all business fragments and bootstrap composes them once in their original order.
-- Vite builds the module graph, then the release script inlines CSS and JavaScript into one file that works on GitHub Pages and over `file://`.
-
-“`src` is the only source” does not mean every repository file lives under `src`. The entry shell, build configuration, and scripts are engineering metadata; business logic, DOM structure, styles, and runtime behavior must originate under `src/`.
-
-## Source Ownership
-
-```text
-src/
-├── main.ts                         Imports styles and invokes bootstrap
-├── app/
-│   ├── bootstrap.ts                Boot order and compatibility bridge
-│   ├── state.ts                    Application state model
-│   ├── state-store.ts              Typed state commands/events and sole write boundary
-│   ├── command.ts                  CommandRegistry
-│   ├── interactions/               InteractionManager
-│   ├── rendering/                  RenderScheduler
-│   ├── runtime/context.ts          Typed RuntimeContext service boundary
-│   ├── runtime/compose.ts          Fragment integrity and one-time composition
-│   ├── runtime/classic.ts          App state and render-orchestration fragments
-│   ├── runtime.ts                  Approximately 340 lines of boot and command glue
-│   └── index.ts                    Typed app public exports
-├── core/                           DOM-free math, parsing, storage, and render models
-│   └── performance/               Large-track segmentation, downsampling, diffs, and revisions
-├── features/
-│   ├── files/                      Typed import/export controllers plus menu DOM
-│   ├── storage/                    Typed controller plus restore/UI adapter
-│   ├── map/runtime.ts              Track / Leaflet rendering
-│   ├── waypoint/                   Typed controller plus Leaflet marker adapter
-│   ├── elevation/runtime.ts        Elevation Canvas effects
-│   ├── localization/runtime.ts     i18n, changelog, and language DOM
-│   ├── measure/                    Typed session controller plus Leaflet segment adapter
-│   ├── segment/                    Typed edit/commit controller plus Leaflet/DOM adapter
-│   ├── itinerary/                  Typed Day-preview controller plus itinerary DOM/Leaflet adapter
-│   ├── escape/                     Typed route controller plus sidebar/Leaflet adapter
-│   └── trails/                     Typed controller plus classic UI adapter
-├── adapters/                       Leaflet, IndexedDB, ZIP, and browser-file effect boundaries
-├── ui/
-│   ├── layout/app-shell.ts         Workbench DOM shell and mount function
-│   ├── workbench.ts                Responsive Workbench chrome
-│   ├── workbench.css               Workbench visuals and layout
-│   ├── dialog/                     DialogController
-│   └── orchestration/runtime.ts    Help and image-modal compatibility orchestration
-├── styles/                         Global/vendor style entries
-└── vendor/                         Browser dependencies inlined by the build
-```
-
-Ownership rules:
-
-| Change | Location |
-|--------|----------|
-| Distance, ascent, KML, itinerary, elevation layout | `src/core` |
-| App state, commands, interaction sessions, render scheduling | `src/app` |
-| Interaction state for one feature | `src/features` |
-| Leaflet / IndexedDB calls | `src/adapters` |
-| DOM shell, responsive layout, dialogs, CSS | `src/ui` / `src/styles` |
-| Legacy browser orchestration migration | From `src/app/runtime.ts` into the owners above |
-
-Do not fix behavior in `hiking-trail-mapper.html` or `dist/`; both are generated.
-
-## Boot Chain
+`v2.0.0` has one application source: `src/`. Root `index.html` is the small Vite shell; `hiking-trail-mapper.html` and `dist/` are generated. Production startup no longer uses raw imports, `executeClassicScript()`, a runtime composer, or classic globals.
 
 ```text
 index.html
-  └── <script type="module" src="/src/main.ts">
-        ├── styles/leaflet.css
-        ├── ui/workbench.css
-        └── bootstrapOutdoorRouteStudio(document)
-              ├── mountAppShell(#app)
-              ├── execute Leaflet / decorator / fflate vendors
-              ├── expose HikingTrailCore and HikingTrailApp
-              ├── validate and compose vertical runtime owners
-              ├── execute the one compatibility script
-              └── expose __OUTDOOR_ROUTE_STUDIO__.ready
+  -> src/main.ts
+  -> bootstrapOutdoorRouteStudio()
+  -> mountWorkbenchShell()
+  -> startStudioRuntime({ document, commands, dialogs })
+  -> upgradeWorkbenchLayout()
 ```
 
-`bootstrap.ts` raw-imports the runtime template and 13 vertical owners. `composeClassicRuntime()` requires every named fragment to have exactly one slot and one implementation, with no unused fragments, before producing the one classic script. This preserves the global scope and execution order expected by compatibility code while preventing fallbacks and dual paths from returning.
+Leaflet, PolylineDecorator, and fflate load as side-effect imports in the Vite module graph. `src/app/runtime/studio.ts` is a normal TypeScript module, not a string template or a second implementation.
 
-The vertical split reduced `runtime.ts` from 8,089 lines to about 340. Migrated implementations no longer exist in the template; `test_runtime_composition.js` enforces a 400-line guardrail and rejects missing, duplicate, or unused fragments. `RuntimeContext` aggregates six stable services, and trail, storage, file import/export, waypoint, measure, segment, Day preview, and escape now use typed controllers. The export core builds KML, merged bundles, and itinerary Markdown; the file adapter isolates fflate, Blob/ObjectURL, the save picker, and export Canvas effects. The classic files owner dropped from 994 to about 705 lines and retains only import and menu DOM. Remaining owners should follow this pattern one at a time without copying code back into the template.
-
-This bridge is a migration mechanism, not a permanent module boundary. Typed code must not depend on accidental globals created by the script. When behavior moves out, give it explicit inputs, outputs, lifecycle, and tests.
-
-## Workbench Contract
-
-The Workbench is a map-first interface that changes placement, not command meaning, by viewport:
-
-- Desktop: seven primary actions live in a side rail with scannable route context.
-- Mobile: five primary actions live in a bottom bar; lower-frequency actions move into More or a bottom sheet.
-- The sidebar contains the primary-trail summary, routes, itinerary, and escape views.
-- The elevation analysis dock is independent from the route sidebar and remembers its collapsed state.
-- Responsive layout changes command placement without duplicating command implementation or business state.
-
-Seven-side/five-bottom is a layout contract, not two feature sets. Command IDs, enabled/checked state, and dispatch paths should be shared through `CommandRegistry`; visual tests cover desktop and mobile breakpoints.
-
-## Five Managers
-
-### AppStateStore
-
-`src/app/state-store.ts` is the sole write boundary for mutable application state. Classic owners may read the stable `snapshot()` view, but trail visibility, primary trail, groups, batch selection, map mode, waypoint filters, escape selection, and cache restoration must dispatch discriminated `AppStateCommand` values. Every commit emits an `AppStateChangedEvent` with an increasing revision, which command state observes.
-
-Transient measure, segment, waypoint-add, escape-add, and Day-preview data remains owned by feature controllers. Effect objects such as Leaflet layers do not enter application state. A source contract rejects any classic owner that reintroduces direct state assignment or Set mutation.
-
-### InteractionManager
-
-`src/app/interactions/` owns mutually exclusive interaction sessions. The current vocabulary is:
+## Directory Ownership
 
 ```text
-idle | measure | segment | waypoint | escape | day-preview
+src/
+├── app/
+│   ├── bootstrap.ts              Startup and dependency assembly
+│   ├── version.ts                Single version source
+│   ├── state-store.ts            Application state write boundary
+│   ├── command.ts                Unified commands
+│   ├── interaction-manager.ts    Map interaction sessions
+│   ├── render-scheduler.ts       Frame batching and last-fit wins
+│   ├── runtime-context.ts        Typed service context
+│   └── runtime/studio.ts         DOM/Leaflet browser orchestration
+├── core/                         DOM-free domain algorithms and render models
+├── features/                     Vertical feature controllers and data
+├── adapters/                     Leaflet, IndexedDB, file, and browser effects
+├── ui/                           Workbench, dialogs, and UI components
+├── styles/                       Layout, components, and theme
+└── vendor/                       Browser dependencies in the Vite graph
 ```
 
-Each active session carries a `sessionId`, phase, owner, and independent `AbortController`. Starting a session atomically cancels the previous one; an event can be consumed only once by the current kind/session/owner. Animation frames and delays created by a session are cleaned up on cancellation, replacement, or phase change so stale callbacks cannot mutate new state.
+## Boundary Rules
 
-Measure, segment, waypoint, escape, and Day preview now all use this lifecycle. Map taps pass through one active-kind dispatcher, and measure/segment drags are Session events as well. Replacing, deleting, or revising a trail invalidates the old owner, while Escape cleans up the current mode through the same cancellation path.
+### Core
 
-### RenderScheduler
+`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, downsampling, marker diffs, and revisions do not depend on the DOM, Leaflet, or storage handles.
 
-`src/app/rendering/` coalesces invalidations with a dirty mask. Its fixed flush order is:
+### App
+
+`AppStateStore` owns persistent application-state writes. Mutations use discriminated commands and emit revisioned events. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands.
+
+`InteractionManager` unifies the `select -> preview -> dragging -> commit` lifecycle for measure, segment, waypoint, escape, and Day preview. It cancels stale sessions, timers, RAF callbacks, and asynchronous work.
+
+`RenderScheduler` coalesces map, track, marker, elevation, sidebar, analysis-panel, and fit requests. Only the newest epoch may commit after consecutive resets.
+
+### Features and Adapters
+
+Trail, storage, file import/export, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. Adapters isolate browser capabilities:
+
+- Leaflet adapters consume track/marker render models and update layers by diff;
+- the elevation renderer consumes a Canvas context, dimensions, and a downsampled model;
+- the IndexedDB adapter owns transactions and snapshots;
+- file/browser adapters own ZIP, Blob, ObjectURL, save-picker, and export-Canvas effects.
+
+### Direct Runtime
+
+`src/app/runtime/studio.ts` centralizes mature orchestration that still shares DOM and Leaflet instances. It currently uses `@ts-nocheck`, but starts directly through explicit parameters and calls typed core, controller, adapter, and UI APIs. New domain logic must not enter this boundary, and deleted feature runtime owners must not return.
+
+Real-browser tests receive a frozen, read-only inspector only when the URL includes `?studio-test=1`. Normal releases do not create it and do not expose `HikingTrailCore`, `HikingTrailApp`, command, or dialog classic globals.
+
+## UI Architecture
+
+The Workbench consists of the top menu, left activity rail, map workspace, responsive sidebar, and bottom analysis dock. Desktop and mobile entries share command IDs. Floating panels and dialogs share components, theme, focus, and Escape behavior. Lucide icons, the Forest Green / Stone / White / Orange palette, and responsive geometry live under `src/styles/`.
+
+## Release Chain
 
 ```text
-tracks -> markers -> sidebar -> days -> legend -> chart -> fit
+src + index.html
+  -> Vite build
+  -> inline JavaScript/CSS
+  -> dist/index.html
+  -> dist/hiking-trail-mapper.html
+  -> root offline HTML + release.json
 ```
 
-Multiple invalidations schedule one animation frame. Dirty bits raised during a flush move to the next frame. `fit` uses an epoch and last-request-wins semantics so an older async viewport change cannot override a newer interaction.
+The version script synchronizes `src/app/version.ts`, localization changelog, package/lock data, READMEs, and generated artifacts. Final HTML has no external JavaScript/CSS dependencies and works from a static server, GitHub Pages, and `file://`.
 
-The runtime now delegates tracks, markers, sidebar, days, legend, elevation chart, and viewport fitting to one scheduler. Elevation tracks are grouped into at most 40 color bands. The Canvas profile uses pixel-width min/max downsampling while hit testing and annotations retain the full track. Regular waypoint markers use stable keys for add/update/remove/keep diffs, preserving unchanged Leaflet marker instances. Reset requests are guarded by both fit and reset epochs, so only the final reset can commit the viewport.
+## Further Evolution
 
-### CommandRegistry
-
-`src/app/command.ts` is the DOM-free command registration and dispatch layer. It provides:
-
-- unique command IDs with explicit registration and disposal;
-- dynamic `enabled` / `checked` state;
-- synchronous and asynchronous dispatch;
-- registered, changed, dispatched, and unregistered lifecycle notifications.
-
-Bootstrap creates one registry. The top menu, desktop activity rail, responsive mobile activity bar, bottom analysis tabs, compatibility sidebar tabs, and Escape shortcut only dispatch stable semantic commands; they no longer proxy old buttons or clone business listeners. Runtime registers the handlers, while Workbench subscribes to dispatched/changed events to synchronize disabled and checked state, active destinations, and the operation log.
-
-### DialogController
-
-`src/ui/dialog/` centralizes `info`, `confirm`, `prompt`, and custom dialogs:
-
-- native `<dialog>` and `showModal()`;
-- user strings assigned through `textContent`, without HTML injection sinks;
-- shared Escape, cancel, danger-state, and default-button behavior;
-- focus restoration on close and pending-state cleanup on destroy.
-
-All native runtime `alert`, `confirm`, and `prompt` calls now use this controller. Text entry, dangerous confirmations, and manual-waypoint commits are asynchronous dialogs. Help, changelog, storage information, and import panels remain transitional custom modals for later feature-level migration.
-
-## Manager Adoption Status
-
-The typed APIs and unit contracts for all five managers/store are in place. `AppStateStore` owns application-level writes, `InteractionManager` owns all five mutually exclusive map interactions, `RenderScheduler` owns all seven runtime render/fit phases, `CommandRegistry` owns all four Workbench entry surfaces, and `DialogController` owns every native browser dialog. The compatibility runtime remains, but state writes, primary interaction, rendering, command, and native-dialog lifecycles are unified.
-
-Each migration should:
-
-1. Add a contract or regression test for the old behavior.
-2. Move state and pure calculations into `src/core` / `src/features`.
-3. Connect lifecycle, rendering, commands, or dialogs to the corresponding manager.
-4. Remove the replaced code from `runtime.ts`.
-5. Build the single file and run real-browser workflows.
-
-## State and Data Flow
-
-```text
-File/user event
-  -> CommandRegistry / InteractionManager
-  -> AppStateStore.dispatch(command) or feature controller
-  -> core pure function / render model
-  -> RenderScheduler.invalidate(mask)
-  -> adapters + DOM/Canvas renderer
-  -> IndexedDB when persistence is required
-```
-
-Primary state conventions:
-
-- `activeTrails: Set<trailId>`: currently visible routes.
-- `expandedTrails: Set<trailId>`: expanded route cards.
-- `batchSelected: Set<trailId>`: batch selection.
-- `activeGroup: string | null`: current group.
-- `primaryByGroup: Record<group, trailId>`: one primary trail per group.
-- `primaryTrailId`: derived getter/setter for the current group.
-- `modeVisibleTags`: separate visible-waypoint sets per map mode.
-
-`Set` values must become arrays before entering an IndexedDB snapshot and become Sets on restore. New state gets one owner instead of mirrored fields kept “in sync.”
-
-The transitional runtime still exposes `applyChange()` as a compatibility entrypoint. New code should prefer precise dirty masks; as migration proceeds, `applyChange` should only adapt legacy callers and must not keep growing.
-
-## Core Data Model
-
-```typescript
-type TrackTuple = [
-  lat: number,
-  lng: number,
-  elev?: number,
-  km?: number,
-  ascent_m?: number,
-  dayId?: number | null,
-];
-
-type EnrichedWaypoint = {
-  lat: number;
-  lng: number;
-  name: string;
-  tag?: string;
-  gps_idx: number;
-  label: string;
-  elev: number;
-};
-
-type DayMeta = {
-  d: number;
-  km: number;
-  asc: number;
-  desc: number;
-  max: number;
-  min: number;
-  camp: string;
-  i_start: number;
-  i_end: number;
-};
-```
-
-`gps_idx` binds a waypoint, map location, and elevation position to one track index. `i_start` / `i_end` are stable ranges for Day and measurement rendering.
-
-## Key Algorithm Boundaries
-
-- **Accumulated ascent/descent**: smooth elevation first, then use a threshold accumulator so GPS noise is not counted as many tiny climbs.
-- **Snap to track**: find and store the nearest track index as `gps_idx`; map and elevation positions derive from the same index.
-- **Segment thinning**: measurement, segmentation, and Day preview use bounded Leaflet models from `src/core/render.ts`.
-- **Elevation layout**: `src/core/elevationProfile.ts` computes coordinates, paths, label collision avoidance, drawing commands, and adaptive height; Canvas only consumes the model.
-- **Storage restore**: `src/core/storage.ts` normalizes snapshots and migrates legacy `primaryTrailId` into `primaryByGroup`.
-
-## Build and Release
-
-```text
-index.html + src module graph
-  -> Vite
-  -> dist/index.html + temporary assets
-  -> scripts/build/build_release.mjs
-       ├── inline CSS and module JS
-       ├── remove dist/assets
-       ├── write dist/index.html
-       ├── copy identical dist/hiking-trail-mapper.html alias
-       ├── write dist/release.json
-       └── refresh/check root hiking-trail-mapper.html
-  -> GitHub Pages uploads dist/
-```
-
-“Single HTML” means the final application references no external JavaScript or CSS. The compatibility alias has identical content and is not a second source. Map tiles still come from the network.
-
-Root and build files have different responsibilities:
-
-| File | Role | Direct `file://` |
-|------|------|-------------------|
-| `index.html` | Small Vite source-entry shell | No |
-| `hiking-trail-mapper.html` | Generated self-contained release | Yes |
-| `dist/index.html` | GitHub Pages primary entry | Yes |
-| `dist/hiking-trail-mapper.html` | Compatibility download alias | Yes |
-
-## Progressively Splitting runtime.ts
-
-`runtime.ts` still contains substantial mature but classic browser orchestration. Split it vertically by behavior instead of rewriting everything at once:
-
-The `RenderScheduler` migration for core redraws, `rebuildAll`, and workspace fitting, the Workbench command migration, and native-browser-dialog migration are complete. Remaining steps are:
-
-1. Move dynamic trail-card, filter, and auxiliary-panel actions into payload commands where useful.
-2. Continue replacing custom help, changelog, storage, and import modals with `DialogController`.
-3. Split import, export, i18n, Leaflet/Canvas, and IndexedDB orchestration into small controllers/adapters.
-4. Delete the classic execution path only after release and real-browser tests no longer depend on its globals.
-
-## Performance and Reliability Constraints
-
-- Do not redraw the elevation chart unconditionally during map pan/zoom.
-- Coalesce repeated invalidations in one frame; only the latest fit request may run.
-- Keep elevation Canvas draw points at or below twice the pixel width while retaining endpoints and bucket extrema; never downsample hit-test data.
-- Limit elevation-gradient tracks to 40 color-layer groups and diff waypoint markers by stable key.
-- During consecutive resets, stale fit epochs, reset epochs, and delayed mobile fits must not override the latest request.
-- After interaction cancellation, timers, RAF callbacks, and async results must not write state.
-- Do not serialize raw `Set` values or persist DOM/Leaflet objects.
-- Keep pure calculations DOM-free and cover boundary inputs with unit tests.
-- The seven-side/five-bottom Workbench must share commands instead of duplicating responsive side effects.
-
-## Known Limitations
-
-- KML is the only native import format; GPX, GeoJSON, and FIT are not parsed directly.
-- The single-file release does not cache map tiles for offline use.
-- `runtime.ts` still needs progressive splitting; primary Workbench commands and native dialogs are unified, while dynamic data actions, custom modals, and remaining browser orchestration are not fully modular yet.
-- Use the generated release, not the root Vite shell, for `file://`.
+Architecture 2.0 removed the dual path and classic bridge. Future work should shrink the browser-orchestration area of `studio.ts` incrementally: define a typed render model or controller API, migrate callers, and delete the old implementation in the same change. Do not reintroduce a composer, string execution, or mirrored state.

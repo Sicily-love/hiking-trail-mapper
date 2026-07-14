@@ -126,13 +126,13 @@ function createHarness(trails = []) {
     assert.strictEqual(effects.resets, 1);
   });
 
-  await T('classic files owner keeps parsing and DOM but not project writes', () => {
-    const source = read('src/features/files/runtime.ts');
+  await T('direct runtime keeps import DOM but not project writes', () => {
+    const source = read('src/app/runtime/studio.ts');
     assert.match(source, /createFileImportController\(runtimeContext/);
     assert.match(source, /fileImportController\.addTrail\(trail\)/);
     assert.match(source, /fileImportController\.renameTrail/);
     assert.match(source, /fileImportController\.finalizeImport/);
-    assert.doesNotMatch(source.slice(0, source.indexOf('/* @runtime-fragment files.download */')), /DATA\.trails\.push\(/);
+    assert.doesNotMatch(source, /DATA\.trails\.push\(/);
     assert.doesNotMatch(source, /fflate\.unzipSync\(buf\)/);
   });
 

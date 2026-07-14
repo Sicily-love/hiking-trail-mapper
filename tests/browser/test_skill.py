@@ -18,6 +18,12 @@ RELEASE = ROOT
 HTML = TMPL.read_text(encoding='utf-8')
 CHANGELOG_SOURCE = (ROOT / "src/features/localization/changelog.ts").read_text(encoding='utf-8')
 TRANSLATIONS_SOURCE = (ROOT / "src/features/localization/translations.ts").read_text(encoding='utf-8')
+VERSION_SOURCE = (ROOT / "src/app/version.ts").read_text(encoding='utf-8')
+RUNTIME_SOURCE = (ROOT / "src/app/runtime/studio.ts").read_text(encoding='utf-8')
+SOURCE_GRAPH = "\n".join(
+    path.read_text(encoding='utf-8')
+    for path in sorted((ROOT / "src").rglob("*.ts"))
+)
 
 def chrome_bin():
     candidates = [
@@ -32,8 +38,8 @@ def chrome_bin():
             return c
     return None
 
-# 从 HTML 读取"当前版本"作为期望值
-VER_MATCH = re.search(r"const APP_VERSION\s*=\s*'([^']+)'", HTML)
+# 从唯一版本模块读取当前版本。
+VER_MATCH = re.search(r"STUDIO_VERSION\s*=\s*'([^']+)'", VERSION_SOURCE)
 EXPECTED_VER = VER_MATCH.group(1) if VER_MATCH else 'UNKNOWN'
 
 results = []
@@ -49,9 +55,8 @@ print(f"  期望版本: {EXPECTED_VER}\n")
 print("▸ 版本一致性")
 m1 = re.search(r"APP_VERSION:\s*(v[\d.]+)", HTML)
 m2 = re.search(r"<title>\s*([^<]+?)\s*</title>", HTML)
-m3 = re.search(r"const APP_VERSION\s*=\s*'([^']+)'", HTML)
 m4 = re.search(r"export const CHANGELOG\s*=\s*\[\s*\{\s*version:\s*'([^']+)'", CHANGELOG_SOURCE)
-versions = {'注释': m1 and m1.group(1), 'JS APP_VERSION': m3 and m3.group(1),
+versions = {'注释': m1 and m1.group(1), '版本模块': VER_MATCH and VER_MATCH.group(1),
             'CHANGELOG首条': m4 and m4.group(1)}
 for k, v in versions.items():
     check(f"版本 {k} = {v}", v == EXPECTED_VER)
@@ -68,7 +73,7 @@ required_funcs = [
 for fn in required_funcs:
     found = bool(re.search(
         rf"\bfunction\s+{fn}\b|\b{fn}\s*=\s*(?:async\s+)?(?:function|\()|\b{fn}\s*=\s*HTM_(?:CORE|APP)\.",
-        HTML,
+        SOURCE_GRAPH,
     ))
     check(f"函数 {fn}", found)
 
@@ -76,18 +81,18 @@ print("\n▸ 关键状态字段")
 required_state = ['batchMode', 'batchSelected', 'activeGroup', 'primaryTrailId',
                   'activeTrails', 'expandedTrails']
 for f in required_state:
-    check(f"state.{f}", f'state.{f}' in HTML or f"'{f}'" in HTML or f'"{f}"' in HTML)
+    check(f"state.{f}", f'state.{f}' in SOURCE_GRAPH or f"'{f}'" in SOURCE_GRAPH or f'"{f}"' in SOURCE_GRAPH)
 
 print("\n▸ KML 解析约束")
-check("gx:Track 处理", 'gx:Track' in HTML or 'gx\\:Track' in HTML)
-check("LineString 处理", 'LineString' in HTML)
-check("Point placemark", 'Point' in HTML)
+check("gx:Track 处理", 'gx:Track' in SOURCE_GRAPH or 'gx\\:Track' in SOURCE_GRAPH)
+check("LineString 处理", 'LineString' in SOURCE_GRAPH)
+check("Point placemark", 'Point' in SOURCE_GRAPH)
 
 print("\n▸ 计算约定")
 check("accumulator ascent (thr=10)",
-      re.search(r"(?:running_asc|accumulator|thr\s*[:=]\s*10)", HTML) is not None)
+      re.search(r"(?:running_asc|accumulator|thr\s*[:=]\s*10)", SOURCE_GRAPH) is not None)
 check("haversine 球面距离",
-      HTML.count('haversine') >= 3)
+      SOURCE_GRAPH.count('haversine') >= 3)
 
 print("\n▸ i18n 词条对齐")
 # TRANSLATIONS = { zh: { 'key.a':'..', ... }, en: { 'key.a':'..', ... } }

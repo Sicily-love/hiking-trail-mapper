@@ -133,9 +133,9 @@ T('rejects commit after the primary trail changes', () => {
   assert.strictEqual(effects.revisions, 0);
 });
 
-T('classic segment owner delegates state and project writes to the controller', () => {
-  const segment = read('src/features/segment/runtime.ts');
-  const map = read('src/features/map/runtime.ts');
+T('direct runtime delegates segment state and project writes to the controller', () => {
+  const segment = read('src/app/runtime/studio.ts');
+  const map = segment;
   const directBusinessWrite = /segmentState\.(?:active|trailId|points|campEdits|_justDragged|_fastTapUntil)\s*(?:=|\+\+)/;
   assert.match(segment, /createSegmentController\(runtimeContext/);
   assert.match(segment, /const segmentState = segmentController\.state/);

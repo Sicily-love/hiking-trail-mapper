@@ -9,6 +9,8 @@ export const TRANSLATIONS: TranslationCatalog = {
     'header.peak': '最高',
     'header.km': 'km',
     'header.ascent': 'm ↑',
+    'toolbar.noTrail': '尚未加载轨迹',
+    'toolbar.noGroup': '未选择活动分组',
     // Tabs
     'tab.trail': '轨迹',
     'tab.filter': '标注点',
@@ -153,6 +155,8 @@ export const TRANSLATIONS: TranslationCatalog = {
     'header.peak': 'peak',
     'header.km': 'km',
     'header.ascent': 'm ↑',
+    'toolbar.noTrail': 'No trail loaded',
+    'toolbar.noGroup': 'No active group',
     'tab.trail': 'Trails',
     'tab.filter': 'Waypoints',
     'tab.day': 'Itinerary',

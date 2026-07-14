@@ -2,7 +2,7 @@
 
 **[中文](TESTING.md) · [English](TESTING.en.md)**
 
-测试体系同时保护模块化源码、过渡 runtime、真实浏览器行为和 Vite 单文件发布物。
+测试体系同时保护模块化源码、direct runtime、真实浏览器行为和 Vite 单文件发布物。
 
 ## 常用命令
 
@@ -26,9 +26,9 @@ npm run test:visual:capture
 
 1. `src/` 是行为真源，测试不把生成 HTML 当作可编辑实现。
 2. `index.html` 与 `hiking-trail-mapper.html` 的职责不同，不能再断言两者内容相同。
-3. `runtime.ts` 是启动/命令兼容模板；测试必须保护 400 行上限和命名片段唯一性。
+3. `runtime/studio.ts` 必须由 bootstrap 直接 import；测试拒绝 raw import、composer、脚本执行桥和已删除 owner 回归。
 4. 纯函数使用 Node 单元测试；DOM/Canvas/Leaflet 行为使用浏览器测试；完整用户流程使用 E2E。
-5. 每次从 `runtime.ts` 迁出行为，应先保留旧行为测试，再切 owner，最后删除旧路径。
+5. 从 direct runtime 迁出行为时，先保留行为测试，再接入 typed controller/adapter，最后在同一提交删除旧实现。
 
 ## 完整检查
 
@@ -48,7 +48,7 @@ npm run check:generated
 - Vite 入口是根目录小壳 `index.html`。
 - `index.html` 只含 `#app`、产品元信息和 `/src/main.ts`。
 - `src/main.ts` 导入样式并调用 `bootstrapOutdoorRouteStudio()`。
-- bootstrap 先挂载 Workbench，再加载 vendor、typed modules，并把垂直 owner 组合成唯一 classic runtime。
+- bootstrap 挂载 Workbench，通过 Vite 模块图加载 vendor 和 typed modules，然后直接调用 `startStudioRuntime()`。
 - 临时 `.vite-build/index.html` 不引用外部 JavaScript/CSS asset。
 - `.vite-build/hiking-trail-mapper.html` 是内容相同的兼容别名。
 - `.vite-build/release.json` 记录产品、版本、日期、hash 和入口。
@@ -62,23 +62,23 @@ npm run check:generated
 | `test_math.js` / `test_enrich.js` | 距离、海拔、统计、标注吸附与内容 hash |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` 出口、KML 坐标、`gx:Track`、waypoint 和 import model |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshot、事务提交、Set 序列化、每组主轨迹和 legacy 恢复 |
-| `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | typed 存储、导入、标注点 controller 与 classic adapter 边界 |
-| `test_file_export_controller.js` | KML/Markdown 模型、ZIP/Blob adapter、导出 controller 与 classic DOM 边界 |
-| `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 classic adapter 边界 |
-| `test_segment_controller.js` | typed 分段编辑、营地重编号、Day 提交和 classic adapter 边界 |
+| `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | typed 存储、导入、标注点 controller 与 direct runtime 边界 |
+| `test_file_export_controller.js` | KML/Markdown 模型、ZIP/Blob adapter、导出 controller 与 direct DOM 边界 |
+| `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 direct runtime 边界 |
+| `test_segment_controller.js` | typed 分段编辑、营地重编号、Day 提交和 direct runtime 边界 |
 | `test_day_preview_controller.js` | typed Day 预览计划、选择生命周期和 core/runtime 边界 |
-| `test_escape_controller.js` | 下撤 A/B 吸附、正反向统计、抽稀、提交/删除和 classic adapter 边界 |
+| `test_escape_controller.js` | 下撤 A/B 吸附、正反向统计、抽稀、提交/删除和 direct runtime 边界 |
 | `test_measure_itinerary.js` | A/B 测距、分段、Day 范围、海拔布局和 render model |
 | `test_performance_core.js` | 海拔分段、Canvas min/max 抽稀、waypoint diff 与 track revision |
 | `test_app_architecture.js` | app state、feature controller、adapter 与 Workbench fit 计划 |
-| `test_runtime_composition.js` | 400 行启动胶水护栏、垂直片段唯一性，以及缺失/重复/闲置拒绝 |
+| `test_runtime_composition.js` | direct runtime 启动契约，以及 raw/composer/旧 owner 缺失断言 |
 | `test_interaction_manager.js` | 会话互斥、owner/session guard、AbortController、timer/RAF 清理 |
 | `test_interaction_runtime.js` | 五种地图模式接入统一交互状态机的 runtime 契约 |
 | `test_render_scheduler.js` | dirty mask 合并、固定 flush 顺序、下一帧重入和 fit epoch |
 | `test_render_runtime.js` | 七阶段调度接线、海拔降采样、marker diff 和最后一次复位保护 |
 | `test_command_dialog.js` | 命令注册/状态/dispatch、四类入口接线，以及原生 dialog 安全、焦点、Escape |
 | `test_ui_contract.js` | Workbench 响应式布局、七侧栏/五底栏、侧栏、海拔坞和无障碍 |
-| `test_vite_entry.js` | 小壳、`main.ts`、`bootstrap.ts`、过渡 runtime 与单文件构建 |
+| `test_vite_entry.js` | 小壳、`main.ts`、`bootstrap.ts`、direct runtime 与单文件构建 |
 | `test_release_pipeline.js` | 构建重现、release metadata、版本工具和 GitHub Pages workflow |
 | `verify_alignment.js` | 生成发布物使用 `src/core` 行为且没有恢复重复 core fallback |
 
@@ -88,7 +88,7 @@ npm run check:generated
 
 `python3 scripts/release/check_release_metadata.py` 应检查：
 
-- `package.json` / lockfile、runtime `APP_VERSION`、localization CHANGELOG 和 README 版本一致；
+- `package.json` / lockfile、`src/app/version.ts`、localization CHANGELOG 和 README 版本一致；
 - 产品名为 Outdoor Route Studio；
 - 小壳 title、runtime 发布元数据和生成 HTML 注释一致；
 - `release.json` 与单 HTML hash/字节数一致；
@@ -104,7 +104,7 @@ npm run check:generated
 - 中英文 i18n key 对齐；
 - Leaflet / fflate 已进入生成单文件；
 - 没有外部脚本/样式依赖；
-- 生成物包含 Outdoor Route Studio 启动标记和兼容 runtime。
+- 生成物包含 Outdoor Route Studio 启动标记和 direct runtime。
 
 ### Phase 5：真实 Chrome 功能
 
@@ -212,7 +212,7 @@ uv run --with websocket-client python3 tests/e2e/run_all.py
 
 - 纯计算：在相关 `src/core` 模块旁补 Node 单元测试。
 - manager：使用注入的 scheduler/RAF/document fake，断言公开契约，不依赖真实时间。
-- DOM 与兼容 runtime：放入 `tests/browser`。
+- DOM 与 direct runtime：放入 `tests/browser`。
 - 多步骤用户流程：放入 `tests/e2e`。
 - 布局、遮挡和断点：放入 `tests/visual`。
 

@@ -75,9 +75,9 @@ T('invalidates stale asynchronous computations monotonically', () => {
   assert.strictEqual(controller.isComputeCurrent(second), false);
 });
 
-T('classic measure owner delegates all session mutations to the controller', () => {
-  const measure = read('src/features/measure/runtime.ts');
-  const map = read('src/features/map/runtime.ts');
+T('direct runtime delegates all measure session mutations to the controller', () => {
+  const measure = read('src/app/runtime/studio.ts');
+  const map = measure;
   const directBusinessWrite = /measureState\.(?:active|trailId|ptA|ptB|_justDragged|_fastTapUntil|_computeSeq)\s*(?:=|\+\+)/;
   assert.match(measure, /createMeasureController\(\)/);
   assert.match(measure, /const measureState = measureController\.state/);

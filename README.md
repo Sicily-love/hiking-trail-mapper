@@ -70,20 +70,20 @@ index.html
   -> src/main.ts
   -> bootstrapOutdoorRouteStudio()
   -> mountAppShell()
-  -> typed core/app modules
-  -> compose vertical runtime owners
-  -> runtime.ts compatibility bridge
+  -> vendor side-effect modules
+  -> startStudioRuntime({ document, commands, dialogs })
+  -> typed core / feature controllers / adapters
 ```
 
 - `index.html` 只保留元信息、`#app` 和 `/src/main.ts`，不承载业务实现。
-- `src/app/bootstrap.ts` 挂载 Workbench DOM，加载内联 vendor，并按确定顺序启动 typed modules 与过渡 runtime。
+- `src/app/bootstrap.ts` 挂载 Workbench DOM，通过 Vite 模块图加载 vendor，并显式启动 Studio runtime；业务代码不再通过字符串脚本执行。
 - `src/core` 负责无 DOM 的计算、解析、数据转换和渲染模型。
 - `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench 与对话框。
 - `InteractionManager` 保证测距、分段、标注、下撤和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
-`src/app/runtime.ts` 已从 8,089 行收口到约 340 行，只保留 core/app 兼容绑定、版本、启动恢复、统一命令注册和初始刷新。文件、存储、地图、Marker、海拔、测距、分段、Day、下撤、轨迹变更、localization 和 DOM 编排分别由 13 个垂直 runtime owner 单独持有；`composeClassicRuntime()` 按原顺序组合一次，不保留旧实现或双路径。文件拆分目标已经完成，trail、storage、file import/export、waypoint、measure、segment、Day preview 和 escape 已迁入 typed controller。KML/Markdown 生成位于纯 core，ZIP、Blob、Canvas 导出图和浏览器保存位于 file adapter；classic 文件 owner 只保留导入面板与导出菜单 DOM。
+`v2.0.0` 删除了 `executeClassicScript()`、runtime composer、raw runtime import 和 13 个 classic owner。`src/app/runtime/studio.ts` 作为普通 TypeScript 模块直接接收 `document`、`CommandRegistry` 与 `DialogController`，不再依赖 `window.HikingTrailCore/HikingTrailApp`。轨迹、存储、文件导入导出、标注、测距、分段、Day 预览和下撤的业务状态继续由 typed controller 持有；浏览器 DOM/Leaflet 编排集中在 direct runtime，后续新增逻辑应优先进入 controller、adapter 或 UI module。仅真实浏览器测试通过 `?studio-test=1` 启用只读 inspector，正常发布不暴露 classic globals。
 
 ## 开发与测试
 
@@ -108,9 +108,9 @@ npm run test:visual:capture
 | Milestone 3：核心模块化 | 完成 | 核心计算、KML、存储、测距、分段和海拔模型以 TypeScript 为真源 |
 | Milestone 4：UI 系统化 | 完成 | Workbench 统一桌面、移动、侧栏、底栏、海拔坞和 bottom sheet |
 | Milestone 5：发布链路 | 完成 | Vite 单文件构建、发布元数据、完整检查和 GitHub Pages 部署固定 |
-| Milestone 6：入口与编排 | 完成 | Outdoor Route Studio 命名、小壳入口、bootstrap、四个 manager 与七侧栏/五底栏契约落位 |
+| Milestone 6：Architecture & UX 2.0 | 完成 | 删除 classic bridge/composer，直接模块启动、统一 manager、Workbench 和单 HTML 发布链收口 |
 
-Milestone 6 已完成入口边界和 classic runtime 的垂直拆分；`runtime.ts` 只剩约 340 行启动/命令胶水。这里不宣称 13 个 owner 已全部强类型化，后续重构重点转为显式依赖和 typed controller。
+Milestone 6 已完成 Architecture 2.0 基线：生产启动链中不存在 runtime 字符串注入、fragment composer 或双执行路径。后续迭代以 typed feature、性能与新格式支持为主，不再调整整体启动架构。
 
 ## GPX / GeoJSON
 
@@ -124,7 +124,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v1.32.2
+版本：v2.0.0
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。

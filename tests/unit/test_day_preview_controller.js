@@ -86,9 +86,9 @@ T('rejects invalid days, non-primary trails, and stale plans', () => {
   assert.strictEqual(controller.activate(plan), false);
 });
 
-T('classic itinerary owner delegates selection state and uses core range helpers', () => {
-  const source = read('src/features/itinerary/runtime.ts');
-  const directBusinessWrite = /dayPreviewState\.(?:active|trailId|day|iStart|iEnd)\s*(?:=|\+\+)/;
+T('direct runtime delegates Day selection state and uses core range helpers', () => {
+  const source = read('src/app/runtime/studio.ts');
+  const directBusinessWrite = /dayPreviewState\.(?:active|trailId|day|iStart|iEnd)\s*(?:=(?!=)|\+\+)/;
   assert.match(source, /createDayPreviewController\(runtimeContext\)/);
   assert.match(source, /const dayPreviewState = dayPreviewController\.state/);
   assert.match(source, /dayPreviewController\.prepare/);

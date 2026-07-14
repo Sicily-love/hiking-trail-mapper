@@ -98,14 +98,13 @@ function createHarness(trails) {
     assert.strictEqual(await controller.clearTrails(), false);
   });
 
-  await T('classic trail owner remains a thin adapter without duplicate mutation logic', () => {
-    const source = read('src/features/trails/runtime.ts');
+  await T('direct runtime keeps trail mutation behind the typed controller', () => {
+    const source = read('src/app/runtime/studio.ts');
     assert.match(source, /createTrailController\(runtimeContext/);
     assert.match(source, /trailController\.deleteTrail/);
     assert.match(source, /trailController\.reverseTrail/);
     assert.match(source, /trailController\.clearTrails/);
     assert.doesNotMatch(source, /\.track\.reverse\(/);
-    assert.ok(source.split('\n').length < 50);
   });
 
   console.log('\n══════════════════════════════════════════════════');

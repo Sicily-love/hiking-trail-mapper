@@ -112,7 +112,7 @@ export function buildHighPointMarkerModel(
   };
 }
 
-/** Centralizes Marker visibility and model creation outside the classic runtime. */
+/** Centralizes marker visibility and model creation outside browser orchestration. */
 export function createMarkerRenderController(
   context: RuntimeContext<WaypointRenderTrail>,
   options: MarkerRenderControllerOptions,

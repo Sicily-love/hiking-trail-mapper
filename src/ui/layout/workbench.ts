@@ -9,6 +9,7 @@ import {
 interface ControlDefinition {
   icon: WorkbenchIconName;
   label: string;
+  labelZh: string;
 }
 
 interface CommandDefinition extends ControlDefinition {
@@ -16,45 +17,47 @@ interface CommandDefinition extends ControlDefinition {
 }
 
 export const COMMAND_DEFINITIONS = {
-  'add-trail-btn': { icon: 'plus', label: 'Add trail', commandId: STUDIO_COMMANDS.FILE_IMPORT },
-  'reverse-btn': { icon: 'rotate', label: 'Reverse trail', commandId: STUDIO_COMMANDS.TRAIL_REVERSE },
-  'clear-btn': { icon: 'trash', label: 'Clear all', commandId: STUDIO_COMMANDS.PROJECT_CLEAR },
-  'measure-btn': { icon: 'ruler', label: 'Measure distance', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
-  'segment-btn': { icon: 'calendar', label: 'Plan segments', commandId: STUDIO_COMMANDS.SEGMENT_TOGGLE },
-  'add-escape-btn': { icon: 'shield', label: 'Add escape route', commandId: STUDIO_COMMANDS.ESCAPE_TOGGLE },
-  'add-waypoint-btn': { icon: 'map-pin', label: 'Add waypoint', commandId: STUDIO_COMMANDS.WAYPOINT_TOGGLE },
-  'reset-btn': { icon: 'crosshair', label: 'Reset view', commandId: STUDIO_COMMANDS.MAP_RESET },
-  'help-btn': { icon: 'help', label: 'Help', commandId: STUDIO_COMMANDS.HELP_OPEN },
-  'lang-btn': { icon: 'language', label: 'Language', commandId: STUDIO_COMMANDS.LANGUAGE_TOGGLE },
-  'export-btn': { icon: 'download', label: 'Export', commandId: STUDIO_COMMANDS.FILE_EXPORT },
+  'add-trail-btn': { icon: 'plus', label: 'Add trail', labelZh: '添加轨迹', commandId: STUDIO_COMMANDS.FILE_IMPORT },
+  'reverse-btn': { icon: 'rotate', label: 'Reverse trail', labelZh: '反向轨迹', commandId: STUDIO_COMMANDS.TRAIL_REVERSE },
+  'clear-btn': { icon: 'trash', label: 'Clear all', labelZh: '清空项目', commandId: STUDIO_COMMANDS.PROJECT_CLEAR },
+  'measure-btn': { icon: 'ruler', label: 'Measure distance', labelZh: '测量距离', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
+  'segment-btn': { icon: 'calendar', label: 'Plan segments', labelZh: '行程分段', commandId: STUDIO_COMMANDS.SEGMENT_TOGGLE },
+  'add-escape-btn': { icon: 'shield', label: 'Add escape route', labelZh: '添加下撤路线', commandId: STUDIO_COMMANDS.ESCAPE_TOGGLE },
+  'add-waypoint-btn': { icon: 'map-pin', label: 'Add waypoint', labelZh: '添加标注点', commandId: STUDIO_COMMANDS.WAYPOINT_TOGGLE },
+  'reset-btn': { icon: 'crosshair', label: 'Reset view', labelZh: '复位视图', commandId: STUDIO_COMMANDS.MAP_RESET },
+  'help-btn': { icon: 'help', label: 'Help', labelZh: '帮助', commandId: STUDIO_COMMANDS.HELP_OPEN },
+  'lang-btn': { icon: 'language', label: 'Language', labelZh: '语言', commandId: STUDIO_COMMANDS.LANGUAGE_TOGGLE },
+  'export-btn': { icon: 'download', label: 'Export', labelZh: '导出', commandId: STUDIO_COMMANDS.FILE_EXPORT },
 } as const satisfies Record<string, CommandDefinition>;
 
 export const MENU_DEFINITIONS = [
-  { key: 'file', label: 'File', icon: 'file', commandIds: ['add-trail-btn'] },
-  { key: 'edit', label: 'Edit', icon: 'pencil', commandIds: ['reverse-btn', 'clear-btn'] },
-  { key: 'measure', label: 'Measure', icon: 'ruler', commandIds: ['measure-btn'] },
-  { key: 'plan', label: 'Plan', icon: 'calendar', commandIds: ['segment-btn', 'add-escape-btn'] },
-  { key: 'waypoint', label: 'Waypoint', icon: 'map-pin', commandIds: ['add-waypoint-btn'] },
-  { key: 'view', label: 'View', icon: 'eye', commandIds: ['reset-btn', 'help-btn', 'lang-btn'] },
-  { key: 'export', label: 'Export', icon: 'download', commandIds: ['export-btn'] },
+  { key: 'file', label: 'File', labelZh: '文件', icon: 'file', commandIds: ['add-trail-btn'] },
+  { key: 'edit', label: 'Edit', labelZh: '编辑', icon: 'pencil', commandIds: ['reverse-btn', 'clear-btn'] },
+  { key: 'measure', label: 'Measure', labelZh: '测距', icon: 'ruler', commandIds: ['measure-btn'] },
+  { key: 'plan', label: 'Plan', labelZh: '规划', icon: 'calendar', commandIds: ['segment-btn', 'add-escape-btn'] },
+  { key: 'waypoint', label: 'Waypoint', labelZh: '标注', icon: 'map-pin', commandIds: ['add-waypoint-btn'] },
+  { key: 'view', label: 'View', labelZh: '视图', icon: 'eye', commandIds: ['reset-btn', 'help-btn', 'lang-btn'] },
+  { key: 'export', label: 'Export', labelZh: '导出', icon: 'download', commandIds: ['export-btn'] },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
+  labelZh: string;
   icon: WorkbenchIconName;
   commandIds: ReadonlyArray<keyof typeof COMMAND_DEFINITIONS>;
 }>;
 
 export const ACTIVITY_DEFINITIONS = [
-  { key: 'project', label: 'Project', icon: 'folder', commandId: STUDIO_COMMANDS.WORKSPACE_PROJECT },
-  { key: 'trails', label: 'Trails', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
-  { key: 'itinerary', label: 'Itinerary', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
-  { key: 'waypoints', label: 'Waypoints', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
-  { key: 'escape', label: 'Escape', icon: 'shield', commandId: STUDIO_COMMANDS.WORKSPACE_ESCAPE },
-  { key: 'statistics', label: 'Statistics', icon: 'chart', commandId: STUDIO_COMMANDS.WORKSPACE_STATISTICS, bottomTab: 'statistics' },
-  { key: 'settings', label: 'Settings', icon: 'settings', commandId: STUDIO_COMMANDS.WORKSPACE_SETTINGS, menu: 'view' },
+  { key: 'project', label: 'Project', labelZh: '项目', icon: 'folder', commandId: STUDIO_COMMANDS.WORKSPACE_PROJECT },
+  { key: 'trails', label: 'Trails', labelZh: '轨迹', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
+  { key: 'itinerary', label: 'Itinerary', labelZh: '行程', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
+  { key: 'waypoints', label: 'Waypoints', labelZh: '标注点', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
+  { key: 'escape', label: 'Escape', labelZh: '下撤', icon: 'shield', commandId: STUDIO_COMMANDS.WORKSPACE_ESCAPE },
+  { key: 'statistics', label: 'Statistics', labelZh: '统计', icon: 'chart', commandId: STUDIO_COMMANDS.WORKSPACE_STATISTICS, bottomTab: 'statistics' },
+  { key: 'settings', label: 'Settings', labelZh: '设置', icon: 'settings', commandId: STUDIO_COMMANDS.WORKSPACE_SETTINGS, menu: 'view' },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
+  labelZh: string;
   icon: WorkbenchIconName;
   commandId: StudioCommandId;
   bottomTab?: string;
@@ -62,14 +65,15 @@ export const ACTIVITY_DEFINITIONS = [
 }>;
 
 export const BOTTOM_TAB_DEFINITIONS = [
-  { key: 'elevation', label: 'Elevation', icon: 'mountain', nodeId: 'elev-bar', commandId: STUDIO_COMMANDS.PANEL_ELEVATION },
-  { key: 'statistics', label: 'Statistics', icon: 'chart', nodeId: 'header-stats', commandId: STUDIO_COMMANDS.PANEL_STATISTICS },
-  { key: 'measure', label: 'Measure', icon: 'ruler', nodeId: 'measure-panel', commandId: STUDIO_COMMANDS.PANEL_MEASURE },
-  { key: 'segment', label: 'Segment', icon: 'calendar', nodeId: 'segment-panel', commandId: STUDIO_COMMANDS.PANEL_SEGMENT },
-  { key: 'log', label: 'Log', icon: 'logs', nodeId: null, commandId: STUDIO_COMMANDS.PANEL_LOG },
+  { key: 'elevation', label: 'Elevation', labelZh: '海拔', icon: 'mountain', nodeId: 'elev-bar', commandId: STUDIO_COMMANDS.PANEL_ELEVATION },
+  { key: 'statistics', label: 'Statistics', labelZh: '统计', icon: 'chart', nodeId: 'header-stats', commandId: STUDIO_COMMANDS.PANEL_STATISTICS },
+  { key: 'measure', label: 'Measure', labelZh: '测距', icon: 'ruler', nodeId: 'measure-panel', commandId: STUDIO_COMMANDS.PANEL_MEASURE },
+  { key: 'segment', label: 'Segment', labelZh: '分段', icon: 'calendar', nodeId: 'segment-panel', commandId: STUDIO_COMMANDS.PANEL_SEGMENT },
+  { key: 'log', label: 'Log', labelZh: '日志', icon: 'logs', nodeId: null, commandId: STUDIO_COMMANDS.PANEL_LOG },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;
+  labelZh: string;
   icon: WorkbenchIconName;
   nodeId: string | null;
   commandId: StudioCommandId;
@@ -81,20 +85,20 @@ export const WORKBENCH_STORAGE_KEYS = {
 } as const;
 
 const AUXILIARY_CONTROLS = {
-  'measure-reset': { icon: 'rotate', label: 'Reset points' },
-  'measure-reverse': { icon: 'arrow-left-right', label: 'Reverse points' },
-  'measure-exit': { icon: 'x', label: 'Exit measure' },
-  'segment-close': { icon: 'x', label: 'Close segment panel' },
-  'segment-undo': { icon: 'undo', label: 'Undo segment' },
-  'segment-clear': { icon: 'rotate', label: 'Clear segments' },
-  'segment-apply': { icon: 'check', label: 'Apply segments' },
-  'segment-exit': { icon: 'x', label: 'Exit segment mode' },
-  'addescape-close': { icon: 'x', label: 'Close escape panel' },
-  'addescape-commit': { icon: 'save', label: 'Save escape route' },
-  'addescape-reset': { icon: 'rotate', label: 'Reset escape route' },
-  'addescape-exit': { icon: 'x', label: 'Exit escape mode' },
-  'sidebar-close': { icon: 'panel-left-close', label: 'Close sidebar' },
-  'sidebar-toggle': { icon: 'panel-left-open', label: 'Open sidebar' },
+  'measure-reset': { icon: 'rotate', label: 'Reset points', labelZh: '重新选点' },
+  'measure-reverse': { icon: 'arrow-left-right', label: 'Reverse points', labelZh: '反向' },
+  'measure-exit': { icon: 'x', label: 'Exit measure', labelZh: '退出测距' },
+  'segment-close': { icon: 'x', label: 'Close segment panel', labelZh: '关闭分段面板' },
+  'segment-undo': { icon: 'undo', label: 'Undo segment', labelZh: '撤销分段' },
+  'segment-clear': { icon: 'rotate', label: 'Clear segments', labelZh: '清空分段' },
+  'segment-apply': { icon: 'check', label: 'Apply segments', labelZh: '应用分段' },
+  'segment-exit': { icon: 'x', label: 'Exit segment mode', labelZh: '退出分段' },
+  'addescape-close': { icon: 'x', label: 'Close escape panel', labelZh: '关闭下撤面板' },
+  'addescape-commit': { icon: 'save', label: 'Save escape route', labelZh: '保存下撤路线' },
+  'addescape-reset': { icon: 'rotate', label: 'Reset escape route', labelZh: '重选下撤路线' },
+  'addescape-exit': { icon: 'x', label: 'Exit escape mode', labelZh: '退出下撤' },
+  'sidebar-close': { icon: 'panel-left-close', label: 'Close sidebar', labelZh: '收起侧栏' },
+  'sidebar-toggle': { icon: 'panel-left-open', label: 'Open sidebar', labelZh: '展开侧栏' },
 } as const satisfies Record<string, ControlDefinition>;
 
 export type WorkbenchMenuKey = (typeof MENU_DEFINITIONS)[number]['key'];
@@ -106,7 +110,14 @@ export interface WorkbenchLayoutController {
   activateActivity(activity: WorkbenchActivityKey): void;
   activateBottomTab(tab: WorkbenchBottomTabKey): void;
   closeMenus(): void;
+  setLanguage(language: WorkbenchLanguage): void;
   destroy(): void;
+}
+
+export type WorkbenchLanguage = 'zh' | 'en';
+
+function localizedLabel(definition: ControlDefinition, language: WorkbenchLanguage): string {
+  return language === 'zh' ? definition.labelZh : definition.label;
 }
 
 interface MenuView {
@@ -150,29 +161,14 @@ function writeStorage(storage: WorkbenchStorage | null | undefined, key: string,
   }
 }
 
-function normalizedControlLabel(control: HTMLElement, fallback: string): string {
-  const labelNode = control.querySelector<HTMLElement>('.studio-command-label, .studio-control-label, .tb-label');
-  const candidates = [
-    labelNode?.textContent,
-    control.textContent,
-    control.getAttribute('aria-label'),
-    control.dataset.workbenchLabel,
-    fallback,
-  ];
-  for(const candidate of candidates) {
-    const normalized = (candidate || '').trim().replace(/^[^\p{L}\p{N}]+/u, '').trim();
-    if(normalized) return normalized;
-  }
-  return fallback;
-}
-
 function decorateControl(
   document: Document,
   control: HTMLElement,
   definition: ControlDefinition,
   kind: 'command' | 'control',
+  language: WorkbenchLanguage,
 ): void {
-  const label = normalizedControlLabel(control, definition.label);
+  const label = localizedLabel(definition, language);
   const iconWrap = createElement(document, 'span', kind === 'command'
     ? 'tb-icon studio-command-icon'
     : 'studio-control-icon');
@@ -182,6 +178,11 @@ function decorateControl(
   iconWrap.setAttribute('aria-hidden', 'true');
   iconWrap.appendChild(createWorkbenchIcon(document, definition.icon, { size: kind === 'command' ? 16 : 15 }));
   labelNode.textContent = label;
+  const i18nKey = control.dataset.i18n;
+  if(i18nKey) {
+    delete control.dataset.i18n;
+    labelNode.dataset.i18n = i18nKey;
+  }
   control.dataset.workbenchLabel = label;
   control.setAttribute('aria-label', label);
   control.classList.add(kind === 'command' ? 'studio-command' : 'studio-icon-control');
@@ -194,9 +195,11 @@ function decorateHeading(
   heading: HTMLElement | null,
   icon: WorkbenchIconName,
   fallback: string,
+  fallbackZh: string,
+  language: WorkbenchLanguage,
 ): void {
   if(!heading) return;
-  const label = normalizedControlLabel(heading, fallback);
+  const label = language === 'zh' ? fallbackZh : fallback;
   const text = createElement(document, 'span', 'studio-panel-title-text');
   text.textContent = label;
   heading.classList.add('studio-panel-title');
@@ -211,7 +214,7 @@ function isBottomTabKey(value: string | null): value is WorkbenchBottomTabKey {
   return BOTTOM_TAB_DEFINITIONS.some(tab => tab.key === value);
 }
 
-function buildBottomDock(document: Document): BottomDockView {
+function buildBottomDock(document: Document, language: WorkbenchLanguage): BottomDockView {
   const root = createElement(document, 'section', 'studio-bottom-dock');
   const tabList = createElement(document, 'div', 'studio-bottom-tabs');
   const content = createElement(document, 'div', 'studio-bottom-content');
@@ -237,12 +240,13 @@ function buildBottomDock(document: Document): BottomDockView {
     tab.id = tabId;
     tab.dataset.bottomTab = definition.key;
     tab.dataset.commandId = definition.commandId;
-    tab.title = definition.label;
+    const localized = localizedLabel(definition, language);
+    tab.title = localized;
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', paneId);
     tab.setAttribute('aria-selected', 'false');
     tab.tabIndex = -1;
-    label.textContent = definition.label;
+    label.textContent = localized;
     tab.append(createWorkbenchIcon(document, definition.icon, { size: 15 }), label);
 
     pane.id = paneId;
@@ -272,7 +276,7 @@ function buildBottomDock(document: Document): BottomDockView {
   return { log, panes, root, tabList, tabs };
 }
 
-function buildActivityRail(document: Document): {
+function buildActivityRail(document: Document, language: WorkbenchLanguage): {
   buttons: Map<WorkbenchActivityKey, HTMLButtonElement>;
   root: HTMLElement;
 } {
@@ -287,11 +291,12 @@ function buildActivityRail(document: Document): {
     button.id = `workbench-activity-${definition.key}`;
     button.dataset.activity = definition.key;
     button.dataset.commandId = definition.commandId;
-    button.title = definition.label;
+    const localized = localizedLabel(definition, language);
+    button.title = localized;
     button.setAttribute('aria-controls', 'sidebar');
     button.setAttribute('aria-pressed', 'false');
     button.tabIndex = -1;
-    label.textContent = definition.label;
+    label.textContent = localized;
     button.append(createWorkbenchIcon(document, definition.icon, { size: 19 }), label);
     if(definition.key === 'settings') button.classList.add('studio-activity-button--settings');
     root.appendChild(button);
@@ -361,8 +366,9 @@ export function upgradeWorkbenchLayout(
   if(!main || !header || !map || !toolbar || !sidebar || !elevationPanel) return null;
   const sidebarElement = sidebar;
 
-  const dock = buildBottomDock(document);
-  const activityRail = buildActivityRail(document);
+  let language: WorkbenchLanguage = document.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'zh';
+  const dock = buildBottomDock(document, language);
+  const activityRail = buildActivityRail(document, language);
   const menuList = createElement(document, 'div', 'studio-menu-list');
   const menuViews = new Map<WorkbenchMenuKey, MenuView>();
   const commandButtons = new Map<keyof typeof COMMAND_DEFINITIONS, HTMLButtonElement>();
@@ -409,15 +415,16 @@ export function upgradeWorkbenchLayout(
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-controls', menuId);
-    trigger.title = definition.label;
-    label.textContent = definition.label;
+    const localized = localizedLabel(definition, language);
+    trigger.title = localized;
+    label.textContent = localized;
     trigger.append(createWorkbenchIcon(document, definition.icon, { size: 14 }), label,
       createWorkbenchIcon(document, 'chevron-down', { className: 'studio-menu-caret', size: 12 }));
 
     panel.id = menuId;
     panel.dataset.menuPanel = definition.key;
     panel.setAttribute('role', 'menu');
-    panel.setAttribute('aria-label', definition.label);
+    panel.setAttribute('aria-label', localized);
     panel.hidden = true;
 
     for(const commandId of definition.commandIds) {
@@ -428,7 +435,7 @@ export function upgradeWorkbenchLayout(
       command.dataset.commandId = commandDefinition.commandId;
       command.setAttribute('role', 'menuitem');
       command.tabIndex = -1;
-      decorateControl(document, command, commandDefinition, 'command');
+      decorateControl(document, command, commandDefinition, 'command', language);
       const onCommandClick = (event: MouseEvent): void => {
         event.preventDefault();
         closeMenus(false);
@@ -470,20 +477,79 @@ export function upgradeWorkbenchLayout(
 
   for(const [id, definition] of Object.entries(AUXILIARY_CONTROLS)) {
     const control = document.getElementById(id);
-    if(control) decorateControl(document, control, definition, 'control');
+    if(control) decorateControl(document, control, definition, 'control', language);
   }
   decorateHeading(
     document,
     document.querySelector<HTMLElement>('#segment-panel .tool-panel-title'),
     'calendar',
     'Itinerary segments',
+    '行程分段',
+    language,
   );
   decorateHeading(
     document,
     document.querySelector<HTMLElement>('#addescape-panel .tool-panel-title'),
     'shield',
     'Escape route',
+    '下撤路线',
+    language,
   );
+
+  function setLanguage(nextLanguage: WorkbenchLanguage): void {
+    language = nextLanguage;
+    document.documentElement.lang = language === 'en' ? 'en' : 'zh-CN';
+    for(const definition of MENU_DEFINITIONS) {
+      const view = menuViews.get(definition.key);
+      const label = localizedLabel(definition, language);
+      if(!view) continue;
+      const labelNode = view.trigger.querySelector<HTMLElement>('.studio-menu-label');
+      if(labelNode) labelNode.textContent = label;
+      view.trigger.title = label;
+      view.panel.setAttribute('aria-label', label);
+    }
+    for(const [id, button] of commandButtons) {
+      const label = localizedLabel(COMMAND_DEFINITIONS[id], language);
+      const labelNode = button.querySelector<HTMLElement>('.studio-command-label');
+      if(labelNode) labelNode.textContent = label;
+      button.dataset.workbenchLabel = label;
+      button.setAttribute('aria-label', label);
+    }
+    for(const definition of ACTIVITY_DEFINITIONS) {
+      const button = activityRail.buttons.get(definition.key);
+      const label = localizedLabel(definition, language);
+      if(!button) continue;
+      const labelNode = button.querySelector<HTMLElement>('.studio-activity-label');
+      if(labelNode) labelNode.textContent = label;
+      button.title = label;
+    }
+    for(const definition of BOTTOM_TAB_DEFINITIONS) {
+      const tab = dock.tabs.get(definition.key);
+      const label = localizedLabel(definition, language);
+      if(!tab) continue;
+      const labelNode = tab.querySelector<HTMLElement>('.studio-bottom-tab-label');
+      if(labelNode) labelNode.textContent = label;
+      tab.title = label;
+    }
+    for(const [id, definition] of Object.entries(AUXILIARY_CONTROLS)) {
+      const control = document.getElementById(id);
+      const label = localizedLabel(definition, language);
+      const labelNode = control?.querySelector<HTMLElement>('.studio-control-label');
+      if(labelNode) labelNode.textContent = label;
+      control?.setAttribute('aria-label', label);
+    }
+    const segmentTitle = document.querySelector<HTMLElement>('#segment-panel .studio-panel-title-text');
+    const escapeTitle = document.querySelector<HTMLElement>('#addescape-panel .studio-panel-title-text');
+    if(segmentTitle) segmentTitle.textContent = language === 'zh' ? '行程分段' : 'Itinerary segments';
+    if(escapeTitle) escapeTitle.textContent = language === 'zh' ? '下撤路线' : 'Escape route';
+  }
+
+  const onLanguageChanged = (event: Event): void => {
+    const requested = (event as CustomEvent<{ language?: string }>).detail?.language;
+    setLanguage(requested === 'en' ? 'en' : 'zh');
+  };
+  document.defaultView?.addEventListener('studio:language-changed', onLanguageChanged);
+  cleanups.push(() => document.defaultView?.removeEventListener('studio:language-changed', onLanguageChanged));
 
   const workspace = createElement(document, 'div', 'studio-workspace');
   const mapStage = createElement(document, 'main', 'studio-map-stage');
@@ -713,11 +779,11 @@ export function upgradeWorkbenchLayout(
   function commandLabel(commandId: string): string | null {
     const command = Object.values(COMMAND_DEFINITIONS)
       .find(definition => definition.commandId === commandId);
-    if(command) return command.label;
+    if(command) return localizedLabel(command, language);
     const activity = ACTIVITY_DEFINITIONS.find(definition => definition.commandId === commandId);
-    if(activity) return activity.label;
+    if(activity) return localizedLabel(activity, language);
     const panel = BOTTOM_TAB_DEFINITIONS.find(definition => definition.commandId === commandId);
-    return panel?.label ?? null;
+    return panel ? localizedLabel(panel, language) : null;
   }
 
   const unsubscribeCommands = commandRegistry.subscribe(event => {
@@ -762,7 +828,7 @@ export function upgradeWorkbenchLayout(
     commandObserver = new MutationObserverConstructor(() => {
       for(const [id, button] of commandButtons) {
         if(!button.querySelector('.studio-command-icon')) {
-          decorateControl(document, button, COMMAND_DEFINITIONS[id], 'command');
+          decorateControl(document, button, COMMAND_DEFINITIONS[id], 'command', language);
         }
       }
     });
@@ -795,6 +861,7 @@ export function upgradeWorkbenchLayout(
 
   const initialActivity = readStorage(storage, WORKBENCH_STORAGE_KEYS.activity);
   syncActivitySelection(isActivityKey(initialActivity) ? initialActivity : 'project', false);
+  setLanguage(language);
 
   const controller: WorkbenchLayoutController = {
     activateActivity(activity): void {
@@ -807,6 +874,9 @@ export function upgradeWorkbenchLayout(
     },
     closeMenus(): void {
       closeMenus(false);
+    },
+    setLanguage(nextLanguage): void {
+      setLanguage(nextLanguage);
     },
     destroy(): void {
       commandObserver?.disconnect();

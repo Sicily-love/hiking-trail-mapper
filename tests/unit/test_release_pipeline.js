@@ -45,7 +45,7 @@ T('retired template, IIFE sync, and fallback scripts are absent', () => {
   ].forEach(name => assert.ok(!fs.existsSync(path.join(root, name)), name));
 });
 
-T('release sync and version bump use Vite plus the runtime owners', () => {
+T('release sync and version bump use Vite plus source-owned metadata', () => {
   const sync = read('scripts/release/sync_release.sh');
   const syncDocs = read('scripts/release/sync_release_docs.mjs');
   const bump = read('scripts/release/bump_version.mjs');
@@ -55,7 +55,8 @@ T('release sync and version bump use Vite plus the runtime owners', () => {
   assert.ok(syncDocs.includes("src/features/localization/changelog.ts"));
   assert.ok(syncDocs.includes("process.argv.includes('--check')"));
   assert.ok(!syncDocs.includes('const changelogBlock = html.match'));
-  assert.ok(bump.includes("src/app/runtime.ts"));
+  assert.ok(syncDocs.includes("src/app/version.ts"));
+  assert.ok(bump.includes("src/app/version.ts"));
   assert.ok(bump.includes("src/features/localization/changelog.ts"));
   assert.ok(!bump.includes("src/template/app.html"));
   assert.ok(!bump.includes("src/app/runtime.js"));
@@ -78,12 +79,11 @@ T('release docs are reproducible from localization source without writing in che
   assert.ok(before['CHANGELOG.md'].includes("users couldn't find it"));
 });
 
-T('maintenance tools cover the runtime template and vertical owners', () => {
+T('maintenance tools cover only the direct Studio runtime', () => {
   const cleanup = read('scripts/maintenance/clean_version_comments.py');
-  assert.ok(cleanup.includes('"app" / "runtime.ts"'));
-  assert.ok(cleanup.includes('"runtime" / "classic.ts"'));
-  assert.ok(cleanup.includes('glob("*/runtime.ts")'));
-  assert.ok(cleanup.includes('"orchestration" / "runtime.ts"'));
+  assert.ok(cleanup.includes('"runtime" / "studio.ts"'));
+  assert.ok(!cleanup.includes('glob("*/runtime.ts")'));
+  assert.ok(!cleanup.includes('"runtime" / "classic.ts"'));
   assert.ok(!cleanup.includes('src/app/runtime.js'));
   assert.ok(!cleanup.includes('"runtime.js"'));
 });

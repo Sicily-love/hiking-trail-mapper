@@ -1,7 +1,7 @@
 /** Typed application state ownership contracts. */
 const assert = require('assert');
 const { createAppStateStore } = require('../../src/app/state-store.ts');
-const { runtimeSource, runtimeTemplate, sliceSources } = require('./runtime_source.js');
+const { runtimeSource } = require('./runtime_source.js');
 
 let passed = 0;
 let failed = 0;
@@ -51,11 +51,8 @@ T('restores workspace ownership without replacing stable Set views', () => {
   assert.strictEqual(state.activeGroup, 'B');
   assert.strictEqual(state.primaryTrailId, 'b');
 });
-T('classic owners cannot bypass the typed application-state boundary', () => {
-  const source = [
-    runtimeTemplate,
-    ...sliceSources.filter(slice => !slice.name.includes('localization')).map(slice => slice.source),
-  ].join('\n')
+T('direct runtime cannot bypass the typed application-state boundary', () => {
+  const source = runtimeSource
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*$/gm, '');
   assert.doesNotMatch(source, /\bstate\.[A-Za-z_$][\w$]*\s*=(?!=)/);

@@ -70,20 +70,20 @@ index.html
   -> src/main.ts
   -> bootstrapOutdoorRouteStudio()
   -> mountAppShell()
-  -> typed core/app modules
-  -> compose vertical runtime owners
-  -> runtime.ts compatibility bridge
+  -> vendor side-effect modules
+  -> startStudioRuntime({ document, commands, dialogs })
+  -> typed core / feature controllers / adapters
 ```
 
 - `index.html` contains only metadata, `#app`, and `/src/main.ts`; it contains no business implementation.
-- `src/app/bootstrap.ts` mounts the Workbench DOM, loads inlined vendors, and starts typed modules and the transitional runtime in a deterministic order.
+- `src/app/bootstrap.ts` mounts the Workbench DOM, loads vendors through the Vite module graph, and explicitly starts the Studio runtime. Business code is no longer executed as an injected script string.
 - `src/core` owns DOM-free calculations, parsing, transformations, and render models.
 - `src/app` and `src/features` own state and interaction orchestration; `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench and dialogs.
 - `InteractionManager` makes measure, segment, waypoint, escape, and Day-preview sessions mutually exclusive.
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
 - `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, and Escape shortcut. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
 
-`src/app/runtime.ts` has been reduced from 8,089 lines to about 340. It now contains only core/app compatibility bindings, release version, restore boot, unified command registration, and initial invalidation. Files, storage, map, markers, elevation, measure, segment, Day, escape, trail mutations, localization, and DOM orchestration have 13 single vertical runtime owners. `composeClassicRuntime()` assembles them once in the original order, with no retained fallback or dual path. The file split is complete; future work converts these still-classic owners into typed controllers with explicit contexts rather than shortening the boot glue further.
+`v2.0.0` removes `executeClassicScript()`, the runtime composer, raw runtime imports, and all 13 classic owners. `src/app/runtime/studio.ts` is a normal TypeScript module that directly receives `document`, `CommandRegistry`, and `DialogController`; it no longer depends on `window.HikingTrailCore/HikingTrailApp`. Typed controllers continue to own trail, storage, file import/export, waypoint, measure, segment, Day-preview, and escape business state. Browser DOM/Leaflet orchestration lives in the direct runtime, while new behavior should start in controllers, adapters, or UI modules. A read-only inspector is available only under `?studio-test=1`; normal releases expose no classic globals.
 
 ## Development and Tests
 
@@ -108,9 +108,9 @@ npm run test:visual:capture
 | Milestone 3: Core modularization | Complete | Core math, KML, storage, measurement, itinerary, and elevation models use TypeScript as their source of truth |
 | Milestone 4: UI systemization | Complete | The Workbench unifies desktop, mobile, sidebar, bottom bar, elevation dock, and bottom sheets |
 | Milestone 5: Release pipeline | Complete | Vite single-file builds, release metadata, full checks, and GitHub Pages deployment are fixed |
-| Milestone 6: Entry and orchestration | Complete | Outdoor Route Studio naming, the small shell, bootstrap, four managers, and seven-side/five-bottom Workbench contracts are in place |
+| Milestone 6: Architecture & UX 2.0 | Complete | Classic bridge/composer removed; direct module boot, shared managers, Workbench, and single-HTML release pipeline finalized |
 
-Milestone 6 now includes the entry boundary and the complete vertical split of the classic runtime; `runtime.ts` is about 340 lines of boot/command glue. This does not claim that all 13 owners are typed. Future refactoring focuses on explicit dependencies and typed controllers.
+Milestone 6 establishes the Architecture 2.0 baseline: production boot contains no runtime string injection, fragment composer, or dual execution path. Future releases focus on typed features, performance, and new import formats rather than another boot-architecture rewrite.
 
 ## GPX / GeoJSON
 
@@ -124,7 +124,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v1.32.2
+Version: v2.0.0
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.

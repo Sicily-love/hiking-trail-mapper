@@ -4,14 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const html = await readFile(path.join(root, 'hiking-trail-mapper.html'), 'utf8');
+const versionSource = await readFile(path.join(root, 'src/app/version.ts'), 'utf8');
 const changelogSource = await readFile(
   path.join(root, 'src/features/localization/changelog.ts'),
   'utf8',
 );
 const check = process.argv.includes('--check');
-const version = html.match(/const APP_VERSION = '(v\d+\.\d+\.\d+)'/)?.[1];
-if(!version) throw new Error('Generated HTML is missing APP_VERSION');
+const version = versionSource.match(/STUDIO_VERSION = '(v\d+\.\d+\.\d+)'/)?.[1];
+if(!version) throw new Error('Version module is missing STUDIO_VERSION');
 
 const changelogBlock = changelogSource.match(
   /export const CHANGELOG = (\[[\s\S]*?\n\]) satisfies readonly ChangelogEntry\[\];/,

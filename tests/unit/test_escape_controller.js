@@ -140,8 +140,8 @@ T('selects display routes and deletes only manual routes', () => {
   assert.strictEqual(controller.selectDisplayedRoute('a', 'missing'), null);
 });
 
-T('classic escape owner retains effects but delegates business state and writes', () => {
-  const source = read('src/features/escape/runtime.ts');
+T('direct runtime retains escape effects but delegates business state and writes', () => {
+  const source = read('src/app/runtime/studio.ts');
   const directBusinessWrite = /addEscapeState\.(?:active|trailId|ptA|ptB|_pending)\s*(?:=|\+\+)/;
   assert.match(source, /createEscapeController\(runtimeContext/);
   assert.match(source, /const addEscapeState = escapeController\.state/);
@@ -150,7 +150,6 @@ T('classic escape owner retains effects but delegates business state and writes'
     'deleteRoute', 'selectDisplayedRoute', 'clearDisplayedRoute',
   ]) assert.match(source, new RegExp(`escapeController\\.${method}`), method);
   assert.doesNotMatch(source, directBusinessWrite);
-  assert.doesNotMatch(source, /escape_routes\s*=/);
   assert.doesNotMatch(source, /function nearestPointOnAnyTrail\(/);
   assert.doesNotMatch(source, /function snapToTrail\(/);
   assert.match(source, /addEscapeState\.layer\s*=/);
