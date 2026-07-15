@@ -124,6 +124,7 @@ export const APP_SHELL = `
 <section id="segment-panel" class="floating-panel">
   <header class="tool-panel-header">
     <b class="tool-panel-title">行程分段</b>
+    <span id="segment-dirty-indicator" class="segment-dirty-indicator" hidden>存在未应用修改</span>
     <button id="segment-close" class="tool-panel-close">关闭</button>
   </header>
   <div id="segment-hint" class="tool-panel-hint">在主轨迹上点击起点，之后每次点击增加一天。</div>
@@ -131,7 +132,7 @@ export const APP_SHELL = `
   <footer class="tool-panel-footer">
     <div class="panel-actions panel-actions-four">
       <button id="segment-undo" class="panel-btn muted">撤销</button>
-      <button id="segment-clear" class="panel-btn muted">清空</button>
+      <button id="segment-restore" class="panel-btn muted">还原</button>
       <button id="segment-apply" class="panel-btn primary">应用</button>
       <button id="segment-exit" class="panel-btn ghost">退出</button>
     </div>
@@ -148,6 +149,7 @@ export const APP_SHELL = `
     <div class="escape-result-grid">
       <div>沿迹：<b id="ae-dist" class="escape-value-warn">-</b></div>
       <div>依据轨迹：<b id="ae-trail" class="escape-value-info">-</b></div>
+      <div>对应行程：<b id="ae-day" class="escape-value-info">-</b></div>
       <div>爬升：<b id="ae-asc" class="escape-value-up">-</b></div>
       <div>下降：<b id="ae-desc" class="escape-value-down">-</b></div>
       <div>起点：<b id="ae-eA" class="escape-value-neutral">-</b></div>
@@ -156,6 +158,10 @@ export const APP_SHELL = `
     <div class="form-row">
       <label class="form-label" for="addescape-name">路线名称：</label>
       <input id="addescape-name" class="form-input" type="text" placeholder="自动填写，可修改">
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="addescape-day-select">对应行程：</label>
+      <select id="addescape-day-select" class="form-input"></select>
     </div>
     <div class="escape-actions">
       <button id="addescape-commit" class="panel-btn danger">保存到下撤方案</button>

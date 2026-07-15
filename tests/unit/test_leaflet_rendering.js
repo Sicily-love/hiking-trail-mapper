@@ -81,6 +81,26 @@ T('map controller owns active-group selection without classic globals', () => {
   assert.ok(model.polylines.every(line => line.trail.id === 'a'));
 });
 
+T('escape reference trail renders last with a visible halo while alternatives dim', () => {
+  const points = [[30,100,1000],[31,101,1100]];
+  const model = app.buildTrackRenderModel({
+    trails:[
+      {id:'a', name:'Main', color:'#080', track:points, active:true},
+      {id:'b', name:'Escape base', color:'#888', track:points, active:true},
+    ],
+    primaryTrailId:'a', mode:'waypoint', showTrack:true, activeEscape:null,
+    escapeReferenceTrailId:'b', dayPalette:['#123456'], elevationBandCount:40,
+  });
+  const halo = model.polylines.find(line => line.key === 'b:escape-reference-halo');
+  const reference = model.polylines.find(line => line.key === 'b:waypoint-reference');
+  const dimmedMain = model.polylines.find(line => line.key.startsWith('a:elev:'));
+  assert.ok(halo);
+  assert.strictEqual(halo.lineStyle.color, '#F59E0B');
+  assert.strictEqual(reference.lineStyle.opacity, 1);
+  assert.strictEqual(model.polylines.at(-1).trail.id, 'b');
+  assert.ok(Number(dimmedMain.lineStyle.opacity) < 0.3);
+});
+
 T('track adapter exclusively creates layers and throttles hover callbacks', () => {
   const leaflet = createLeafletHarness();
   const trackLayer = createLayer();

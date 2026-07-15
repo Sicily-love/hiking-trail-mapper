@@ -104,6 +104,11 @@ test('FIT is last-request-wins and reset is epoch guarded', () => {
   assert.ok(execute.includes('request.resetEpoch === workspaceResetEpoch'));
   assert.ok(fit.includes('renderScheduler.requestFit'));
   assert.ok(fit.includes('pendingWorkspaceFit.resolve(false)'));
+  assert.ok(reset.includes('gesture:Boolean(opts.gesture)'));
+  assert.ok(execute.includes("typeof map.flyToBounds === 'function'"));
+  assert.ok(execute.includes('stepCount'));
+  assert.ok(execute.includes('duration'));
+  assert.ok(runtime.includes('resetView({restoreActive:true, gesture:true})'));
   assert.strictEqual((runtime.match(/map\.fitBounds\(/g) || []).length, 1);
 });
 

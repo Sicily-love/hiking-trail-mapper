@@ -1,5 +1,9 @@
 import type { RuntimeContext } from '../../app/runtime/context.ts';
-import { buildManualEscapeRoute } from '../../core/escape.ts';
+import {
+  buildManualEscapeRoute,
+  escapeItineraryDays,
+  resolveEscapeRouteDay,
+} from '../../core/escape.ts';
 import { haversine } from '../../core/geo.ts';
 import type {
   EscapeAnchorPoint,
@@ -42,6 +46,8 @@ export interface EscapeController {
   selectA: (point: EscapeAnchorPoint) => void;
   selectB: (point: EscapeAnchorPoint) => void;
   compute: () => EscapeRoutePreviewResult;
+  availableDays: () => number[];
+  setDay: (day: number) => boolean;
   commit: (name: string) => EscapeRoute | null;
   deleteRoute: (trailId: string, routeId: string) => boolean;
   selectDisplayedRoute: (trailId: string, routeId: string) => EscapeRoute | null;
@@ -142,8 +148,24 @@ export function createEscapeController(
     const referenceTrail = findTrail(state.referenceTrailId);
     if(!referenceTrail?.track.length) return {ok:false, reason:'empty-track'};
     const result = buildManualEscapeRoute(referenceTrail, pointA, pointB, createRouteId());
+    if(result.ok) {
+      const primaryTrail = findTrail(state.trailId);
+      const day = primaryTrail ? resolveEscapeRouteDay(primaryTrail, result.preview.pointA) : null;
+      if(day != null) result.preview.route.day = day;
+    }
     state._pending = result.ok ? result.preview.route : null;
     return result;
+  };
+
+  const availableDays = (): number[] => {
+    const trail = findTrail(state.trailId);
+    return trail ? escapeItineraryDays(trail) : [];
+  };
+
+  const setDay = (day: number): boolean => {
+    if(!state._pending || !availableDays().includes(day)) return false;
+    state._pending.day = day;
+    return true;
   };
 
   const commit = (name: string): EscapeRoute | null => {
@@ -154,8 +176,9 @@ export function createEscapeController(
     if(cleanName) {
       const anchorName = route._anchor?.trailName || '';
       const terrain = route.drop_m > 0 ? '下降' : route.drop_m < 0 ? '上升' : '平路';
+      const direction = route.direction === 'reverse' ? '逆向（反方向）' : '正向';
       route.name = cleanName;
-      route.desc = `手动标注 · 依据轨迹《${anchorName}》，沿轨迹约 ${route.distance_km}km，落差 ${Math.abs(route.drop_m)}m（${terrain}）。`;
+      route.desc = `手动标注 · ${direction} · 依据轨迹《${anchorName}》，沿轨迹约 ${route.distance_km}km，落差 ${Math.abs(route.drop_m)}m（${terrain}）。`;
     }
     trail.escape_routes = (trail.escape_routes || []).filter(candidate => candidate.id !== route.id);
     trail.escape_routes.push(route);
@@ -200,6 +223,8 @@ export function createEscapeController(
     selectA,
     selectB,
     compute,
+    availableDays,
+    setDay,
     commit,
     deleteRoute,
     selectDisplayedRoute,

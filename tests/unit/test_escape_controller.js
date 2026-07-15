@@ -55,6 +55,7 @@ T('builds a bounded A-to-B route and keeps endpoint direction', () => {
   assert.deepStrictEqual(forward.preview.route.line[0], [trail.track[0][0], trail.track[0][1]]);
   assert.deepStrictEqual(forward.preview.route.line.at(-1), [trail.track[400][0], trail.track[400][1]]);
   assert.strictEqual(forward.preview.route.drop_m, -800);
+  assert.strictEqual(forward.preview.route.direction, 'forward');
   assert.ok(forward.preview.ascentM > 0);
   assert.strictEqual(forward.preview.descentM, 0);
 
@@ -63,6 +64,7 @@ T('builds a bounded A-to-B route and keeps endpoint direction', () => {
   assert.deepStrictEqual(reverse.preview.route.line[0], [trail.track[400][0], trail.track[400][1]]);
   assert.deepStrictEqual(reverse.preview.route.line.at(-1), [trail.track[0][0], trail.track[0][1]]);
   assert.strictEqual(reverse.preview.route.drop_m, 800);
+  assert.strictEqual(reverse.preview.route.direction, 'reverse');
   assert.strictEqual(reverse.preview.ascentM, 0);
   assert.ok(reverse.preview.descentM > 0);
   assert.match(reverse.preview.route.desc, /逆向/);
@@ -78,6 +80,26 @@ T('rejects empty tracks and anchors that snap to one point', () => {
     core.buildManualEscapeRoute(trail, anchor(trail, 10), anchor(trail, 10), 'x'),
     {ok:false, reason:'same-point'},
   );
+});
+
+T('resolves the itinerary day from point metadata with day_meta fallback', () => {
+  const explicit = {id:'a', name:'Main', track:track()};
+  explicit.track.forEach((item, index) => { item[5] = index < 200 ? 1 : 2; });
+  assert.strictEqual(core.resolveEscapeRouteDay(explicit, anchor(explicit, 260)), 2);
+
+  const fallback = {
+    id:'b', name:'Fallback', track:track(),
+    day_meta:[
+      {d:1, i_start:0, i_end:150},
+      {d:2, i_start:151, i_end:400},
+    ],
+  };
+  assert.strictEqual(core.resolveEscapeRouteDay(fallback, anchor(fallback, 260)), 2);
+  assert.deepStrictEqual(core.escapeItineraryDays(fallback), [1, 2]);
+  assert.deepStrictEqual(core.escapeItineraryDays({id:'plain', name:'Plain', track:track()}), [1]);
+  assert.strictEqual(core.resolveEscapeRouteDirection({desc:'原路返回（反向）'}), 'reverse');
+  assert.strictEqual(core.resolveEscapeRouteDirection({direction:'forward', desc:'反向'}), 'forward');
+  assert.strictEqual(core.resolveEscapeRouteDay({id:'empty', name:'Empty', track:[]}, {lat:0, lng:0}), null);
 });
 
 T('snaps only to the selected reference trail in the active group and enforces the radius', () => {
@@ -102,7 +124,8 @@ T('snaps only to the selected reference trail in the active group and enforces t
 
 T('owns lifecycle, selection, preview, commit, and stale-primary rejection', () => {
   const first = {id:'a', name:'Main', group:'A', track:track()};
-  const second = {id:'b', name:'Second', group:'A', track:track(31)};
+  first.track.forEach((item, index) => { item[5] = index < 200 ? 1 : 2; });
+  const second = {id:'b', name:'Second', group:'A', track:track(30.002)};
   const {context, controller, effects} = createHarness([first, second]);
   const state = controller.state;
   assert.strictEqual(controller.enter('a'), true);
@@ -114,10 +137,14 @@ T('owns lifecycle, selection, preview, commit, and stale-primary rejection', () 
   const result = controller.compute();
   assert.strictEqual(result.ok, true);
   assert.ok(state._pending);
+  assert.deepStrictEqual(controller.availableDays(), [1, 2]);
+  assert.strictEqual(controller.setDay(3), false);
+  assert.strictEqual(controller.setDay(2), true);
   const committed = controller.commit(' Ridge exit ');
   assert.strictEqual(committed.name, 'Ridge exit');
   assert.strictEqual(first.escape_routes.length, 1);
   assert.strictEqual(committed._anchor.trailId, 'b');
+  assert.strictEqual(committed.day, 2);
   assert.strictEqual(effects.revisions, 1);
 
   controller.selectA(anchor(second, 20));
@@ -155,13 +182,19 @@ T('direct runtime retains escape effects but delegates business state and writes
   assert.match(source, /createEscapeController\(runtimeContext/);
   assert.match(source, /const addEscapeState = escapeController\.state/);
   for(const method of [
-    'enter', 'setReferenceTrail', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute', 'commit',
+    'enter', 'setReferenceTrail', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute',
+    'availableDays', 'setDay', 'commit',
     'deleteRoute', 'selectDisplayedRoute', 'clearDisplayedRoute',
   ]) assert.match(source, new RegExp(`escapeController\\.${method}`), method);
   assert.doesNotMatch(source, directBusinessWrite);
   assert.doesNotMatch(source, /function nearestPointOnAnyTrail\(/);
   assert.doesNotMatch(source, /function snapToTrail\(/);
   assert.match(source, /addEscapeState\.layer\s*=/);
+  assert.match(source, /escapeReferenceTrailId:addEscapeState\.active/);
+  assert.match(source, /document\.getElementById\('ae-day'\)/);
+  assert.match(source, /addescape-day-select/);
+  assert.match(source, /resolveEscapeRouteDirection/);
+  assert.match(source, /escape-filter-bar/);
 });
 
 console.log('\n══════════════════════════════════════════════════');

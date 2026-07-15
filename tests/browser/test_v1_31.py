@@ -815,6 +815,7 @@ try:
           && interactionManager.current.phase === 'editing'
           && segmentState.points[boundaryIndex].idx === segmentDragIndex;
 
+        segmentRestore();
         enterAddWaypointMode({announce:false});
         const waypointBefore = main.waypoints.length;
         dispatchRuntimeInteraction('waypoint', {
@@ -899,6 +900,173 @@ try:
             check(label, interaction_flow.get(key) is True, str(interaction_flow))
     else:
         check("五模式统一状态机", False, str(interaction_flow))
+
+    print("\n▸ v2.0.6 交互回归：下撤筛选、分段确认与海拔收放")
+    patch_interactions = evalj("""
+      (async () => {
+        const waitFrames = (count = 2) => new Promise(resolve => {
+          const step = () => count-- <= 0 ? resolve() : requestAnimationFrame(step);
+          requestAnimationFrame(step);
+        });
+        if(interactionManager.current.kind !== 'idle') interactionManager.cancel('test-reset');
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        if(!main?.track?.length) return {error:'missing-primary'};
+
+        const originalDays = main.track.map(point => point[5]);
+        const half = Math.floor(main.track.length / 2);
+        main.track.forEach((point, index) => { point[5] = index < half ? 1 : 2; });
+        const makeAnchor = index => {
+          const point = main.track[index];
+          return {
+            lat:point[0], lng:point[1], elev:point[2] || 0, km:point[3] || 0,
+            trailId:main.id, trailName:main.name, trackIdx:index,
+          };
+        };
+
+        addEscapeEnter();
+        await waitFrames();
+        const referenceHighlighted = trackLayer.getLayers().some(layer =>
+          layer.options?.color === '#F59E0B' && layer.options?.weight === 9);
+        const pointA = makeAnchor(Math.max(1, Math.floor(main.track.length * 0.15)));
+        const pointB = makeAnchor(Math.min(main.track.length - 2, Math.floor(main.track.length * 0.8)));
+        dispatchRuntimeInteraction('escape', {type:'tap', source:'browser-regression', latlng:pointA});
+        dispatchRuntimeInteraction('escape', {type:'tap', source:'browser-regression', latlng:pointB});
+        const previewed = interactionManager.current.kind === 'escape'
+          && interactionManager.current.phase === 'preview'
+          && !!addEscapeState._pending;
+        const daySelect = document.getElementById('addescape-day-select');
+        const manualDayOptions = [...daySelect.options].map(option => option.value).join('|') === '1|2';
+        daySelect.value = '2';
+        daySelect.dispatchEvent(new Event('change', {bubbles:true}));
+        const manualDayApplied = addEscapeState._pending?.day === 2
+          && document.getElementById('ae-day').textContent === 'D2';
+        document.getElementById('addescape-name').value = 'Browser escape filter probe';
+        const routeId = addEscapeState._pending?.id;
+        addEscapeCommit();
+        await waitFrames();
+
+        const routeItem = document.querySelector(`.escape-item[data-id="${routeId}"]`);
+        const filterBar = document.querySelector('.escape-filter-bar');
+        if(!routeItem || !filterBar) return {
+          error:'missing-saved-route-filter',
+          previewed,
+          routeId,
+          pendingDay:addEscapeState._pending?.day || null,
+          savedRoutes:(main.escape_routes || []).map(route => ({id:route.id, name:route.name, day:route.day})),
+          dayTabHtml:document.getElementById('tab-days')?.innerHTML.slice(-500),
+        };
+        const nameFilter = filterBar?.querySelector('.escape-filter-input');
+        const selects = [...(filterBar?.querySelectorAll('.escape-filter-select') || [])];
+        const directionFilter = selects[0];
+        const dayFilter = selects[1];
+        const referenceFilter = selects[2];
+        const filtersFit = filterBar.scrollWidth <= filterBar.clientWidth
+          && [...filterBar.children].every(control => control.scrollWidth <= control.clientWidth + 1);
+        nameFilter.value = 'browser escape';
+        nameFilter.dispatchEvent(new Event('input', {bubbles:true}));
+        directionFilter.value = 'forward';
+        directionFilter.dispatchEvent(new Event('change', {bubbles:true}));
+        dayFilter.value = '2';
+        dayFilter.dispatchEvent(new Event('change', {bubbles:true}));
+        referenceFilter.value = main.id;
+        referenceFilter.dispatchEvent(new Event('change', {bubbles:true}));
+        const combinedFiltersMatch = !!routeItem && !routeItem.hidden;
+        directionFilter.value = 'reverse';
+        directionFilter.dispatchEvent(new Event('change', {bubbles:true}));
+        const directionFilterHides = routeItem?.hidden === true;
+        nameFilter.value = 'no matching route';
+        nameFilter.dispatchEvent(new Event('input', {bubbles:true}));
+        const filteredEmptyVisible = document.querySelector('.itinerary-escape-section .itinerary-escape-empty:not([hidden])')?.textContent.includes('筛选');
+        escapeController.deleteRoute(main.id, routeId);
+        main.track.forEach((point, index) => { point[5] = originalDays[index]; });
+        buildDaysTab();
+
+        segmentEnter();
+        const originalIndexes = segmentState.points.map(point => point.idx);
+        let insertIndex = Math.floor(main.track.length * 0.37);
+        while(originalIndexes.includes(insertIndex) && insertIndex < main.track.length - 2) insertIndex += 1;
+        const inserted = segmentInsertPoint(pointFromTrackIndex(main.track, insertIndex));
+        const dirtyVisible = inserted && segmentController.isDirty()
+          && !document.getElementById('segment-dirty-indicator').hidden;
+        document.getElementById('segment-restore').click();
+        const restoreWorks = !segmentController.isDirty()
+          && segmentState.points.map(point => point.idx).join('|') === originalIndexes.join('|');
+        segmentInsertPoint(pointFromTrackIndex(main.track, insertIndex));
+
+        const cancelExit = requestSegmentExit('browser-cancel');
+        await waitFrames(1);
+        const cancelDialogVisible = !!document.querySelector('dialog.workbench-dialog[open]');
+        document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click();
+        const cancelResult = await cancelExit;
+        const cancelKeepsEditing = cancelResult === false && segmentState.active && segmentController.isDirty();
+
+        const confirmExit = requestSegmentExit('browser-confirm');
+        await waitFrames(1);
+        document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--danger')?.click();
+        const confirmResult = await confirmExit;
+        const confirmDiscards = confirmResult === true && !segmentState.active && interactionManager.current.kind === 'idle';
+
+        const elevationPanel = document.getElementById('elev-bar');
+        const elevationToggle = document.getElementById('elev-toggle');
+        if(elevationPanel.classList.contains('collapsed')) elevationToggle.click();
+        const expandedMapHeight = document.getElementById('map').getBoundingClientRect().height;
+        elevationToggle.click();
+        await waitFrames();
+        const collapsedDockHeight = document.querySelector('.studio-bottom-dock').getBoundingClientRect().height;
+        const collapsedMapHeight = document.getElementById('map').getBoundingClientRect().height;
+        const elevationCollapsed = elevationPanel.classList.contains('collapsed')
+          && elevationToggle.getAttribute('aria-expanded') === 'false'
+          && collapsedDockHeight <= 45
+          && collapsedMapHeight > expandedMapHeight + 100;
+        elevationToggle.click();
+        await waitFrames();
+        const elevationExpanded = !elevationPanel.classList.contains('collapsed')
+          && elevationToggle.getAttribute('aria-expanded') === 'true';
+
+        return {
+          referenceHighlighted,
+          previewed,
+          manualDayOptions,
+          manualDayApplied,
+          combinedFiltersMatch,
+          filtersFit,
+          directionFilterHides,
+          filteredEmptyVisible,
+          dirtyVisible,
+          restoreWorks,
+          cancelDialogVisible,
+          cancelKeepsEditing,
+          confirmDiscards,
+          elevationCollapsed,
+          elevationExpanded,
+        };
+      })()
+    """)
+    if isinstance(patch_interactions, dict) and 'error' not in patch_interactions and '__error__' not in patch_interactions:
+        check("下撤依据轨迹在真实地图图层高亮", patch_interactions.get('referenceHighlighted') is True, str(patch_interactions))
+        check("下撤方案可手动选择并保存对应 Day",
+              patch_interactions.get('previewed') is True
+              and patch_interactions.get('manualDayOptions') is True
+              and patch_interactions.get('manualDayApplied') is True,
+              str(patch_interactions))
+        check("名称、方向、Day 与依据轨迹联合筛选有效",
+              patch_interactions.get('combinedFiltersMatch') is True
+              and patch_interactions.get('filtersFit') is True
+              and patch_interactions.get('directionFilterHides') is True
+              and patch_interactions.get('filteredEmptyVisible') is True,
+              str(patch_interactions))
+        check("还原分段恢复进入编辑时的边界",
+              patch_interactions.get('dirtyVisible') is True and patch_interactions.get('restoreWorks') is True,
+              str(patch_interactions))
+        check("未应用分段退出时可取消并继续编辑",
+              patch_interactions.get('cancelDialogVisible') is True and patch_interactions.get('cancelKeepsEditing') is True,
+              str(patch_interactions))
+        check("确认放弃后才退出分段模式", patch_interactions.get('confirmDiscards') is True, str(patch_interactions))
+        check("海拔分析真实收起并可再次展开",
+              patch_interactions.get('elevationCollapsed') is True and patch_interactions.get('elevationExpanded') is True,
+              str(patch_interactions))
+    else:
+        check("v2.0.6 专项浏览器交互", False, str(patch_interactions))
 
     print("\n▸ Performance 2.0：调度、降采样、Marker diff 与最后复位")
     performance_flow = evalj("""

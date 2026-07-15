@@ -134,10 +134,14 @@ export {
 
 export {
   buildManualEscapeRoute,
+  escapeItineraryDays,
+  resolveEscapeRouteDirection,
+  resolveEscapeRouteDay,
   type EscapeAnchorPoint,
   type EscapeReferenceTrail,
   type EscapeRoute,
   type EscapeRouteAnchor,
+  type EscapeRouteDirection,
   type EscapeRoutePreview,
   type EscapeRoutePreviewResult,
 } from './escape.ts';

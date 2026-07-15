@@ -693,6 +693,10 @@ html[data-workbench='2'] .studio-map-stage {
   background:var(--studio-map);
 }
 
+html[data-workbench='2'] .studio-map-stage:has(> .studio-bottom-dock #elev-bar.collapsed) {
+  grid-template-rows:minmax(0,1fr) 44px;
+}
+
 html[data-workbench='2'] .studio-map-stage > #map {
   position:relative;
   z-index:1;
@@ -785,8 +789,10 @@ html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed {
   height:100% !important;
 }
 
-html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-canvas {
-  display:block !important;
+html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-canvas,
+html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-crosshair,
+html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-tip {
+  display:none !important;
 }
 
 html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-label {
@@ -796,13 +802,41 @@ html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-label {
 
 html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed .elev-stats {
   top:6px;
-  right:10px;
+  right:42px;
+}
+
+html[data-workbench='2'] .studio-bottom-pane > #elev-bar.collapsed ~ #measure-panel {
+  display:none !important;
 }
 
 html[data-workbench='2'] .studio-bottom-pane #elev-bar .panel-drag-grip,
-html[data-workbench='2'] .studio-bottom-pane #measure-panel .measure-panel-grip,
-html[data-workbench='2'] .studio-bottom-pane #elev-toggle {
+html[data-workbench='2'] .studio-bottom-pane #measure-panel .measure-panel-grip {
   display:none !important;
+}
+
+html[data-workbench='2'] .studio-bottom-pane #elev-toggle {
+  position:absolute;
+  top:6px;
+  right:8px;
+  z-index:12;
+  display:grid !important;
+  place-items:center;
+  width:26px;
+  height:24px;
+  padding:0;
+  border:1px solid var(--studio-line-strong);
+  border-radius:4px;
+  background:var(--studio-surface);
+  color:var(--studio-muted);
+  box-shadow:0 2px 7px rgba(25,39,30,.12);
+}
+
+html[data-workbench='2'] .studio-bottom-pane #elev-toggle svg {
+  transition:transform .18s ease;
+}
+
+html[data-workbench='2'] .studio-bottom-pane #elev-toggle.is-collapsed svg {
+  transform:rotate(180deg);
 }
 
 html[data-workbench='2'] .studio-bottom-pane #elev-bar .elev-canvas {

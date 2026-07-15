@@ -17,6 +17,8 @@ export interface EscapeRouteAnchor {
   trailName: string;
 }
 
+export type EscapeRouteDirection = 'forward' | 'reverse';
+
 export interface EscapeRoute {
   id: string;
   name: string;
@@ -24,6 +26,8 @@ export interface EscapeRoute {
   distance_km: number;
   straight_km?: number;
   drop_m: number;
+  day?: number;
+  direction?: EscapeRouteDirection;
   line: Array<[number, number]>;
   _manual?: boolean;
   _anchor?: EscapeRouteAnchor;
@@ -33,6 +37,7 @@ export interface EscapeReferenceTrail {
   id: string;
   name: string;
   track: TrackTuple[];
+  day_meta?: Array<{d?: number; i_start?: number; i_end?: number}>;
 }
 
 export interface EscapeRoutePreview {
@@ -59,6 +64,46 @@ function nearestTrackIndex(track: TrackTuple[], lat: number, lng: number): numbe
     }
   }
   return bestIndex;
+}
+
+export function resolveEscapeRouteDay(
+  trail: EscapeReferenceTrail,
+  point: Pick<EscapeAnchorPoint, 'lat' | 'lng'>,
+): number | null {
+  if(!trail.track.length) return null;
+  const index = nearestTrackIndex(trail.track, point.lat, point.lng);
+  const explicitDay = Math.trunc(Number(trail.track[index]?.[5]));
+  if(explicitDay > 0) return explicitDay;
+  for(const meta of trail.day_meta || []) {
+    const day = Math.trunc(Number(meta.d));
+    const start = Math.trunc(Number(meta.i_start));
+    const end = Math.trunc(Number(meta.i_end));
+    if(day > 0 && Number.isFinite(start) && Number.isFinite(end) && index >= start && index <= end) {
+      return day;
+    }
+  }
+  return null;
+}
+
+export function escapeItineraryDays(trail: EscapeReferenceTrail): number[] {
+  const days = new Set<number>();
+  for(const point of trail.track) {
+    const day = Math.trunc(Number(point[5]));
+    if(day > 0) days.add(day);
+  }
+  for(const meta of trail.day_meta || []) {
+    const day = Math.trunc(Number(meta.d));
+    if(day > 0) days.add(day);
+  }
+  if(!days.size && trail.track.length) days.add(1);
+  return [...days].sort((left, right) => left - right);
+}
+
+export function resolveEscapeRouteDirection(
+  route: Pick<EscapeRoute, 'direction' | 'desc'>,
+): EscapeRouteDirection {
+  if(route.direction === 'forward' || route.direction === 'reverse') return route.direction;
+  return /逆向|反向|返回|reverse|backtrack/i.test(route.desc || '') ? 'reverse' : 'forward';
 }
 
 function anchorFromTrack(trail: EscapeReferenceTrail, index: number): EscapeAnchorPoint {
@@ -127,6 +172,7 @@ export function buildManualEscapeRoute(
     desc:`手动选点 · ${direction} · 依据轨迹《${trail.name}》，沿轨迹约 ${distanceKm}km，落差 ${Math.abs(dropM)}m（${terrain}）。↑${ascentM}m ↓${descentM}m`,
     distance_km:distanceKm,
     drop_m:dropM,
+    direction:indexA < indexB ? 'forward' : 'reverse',
     line:thinEscapeLine(directedSegment, maxLinePoints),
     _manual:true,
     _anchor:{trailId:trail.id, trailName:trail.name},

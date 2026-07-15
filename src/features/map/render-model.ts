@@ -40,12 +40,13 @@ export interface BuildTrackRenderModelOptions {
   mode: 'day' | 'elev' | 'waypoint';
   showTrack: boolean;
   activeEscape: string | null;
+  escapeReferenceTrailId?: string | null;
   dayPalette: readonly string[];
   elevationBandCount?: number;
 }
 
 export interface MapRenderController {
-  buildTracks(options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount'>): TrackRenderModel;
+  buildTracks(options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount' | 'escapeReferenceTrailId'>): TrackRenderModel;
 }
 
 /** Reads map state through RuntimeContext so browser orchestration does not mirror selection rules. */
@@ -53,7 +54,7 @@ export function createMapRenderController(
   context: RuntimeContext<TrackRenderTrail>,
 ): MapRenderController {
   const buildTracks = (
-    options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount'>,
+    options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount' | 'escapeReferenceTrailId'>,
   ): TrackRenderModel => {
     const state = context.state.snapshot();
     const trails: TrackRenderInputTrail[] = context.project.trails.map(trail => ({
@@ -121,27 +122,50 @@ export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): Tr
   const model: TrackRenderModel = {polylines: [], elevationBands: 0, minElevation, maxElevation};
   if(!options.showTrack) return model;
 
-  const ordered = [
+  let ordered = [
     ...options.trails.filter(trail => trail.id !== options.primaryTrailId),
     ...options.trails.filter(trail => trail.id === options.primaryTrailId),
   ];
+  if(options.escapeReferenceTrailId) {
+    ordered = [
+      ...ordered.filter(trail => trail.id !== options.escapeReferenceTrailId),
+      ...ordered.filter(trail => trail.id === options.escapeReferenceTrailId),
+    ];
+  }
 
   for(const trail of ordered) {
     if(!trail.active || trail.track.length < 2) continue;
     const isMain = trail.id === options.primaryTrailId;
+    const isEscapeReference = trail.id === options.escapeReferenceTrailId;
+    const escapeSelecting = Boolean(options.escapeReferenceTrailId);
+    if(isEscapeReference) {
+      model.polylines.push({
+        key:`${trail.id}:escape-reference-halo`, trail, latLngs:latLngs(trail.track),
+        lineStyle:{color:'#F59E0B', weight:9, opacity:0.92, smoothFactor:1, lineCap:'round', lineJoin:'round', interactive:false},
+      });
+    }
     if(options.mode === 'waypoint' && !isMain) {
       model.polylines.push({
         key:`${trail.id}:waypoint-reference`, trail, latLngs:latLngs(trail.track), selectable:true,
         tooltip:trail.name,
-        lineStyle:{color:trail.color || '#888', weight:1.8, opacity:0.45, dashArray:'4,6'},
+        lineStyle:{
+          color:trail.color || '#888',
+          weight:isEscapeReference ? 4 : 1.8,
+          opacity:isEscapeReference ? 1 : (escapeSelecting ? 0.16 : 0.45),
+          dashArray:isEscapeReference ? undefined : '4,6',
+        },
       });
       continue;
     }
 
     const baseOpacity = isMain ? 0.95 : 0.4;
     const baseWeight = isMain ? 4.5 : 2.5;
-    const opacity = options.activeEscape ? baseOpacity * 0.35 : baseOpacity;
-    const weight = options.activeEscape ? Math.max(1, baseWeight - 1.5) : baseWeight;
+    const opacity = options.activeEscape
+      ? baseOpacity * 0.35
+      : escapeSelecting && !isEscapeReference ? baseOpacity * 0.24 : baseOpacity;
+    const weight = isEscapeReference
+      ? baseWeight + 1
+      : options.activeEscape ? Math.max(1, baseWeight - 1.5) : baseWeight;
     const renderMode = options.mode === 'waypoint' && isMain ? 'elev' : options.mode;
 
     if(renderMode === 'day' && !isMain) {

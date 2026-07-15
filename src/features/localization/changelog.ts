@@ -9,6 +9,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.6',
+    date: '2026-07-15',
+    items: {
+      zh: ['下撤方案支持手动选择对应 Day，并保存明确的正向或反向信息。', '行程页下撤方案支持按名称、方向、Day 和依据轨迹联合筛选。', '分段编辑显示未应用状态，退出或切换工具前通过统一对话框确认。', '新增下撤高亮、分段还原、退出确认和海拔收放的真实 Chrome 交互回归。'],
+      en: ['Allow escape routes to select an itinerary day manually and persist an explicit direction.', 'Filter itinerary escape routes by name, direction, day, and reference trail together.', 'Show unapplied segment changes and confirm before exiting or switching tools.', 'Add real Chrome interaction regressions for escape highlighting, segment restore, exit confirmation, and elevation collapse.'],
+    },
+  },
+  {
+    version: 'v2.0.5',
+    date: '2026-07-15',
+    items: {
+      zh: ['下撤规划高亮当前依据轨迹，并将方案关联到对应行程 Day。', '复位视图改为按缩放级差平滑过渡，接近触控缩放的节奏。', '海拔分析栏支持收起与展开，收起后释放地图空间并记忆状态。', '行程分段改为还原进入编辑时的分段与营地信息。'],
+      en: ['Highlight the selected escape reference trail and associate saved routes with the matching itinerary day.', 'Animate view reset according to the zoom-level distance for a gesture-like transition.', 'Allow the elevation analysis dock to collapse, reclaim map space, and remember its state.', 'Restore itinerary segments and camps to their state when editing began.'],
+    },
+  },
+  {
     version: 'v2.0.4',
     date: '2026-07-14',
     items: {

@@ -53,6 +53,7 @@ T('restores remembered boundaries and camp edits on enter', () => {
   assert.strictEqual(controller.enter('missing'), false);
   assert.strictEqual(controller.enter('a'), true);
   assert.strictEqual(controller.state, state);
+  assert.strictEqual(controller.isDirty(), false);
   assert.deepStrictEqual(state.points.map(item => item.idx), [0, 2, 4]);
   assert.deepStrictEqual(state.campEdits, {1:{name:'Lake', elev:1050}});
   controller.exit();
@@ -83,19 +84,31 @@ T('inserts, moves, and deletes boundaries with camp renumbering', () => {
   assert.deepStrictEqual(controller.deleteDay(1), {ok:false, reason:'min-days'});
 });
 
-T('owns drag and fast-tap suppression while clear restores one day', () => {
-  const trail = {id:'a', track:track()};
+T('owns drag suppression while restore returns to the entry snapshot', () => {
+  const trail = {
+    id:'a', track:track(),
+    day_meta:[
+      {d:1, i_start:0, i_end:2, camp:'Lake', camp_elev:1050},
+      {d:2, i_start:2, i_end:4, camp:'Ridge', camp_elev:1150},
+    ],
+  };
   const {controller} = createHarness([trail]);
   controller.enter('a');
-  controller.insertPoint(point(trail, 2));
+  controller.moveBoundary(1, point(trail, 3));
+  assert.strictEqual(controller.isDirty(), true);
+  controller.updateCamp(1, {name:'Changed'});
   controller.beginDrag();
   controller.suppressFastTap(900);
   assert.strictEqual(controller.state._justDragged, true);
   assert.strictEqual(controller.state._fastTapUntil, 900);
   controller.endDrag();
-  assert.strictEqual(controller.clear(), true);
-  assert.deepStrictEqual(controller.state.points.map(item => item.idx), [0, 4]);
-  assert.deepStrictEqual(controller.state.campEdits, {});
+  assert.strictEqual(controller.restore(), true);
+  assert.deepStrictEqual(controller.state.points.map(item => item.idx), [0, 2, 4]);
+  assert.deepStrictEqual(controller.state.campEdits, {
+    1:{name:'Lake', elev:1050},
+    2:{name:'Ridge', elev:1150},
+  });
+  assert.strictEqual(controller.isDirty(), false);
 });
 
 T('commits day ids, metadata, waypoint days, and one revision', () => {
@@ -121,6 +134,7 @@ T('commits day ids, metadata, waypoint days, and one revision', () => {
   assert.strictEqual(trail.day_meta[0].camp_elev, 1060);
   assert.deepStrictEqual(trail.waypoints.map(item => item.day), [1, 2]);
   assert.strictEqual(effects.revisions, 1);
+  assert.strictEqual(controller.isDirty(), false);
 });
 
 T('rejects commit after the primary trail changes', () => {
@@ -143,6 +157,10 @@ T('direct runtime delegates segment state and project writes to the controller',
   assert.match(segment, /segmentController\.insertPoint/);
   assert.match(segment, /segmentController\.deleteDay/);
   assert.match(segment, /segmentController\.moveBoundary/);
+  assert.match(segment, /segmentController\.restore/);
+  assert.match(segment, /segmentController\.isDirty/);
+  assert.match(segment, /requestSegmentExit/);
+  assert.match(segment, /studioDialogs\.confirm/);
   assert.match(segment, /segmentController\.apply/);
   assert.match(map, /segmentController\.suppressFastTap/);
   assert.doesNotMatch(segment, directBusinessWrite);

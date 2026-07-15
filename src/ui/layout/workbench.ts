@@ -92,7 +92,7 @@ const AUXILIARY_CONTROLS = {
   'measure-exit': { icon: 'x', label: 'Exit measure', labelZh: '退出测距' },
   'segment-close': { icon: 'x', label: 'Close segment panel', labelZh: '关闭分段面板' },
   'segment-undo': { icon: 'undo', label: 'Undo segment', labelZh: '撤销分段' },
-  'segment-clear': { icon: 'rotate', label: 'Clear segments', labelZh: '清空分段' },
+  'segment-restore': { icon: 'rotate', label: 'Restore initial segments', labelZh: '还原初始分段' },
   'segment-apply': { icon: 'check', label: 'Apply segments', labelZh: '应用分段' },
   'segment-exit': { icon: 'x', label: 'Exit segment mode', labelZh: '退出分段' },
   'addescape-close': { icon: 'x', label: 'Close escape panel', labelZh: '关闭下撤面板' },

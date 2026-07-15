@@ -191,6 +191,10 @@ export function startStudioRuntime(
   }
 
   function beginRuntimeInteraction(kind, phase, trail, options = {}) {
+    if(kind !== 'segment' && interactionManager.current.kind === 'segment' && segmentController.isDirty()) {
+      showToast(currentLang === 'zh' ? '请先应用或退出当前分段修改' : 'Apply or discard the current segment changes first', 'info');
+      return null;
+    }
     const owner = runtimeInteractionOwner(trail);
     if(!owner) return null;
     const session = interactionManager.activate(kind, {
@@ -523,6 +527,7 @@ export function startStudioRuntime(
     const model = mapRenderController.buildTracks({
       dayPalette,
       elevationBandCount:40,
+      escapeReferenceTrailId:addEscapeState.active ? addEscapeState.referenceTrailId : null,
     });
     leafletTrackRenderer.render(model);
     renderRuntimeStats.elevationBands = model.elevationBands;
@@ -1671,6 +1676,12 @@ export function startStudioRuntime(
   }
 
   function showDaySegmentPreview(trail, dm) {
+    if(interactionManager.current.kind === 'segment') {
+      void requestSegmentExit('switch-day-preview').then(exited => {
+        if(exited) showDaySegmentPreview(trail, dm);
+      });
+      return;
+    }
     const plan = dayPreviewController.prepare(trail.id, dm, 1200);
     if(!plan) { showToast('这一天缺少可定位的轨迹范围', 'error'); return; }
     if(interactionManager.current.kind === 'day-preview'
@@ -1826,18 +1837,68 @@ export function startStudioRuntime(
   function appendEscapeRoutes(container, trail) {
     const section = document.createElement('section');
     section.className = 'itinerary-escape-section';
-    section.innerHTML = '<div class="section" style="padding-bottom:0"><h3>下撤方案</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">点击任意方案在地图上高亮，再次点击退出</div></div>';
+    section.innerHTML = currentLang === 'zh'
+      ? '<div class="section" style="padding-bottom:0"><h3>下撤方案</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">点击任意方案在地图上高亮，再次点击退出</div></div>'
+      : '<div class="section" style="padding-bottom:0"><h3>Escape routes</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Select a route to highlight it on the map; select it again to exit.</div></div>';
     if(!trail.escape_routes || trail.escape_routes.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'itinerary-escape-empty';
-      empty.textContent = '暂无下撤方案（可手动添加）';
+      empty.textContent = currentLang === 'zh' ? '暂无下撤方案（可手动添加）' : 'No escape routes yet';
       section.appendChild(empty);
     } else {
+      const routes = trail.escape_routes;
+      const filters = document.createElement('div');
+      filters.className = 'escape-filter-bar';
+      const nameFilter = document.createElement('input');
+      nameFilter.type = 'search';
+      nameFilter.className = 'escape-filter-input';
+      nameFilter.placeholder = currentLang === 'zh' ? '筛选名称' : 'Filter name';
+      nameFilter.setAttribute('aria-label', nameFilter.placeholder);
+      const directionFilter = document.createElement('select');
+      const dayFilter = document.createElement('select');
+      const referenceFilter = document.createElement('select');
+      for(const select of [directionFilter, dayFilter, referenceFilter]) select.className = 'escape-filter-select';
+      const addOption = (select, value, label) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        select.append(option);
+      };
+      addOption(directionFilter, 'all', currentLang === 'zh' ? '全部方向' : 'All directions');
+      addOption(directionFilter, 'forward', currentLang === 'zh' ? '正向' : 'Forward');
+      addOption(directionFilter, 'reverse', currentLang === 'zh' ? '反向' : 'Reverse');
+      addOption(dayFilter, 'all', currentLang === 'zh' ? '全部 Day' : 'All days');
+      [...new Set(routes.map(route => Number(route.day)).filter(day => day > 0))]
+        .sort((left, right) => left - right)
+        .forEach(day => addOption(dayFilter, String(day), `D${day}`));
+      if(routes.some(route => !route.day)) addOption(dayFilter, 'none', currentLang === 'zh' ? '未关联 Day' : 'No day');
+      addOption(referenceFilter, 'all', currentLang === 'zh' ? '全部依据轨迹' : 'All references');
+      const references = new Map();
+      routes.forEach(route => {
+        references.set(route._anchor?.trailId || trail.id, route._anchor?.trailName || trail.name);
+      });
+      references.forEach((name, id) => addOption(referenceFilter, id, name));
+      const count = document.createElement('span');
+      count.className = 'escape-filter-count';
+      filters.append(nameFilter, directionFilter, dayFilter, referenceFilter, count);
+      section.appendChild(filters);
+
+      const routeList = document.createElement('div');
+      routeList.className = 'escape-route-list';
+      const filteredEmpty = document.createElement('div');
+      filteredEmpty.className = 'itinerary-escape-empty';
+      filteredEmpty.textContent = currentLang === 'zh' ? '没有符合当前筛选条件的方案' : 'No routes match these filters';
+      filteredEmpty.hidden = true;
+      section.append(routeList, filteredEmpty);
+      const routeRows = [];
       trail.escape_routes.forEach(r => {
         const item = document.createElement('div');
         item.className = 'escape-item';
         item.dataset.trail = trail.id;
         item.dataset.id = r.id;
+        const direction = HTM_CORE.resolveEscapeRouteDirection(r);
+        const referenceId = r._anchor?.trailId || trail.id;
+        const referenceName = r._anchor?.trailName || trail.name;
         const isOtherTrail = r._anchor && r._anchor.trailId !== trail.id;
         const crossTag = isOtherTrail
           ? `<span style="background:#1e3a5f;color:#60a5fa;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">跨轨迹</span>`
@@ -1845,11 +1906,15 @@ export function startStudioRuntime(
         const manualTag = r._manual
           ? `<span style="background:#1a2e1a;color:#4ade80;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">手动</span>`
           : '';
+        const dayTag = r.day
+          ? `<span class="escape-day-tag">D${r.day}</span>`
+          : '';
+        const directionTag = `<span class="escape-direction-tag ${direction}">${direction === 'reverse' ? (currentLang === 'zh' ? '反向' : 'Reverse') : (currentLang === 'zh' ? '正向' : 'Forward')}</span>`;
         const delBtn = r._manual
           ? `<button class="escape-del-btn" data-id="${r.id}" style="float:right;background:transparent;border:none;color:#6b7280;font-size:13px;cursor:pointer;padding:0 2px;line-height:1" title="删除">🗑</button>`
           : '';
         item.innerHTML = `
-          <h4>${delBtn}⚡ ${r.name}${crossTag}${manualTag}</h4>
+          <h4>${delBtn}⚡ ${r.name}${dayTag}${directionTag}${crossTag}${manualTag}</h4>
           <p>${r.desc}</p>
           <div class="meta">
             <span>📏 沿迹 ${r.distance_km} km</span>
@@ -1876,12 +1941,33 @@ export function startStudioRuntime(
             showEscape(trail.id, r.id);
           }
         });
-        section.appendChild(item);
+        routeRows.push({item, route:r, direction, referenceId, referenceName});
+        routeList.appendChild(item);
       });
+      const applyFilters = () => {
+        const query = nameFilter.value.trim().toLocaleLowerCase();
+        let visible = 0;
+        routeRows.forEach(row => {
+          const dayValue = row.route.day ? String(row.route.day) : 'none';
+          const matches = (!query || row.route.name.toLocaleLowerCase().includes(query))
+            && (directionFilter.value === 'all' || row.direction === directionFilter.value)
+            && (dayFilter.value === 'all' || dayValue === dayFilter.value)
+            && (referenceFilter.value === 'all' || row.referenceId === referenceFilter.value);
+          row.item.hidden = !matches;
+          if(matches) visible += 1;
+        });
+        filteredEmpty.hidden = visible > 0;
+        count.textContent = `${visible}/${routeRows.length}`;
+      };
+      nameFilter.addEventListener('input', applyFilters);
+      directionFilter.addEventListener('change', applyFilters);
+      dayFilter.addEventListener('change', applyFilters);
+      referenceFilter.addEventListener('change', applyFilters);
+      applyFilters();
     }
     // 手动添加按钮
     const addBtn = document.createElement('button');
-    addBtn.textContent = '＋ 手动添加下撤路线';
+    addBtn.textContent = currentLang === 'zh' ? '＋ 手动添加下撤路线' : '+ Add escape route';
     addBtn.style.cssText = 'width:100%;margin-top:10px;padding:7px;background:rgba(127,29,29,0.3);border:1px dashed #7f1d1d;border-radius:5px;color:#fca5a5;font-size:11px;cursor:pointer';
     addBtn.addEventListener('mouseenter', () => addBtn.style.background = 'rgba(127,29,29,0.5)');
     addBtn.addEventListener('mouseleave', () => addBtn.style.background = 'rgba(127,29,29,0.3)');
@@ -3000,6 +3086,28 @@ export function startStudioRuntime(
       : 'Click <b style="color:#22c55e">point A</b>, then <b style="color:#ef4444">point B</b> on the selected reference trail.<br><span style="font-size:10px">A/B snap only to that trail.</span>';
   }
 
+  function refreshEscapeDaySelect(selectedDay = null) {
+    const select = document.getElementById('addescape-day-select');
+    if(!select) return null;
+    const days = escapeController.availableDays();
+    select.replaceChildren();
+    days.forEach(day => {
+      const option = document.createElement('option');
+      option.value = String(day);
+      option.textContent = `D${day}`;
+      select.append(option);
+    });
+    const nextDay = days.includes(Number(selectedDay)) ? Number(selectedDay) : (days[0] || null);
+    select.disabled = days.length < 2;
+    if(nextDay != null) {
+      select.value = String(nextDay);
+      escapeController.setDay(nextDay);
+    }
+    const dayValue = document.getElementById('ae-day');
+    if(dayValue) dayValue.textContent = nextDay == null ? '-' : `D${nextDay}`;
+    return nextDay;
+  }
+
   function handleEscapeInteractionEvent(event, session) {
     if(event.type !== 'tap') return;
     const hit = escapeController.nearestPoint(event.latlng.lat, event.latlng.lng);
@@ -3040,8 +3148,11 @@ export function startStudioRuntime(
     addEscapeState.layer.clearLayers();
     document.getElementById('addescape-panel').style.display = 'block';
     document.getElementById('addescape-result').style.display = 'none';
+    document.getElementById('ae-day').textContent = '-';
+    document.getElementById('addescape-day-select').replaceChildren();
     resetEscapeSelectionHint();
     map.getContainer().style.cursor = 'crosshair';
+    drawTracks();
   }
 
   function addEscapeExit(opts = {}) {
@@ -3052,12 +3163,14 @@ export function startStudioRuntime(
     if(addEscapeState.layer) addEscapeState.layer.clearLayers();
     document.getElementById('addescape-panel').style.display = 'none';
     map.getContainer().style.cursor = '';
+    drawTracks();
   }
 
   function addEscapeReset() {
     escapeController.reset();
     if(addEscapeState.layer) addEscapeState.layer.clearLayers();
     document.getElementById('addescape-result').style.display = 'none';
+    document.getElementById('ae-day').textContent = '-';
     resetEscapeSelectionHint();
     setRuntimeInteractionPhase('escape', 'select-a');
   }
@@ -3091,6 +3204,7 @@ export function startStudioRuntime(
     // 填充面板
     document.getElementById('ae-dist').textContent = route.distance_km + ' km';
     document.getElementById('ae-trail').textContent = route._anchor.trailName;
+    refreshEscapeDaySelect(route.day || null);
     document.getElementById('ae-asc').textContent = preview.ascentM + ' m';
     document.getElementById('ae-desc').textContent = preview.descentM + ' m';
     document.getElementById('ae-eA').textContent = Math.round(pointA.elev) + ' m';
@@ -3129,8 +3243,8 @@ export function startStudioRuntime(
     }
     if(!state.activeTrails.has(trailId)) {
       dispatchState({type:'active-trail.set', trailId, active:true});
-      drawTracks();
     }
+    drawTracks();
     if(addEscapeState.layer) addEscapeState.layer.clearLayers();
     document.getElementById('addescape-result').style.display = 'none';
     resetEscapeSelectionHint();
@@ -3140,6 +3254,10 @@ export function startStudioRuntime(
   document.getElementById('addescape-exit').addEventListener('click', addEscapeExit);
   document.getElementById('addescape-reset').addEventListener('click', addEscapeReset);
   document.getElementById('addescape-commit').addEventListener('click', addEscapeCommit);
+  document.getElementById('addescape-day-select').addEventListener('change', event => {
+    const day = Number(event.target.value);
+    if(escapeController.setDay(day)) document.getElementById('ae-day').textContent = `D${day}`;
+  });
   function measureCompute() {
     if(!measureState.ptA || !measureState.ptB) return;
     const seq = measureController.nextComputeSequence();
@@ -3276,14 +3394,44 @@ export function startStudioRuntime(
     map.getContainer().style.cursor = '';
     // v1.30.0：恢复 SVG 命中检测
     map.getContainer().classList.remove('measure-active');
+    updateSegmentDirtyIndicator();
+  }
+
+  let segmentExitPrompt = null;
+  function requestSegmentExit(reason = 'cancelled') {
+    if(!segmentState.active && interactionManager.current.kind !== 'segment') return Promise.resolve(true);
+    const finish = () => {
+      if(cancelRuntimeInteraction('segment', reason)) return true;
+      segmentExit({fromManager:true, reason});
+      return true;
+    };
+    if(!segmentController.isDirty()) return Promise.resolve(finish());
+    if(segmentExitPrompt) return segmentExitPrompt;
+    segmentExitPrompt = studioDialogs.confirm({
+      title:currentLang === 'zh' ? '存在未应用修改' : 'Unapplied segment changes',
+      message:currentLang === 'zh'
+        ? '当前分段边界或营地信息尚未应用。确定放弃这些修改并退出吗？'
+        : 'Segment boundaries or camp details have not been applied. Discard these changes and exit?',
+      danger:true,
+      confirmLabel:currentLang === 'zh' ? '放弃并退出' : 'Discard and exit',
+      cancelLabel:currentLang === 'zh' ? '继续编辑' : 'Keep editing',
+    }).then(confirmed => confirmed ? finish() : false).finally(() => { segmentExitPrompt = null; });
+    return segmentExitPrompt;
+  }
+
+  function updateSegmentDirtyIndicator() {
+    const indicator = document.getElementById('segment-dirty-indicator');
+    if(!indicator) return;
+    indicator.hidden = !segmentController.isDirty();
+    indicator.textContent = currentLang === 'zh' ? '存在未应用修改' : 'Unapplied changes';
   }
 
   function segmentUndo() {
     segmentDeleteDay(segmentState.points.length - 1);
   }
 
-  function segmentClear() {
-    if(segmentController.clear()) updateSegmentUI();
+  function segmentRestore() {
+    if(segmentController.restore()) updateSegmentUI();
   }
 
 
@@ -3335,6 +3483,7 @@ export function startStudioRuntime(
     }
     renderSegmentList();
     redrawSegmentLayer();
+    updateSegmentDirtyIndicator();
   }
 
   function renderSegmentList() {
@@ -3375,6 +3524,7 @@ export function startStudioRuntime(
       inp.addEventListener('input', e => {
         const d = +e.target.dataset.day;
         segmentController.updateCamp(d, {name:e.target.value});
+        updateSegmentDirtyIndicator();
       });
     });
     list.querySelectorAll('.seg-camp-elev').forEach(inp => {
@@ -3382,6 +3532,7 @@ export function startStudioRuntime(
         const d = +e.target.dataset.day;
         const v = parseFloat(e.target.value);
         segmentController.updateCamp(d, {elev:isNaN(v) ? null : v});
+        updateSegmentDirtyIndicator();
       });
     });
     list.querySelectorAll('.seg-day-delete').forEach(btn => {
@@ -3457,13 +3608,13 @@ export function startStudioRuntime(
   }
 
   const segmentCloseBtn = document.getElementById('segment-close');
-  if(segmentCloseBtn) segmentCloseBtn.addEventListener('click', segmentExit);
+  if(segmentCloseBtn) segmentCloseBtn.addEventListener('click', () => { void requestSegmentExit('close'); });
   const segmentExitBtn = document.getElementById('segment-exit');
-  if(segmentExitBtn) segmentExitBtn.addEventListener('click', segmentExit);
+  if(segmentExitBtn) segmentExitBtn.addEventListener('click', () => { void requestSegmentExit('exit'); });
   const segmentUndoBtn = document.getElementById('segment-undo');
   if(segmentUndoBtn) segmentUndoBtn.addEventListener('click', segmentUndo);
-  const segmentClearBtn = document.getElementById('segment-clear');
-  if(segmentClearBtn) segmentClearBtn.addEventListener('click', segmentClear);
+  const segmentRestoreBtn = document.getElementById('segment-restore');
+  if(segmentRestoreBtn) segmentRestoreBtn.addEventListener('click', segmentRestore);
   const segmentApplyBtn = document.getElementById('segment-apply');
   if(segmentApplyBtn) segmentApplyBtn.addEventListener('click', segmentApply);
   const measureCloseBtn = document.getElementById('measure-close');
@@ -4322,6 +4473,8 @@ export function startStudioRuntime(
         desc,
         distance_km: km,
         drop_m: drop,
+        day: Number(camp.day) || Number(pts[campIdx].day) || undefined,
+        direction: i_from > i_to ? 'reverse' : 'forward',
         line,
         _anchor: bestExit._cross ? { trailId: bestExit.trailId, trailName: bestExit.trailName } : null,
       });
@@ -4487,6 +4640,7 @@ export function startStudioRuntime(
    * v1.22.0 抽出，供复位按钮 / 导入 / 切换分组共用。
    * @param {Object} [opts]
    * @param {boolean} [opts.restoreActive=false] 是否把 activeTrails 补齐为所有 trail（复位按钮用）
+   * @param {boolean} [opts.gesture=false] 是否按当前与目标缩放级差执行平滑复位
    */
   function resetView(opts = {}) {
     const resetEpoch = ++workspaceResetEpoch;
@@ -4520,7 +4674,7 @@ export function startStudioRuntime(
           const fitPromise = fitWorkspaceBounds(
             L.latLngBounds(segLL),
             {padding:[60,60]},
-            {source:'reset-measure', resetEpoch},
+            {source:'reset-measure', resetEpoch, gesture:Boolean(opts.gesture)},
           );
           saveToStorage();
           return fitPromise;
@@ -4535,7 +4689,7 @@ export function startStudioRuntime(
       const fitPromise = fitWorkspaceBounds(
         L.latLngBounds(latlngs),
         {padding:[40,40]},
-        {source:'reset-primary', resetEpoch},
+        {source:'reset-primary', resetEpoch, gesture:Boolean(opts.gesture)},
       );
       saveToStorage();
       return fitPromise;
@@ -4548,7 +4702,7 @@ export function startStudioRuntime(
         const fitPromise = fitWorkspaceBounds(
           L.latLngBounds(allLatLngs),
           {padding:[40,40]},
-          {source:'reset-active', resetEpoch},
+          {source:'reset-active', resetEpoch, gesture:Boolean(opts.gesture)},
         );
         saveToStorage();
         return fitPromise;
@@ -4577,7 +4731,20 @@ export function startStudioRuntime(
     }
     const applyFit = () => {
       map.invalidateSize({pan:false});
-      map.fitBounds(request.bounds, request.options);
+      if(request.gesture && typeof map.flyToBounds === 'function') {
+        const targetZoom = map.getBoundsZoom(request.bounds);
+        const zoomStep = Math.max(0.25, Number(map.options.zoomSnap) || 0.5);
+        const stepCount = Math.abs(targetZoom - map.getZoom()) / zoomStep;
+        const duration = Math.max(0.35, Math.min(1.1, 0.3 + stepCount * 0.045));
+        map.flyToBounds(request.bounds, {
+          ...request.options,
+          animate:true,
+          duration,
+          easeLinearity:0.25,
+        });
+      } else {
+        map.fitBounds(request.bounds, request.options);
+      }
     };
     applyFit();
     if(!request.closeOverlay) {
@@ -4612,6 +4779,7 @@ export function startStudioRuntime(
       bounds,
       options,
       closeOverlay,
+      gesture:Boolean(meta.gesture),
       resetEpoch:meta.resetEpoch ?? null,
       source:meta.source || 'workspace',
     });
@@ -4913,24 +5081,31 @@ export function startStudioRuntime(
     return Boolean(trail && trail.track && trail.track.length);
   }
 
-  function toggleMeasureCommand() {
+  async function toggleMeasureCommand() {
+    if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-measure')) return false;
     if(interactionManager.current.kind === 'measure') measureExit();
     else measureEnter();
+    return true;
   }
 
-  function toggleSegmentCommand() {
-    if(interactionManager.current.kind === 'segment') segmentExit();
+  async function toggleSegmentCommand() {
+    if(interactionManager.current.kind === 'segment') return requestSegmentExit('toggle');
     else segmentEnter();
+    return true;
   }
 
-  function toggleWaypointCommand() {
+  async function toggleWaypointCommand() {
+    if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-waypoint')) return false;
     if(interactionManager.current.kind === 'waypoint') exitAddWaypointMode();
     else enterAddWaypointMode();
+    return true;
   }
 
-  function toggleEscapeCommand() {
+  async function toggleEscapeCommand() {
+    if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-escape')) return false;
     if(interactionManager.current.kind === 'escape') addEscapeExit();
     else addEscapeEnter();
+    return true;
   }
 
   async function reversePrimaryTrailCommand() {
@@ -4980,6 +5155,10 @@ export function startStudioRuntime(
       exportPopup.remove();
       return true;
     }
+    if(interactionManager.current.kind === 'segment') {
+      void requestSegmentExit('escape-key');
+      return true;
+    }
     if(interactionManager.current.kind !== 'idle') {
       interactionManager.cancel('escape-key');
       return true;
@@ -5011,7 +5190,7 @@ export function startStudioRuntime(
         enabled:hasPrimaryTrail,
         checked:() => interactionManager.current.kind === 'escape',
       }),
-      register(STUDIO_COMMANDS.MAP_RESET, () => resetView({restoreActive:true}), {enabled:hasTrails}),
+      register(STUDIO_COMMANDS.MAP_RESET, () => resetView({restoreActive:true, gesture:true}), {enabled:hasTrails}),
       register(STUDIO_COMMANDS.HELP_OPEN, showHelp),
       register(STUDIO_COMMANDS.LANGUAGE_TOGGLE, () => {
         setLang(currentLang === 'zh' ? 'en' : 'zh');
@@ -5335,8 +5514,8 @@ export function startStudioRuntime(
       "scheduleRuntimeInteractionFrame": {enumerable:true, get:() => scheduleRuntimeInteractionFrame},
       "segmentApply": {enumerable:true, get:() => segmentApply},
       "segmentApplyBtn": {enumerable:true, get:() => segmentApplyBtn},
-      "segmentClear": {enumerable:true, get:() => segmentClear},
-      "segmentClearBtn": {enumerable:true, get:() => segmentClearBtn},
+      "segmentRestore": {enumerable:true, get:() => segmentRestore},
+      "segmentRestoreBtn": {enumerable:true, get:() => segmentRestoreBtn},
       "segmentCloseBtn": {enumerable:true, get:() => segmentCloseBtn},
       "segmentController": {enumerable:true, get:() => segmentController},
       "segmentDeleteDay": {enumerable:true, get:() => segmentDeleteDay},
@@ -5344,6 +5523,7 @@ export function startStudioRuntime(
       "segmentExit": {enumerable:true, get:() => segmentExit},
       "segmentExitBtn": {enumerable:true, get:() => segmentExitBtn},
       "segmentInsertPoint": {enumerable:true, get:() => segmentInsertPoint},
+      "requestSegmentExit": {enumerable:true, get:() => requestSegmentExit},
       "segmentState": {enumerable:true, get:() => segmentState},
       "segmentStats": {enumerable:true, get:() => segmentStats},
       "segmentUndo": {enumerable:true, get:() => segmentUndo},

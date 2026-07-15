@@ -192,7 +192,8 @@ test('activity surfaces dispatch commands without mirrored bottom mode commands'
   assert.strictEqual(workbenchSource.includes('setBottomTab('), false);
   assert.ok(workbenchSource.includes("if(kind === 'command') control.removeAttribute('style')"));
   assert.ok(css.includes('> #elev-bar.collapsed .elev-canvas'));
-  assert.ok(css.includes('display:block !important;'));
+  assert.ok(css.includes(".studio-map-stage:has(> .studio-bottom-dock #elev-bar.collapsed)"));
+  assert.ok(css.includes('display:none !important;'));
 });
 
 test('menus support keyboard navigation, Escape, and outside-click close', () => {

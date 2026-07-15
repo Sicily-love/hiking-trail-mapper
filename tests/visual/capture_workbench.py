@@ -214,6 +214,34 @@ try:
         (OUTPUT / f"workbench-{width}x{height}.png").write_bytes(base64.b64decode(screenshot["result"]["data"]))
 
     cdp("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False})
+    elevation_collapse_state = evaluate("""
+      (() => {
+        toggleSidebar(true);
+        const toggle = document.getElementById('elev-toggle');
+        const panel = document.getElementById('elev-bar');
+        if(panel?.classList.contains('collapsed')) toggle?.click();
+        const expandedMapHeight = document.getElementById('map')?.getBoundingClientRect().height || 0;
+        toggle?.click();
+        window.dispatchEvent(new Event('resize'));
+        const mapHeight = document.getElementById('map')?.getBoundingClientRect().height || 0;
+        const dockHeight = document.querySelector('.studio-bottom-dock')?.getBoundingClientRect().height || 0;
+        return {
+          collapsed:panel?.classList.contains('collapsed') || false,
+          expanded:toggle?.getAttribute('aria-expanded'),
+          buttonVisible:!!toggle && getComputedStyle(toggle).display !== 'none',
+          compact:dockHeight <= 45,
+          mapExpanded:mapHeight > expandedMapHeight + 100,
+        };
+      })()
+    """)
+    time.sleep(0.4)
+    hide_transient_ui()
+    wait_for_map_tiles()
+    elevation_collapsed_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-elevation-collapsed.png").write_bytes(base64.b64decode(elevation_collapsed_shot["result"]["data"]))
+    evaluate("document.getElementById('elev-toggle')?.click()")
+    time.sleep(0.2)
+
     evaluate("""
       (() => {
         toggleSidebar(true);
@@ -362,7 +390,14 @@ try:
     time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"]]
-    if not group_state or not day_state or not measure_state or not segment_state or not dialog_state or not mobile_dialog_state:
+    elevation_collapse_valid = all([
+        elevation_collapse_state.get("collapsed"),
+        elevation_collapse_state.get("expanded") == "false",
+        elevation_collapse_state.get("buttonVisible"),
+        elevation_collapse_state.get("compact"),
+        elevation_collapse_state.get("mapExpanded"),
+    ])
+    if not group_state or not day_state or not measure_state or not segment_state or not dialog_state or not mobile_dialog_state or not elevation_collapse_valid:
         invalid.append("interaction-states")
     if invalid:
         raise RuntimeError(f"Visual layout contract failed: {', '.join(invalid)}")

@@ -34,6 +34,8 @@ export interface ExportEscapeRoute {
   name: string;
   distance_km: number;
   drop_m: number;
+  day?: number;
+  direction?: 'forward' | 'reverse';
 }
 
 export interface ExportTrail {
@@ -270,7 +272,8 @@ export function buildItineraryMarkdown(
   if(trail.escape_routes?.length) {
     markdown += `## ${isZh ? '下撤方案' : 'Escape Routes'}\n\n`;
     for(const route of trail.escape_routes) {
-      markdown += `- **${route.name}** · ${route.distance_km}km · ${route.drop_m >= 0 ? '↓' : '↑'}${Math.abs(route.drop_m)}m\n`;
+      const day = route.day ? `D${route.day} · ` : '';
+      markdown += `- ${day}**${route.name}** · ${route.distance_km}km · ${route.drop_m >= 0 ? '↓' : '↑'}${Math.abs(route.drop_m)}m\n`;
     }
     markdown += '\n';
   }

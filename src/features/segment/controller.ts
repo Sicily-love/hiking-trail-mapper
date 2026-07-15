@@ -66,7 +66,8 @@ export interface SegmentController {
   readonly state: Readonly<SegmentInteractionState>;
   enter: (trailId: string) => boolean;
   exit: () => void;
-  clear: () => boolean;
+  isDirty: () => boolean;
+  restore: () => boolean;
   insertPoint: (point: TrackIndexPoint | null) => SegmentEditResult;
   deleteDay: (dayNo: number) => SegmentEditResult;
   moveBoundary: (pointIndex: number, point: TrackIndexPoint | null) => SegmentBoundaryMoveResult;
@@ -149,14 +150,34 @@ export function createSegmentController(
     throw new TypeError('SegmentController requires markRevision');
   }
   const state = createSegmentInteractionState();
+  let initialPoints: TrackIndexPoint[] = [];
+  let initialCampEdits: SegmentCampEdits = {};
   const findTrail = (trailId = state.trailId): SegmentTrail | null =>
     context.project.trails.find(trail => trail.id === trailId) || null;
+
+  const rememberSelection = (): void => {
+    initialPoints = state.points.map(point => ({...point}));
+    initialCampEdits = Object.fromEntries(
+      Object.entries(state.campEdits).map(([day, edit]) => [day, {...edit}]),
+    );
+  };
 
   const restoreSelection = (trail: SegmentTrail): void => {
     const indexes = restoreSegmentIndexes(trail.track, trail.day_meta || []);
     state.points = segmentIndexesToPoints(trail.track, indexes);
     state.campEdits = campEditsFromDayMeta(trail.day_meta || []);
+    rememberSelection();
   };
+
+  const selectionSignature = (points: TrackIndexPoint[], campEdits: SegmentCampEdits): string => {
+    const camps = Object.entries(campEdits)
+      .map(([day, edit]) => [Number(day), String(edit.name || '').trim(), edit.elev ?? null])
+      .sort((left, right) => Number(left[0]) - Number(right[0]));
+    return JSON.stringify({indexes:points.map(point => point.idx), camps});
+  };
+
+  const isDirty = (): boolean => state.active && selectionSignature(state.points, state.campEdits)
+    !== selectionSignature(initialPoints, initialCampEdits);
 
   const enter = (trailId: string): boolean => {
     const trail = findTrail(trailId);
@@ -176,11 +197,13 @@ export function createSegmentController(
     state._fastTapUntil = 0;
   };
 
-  const clear = (): boolean => {
+  const restore = (): boolean => {
     const trail = findTrail();
     if(!trail?.track.length) return false;
-    state.points = segmentIndexesToPoints(trail.track, [0, trail.track.length - 1]);
-    state.campEdits = {};
+    state.points = initialPoints.map(point => ({...point}));
+    state.campEdits = Object.fromEntries(
+      Object.entries(initialCampEdits).map(([day, edit]) => [day, {...edit}]),
+    );
     return true;
   };
 
@@ -239,6 +262,7 @@ export function createSegmentController(
     trail.days = trail.day_meta.length;
     assignWaypointDays(trail);
     dependencies.markRevision(trail);
+    rememberSelection();
     return {trail, dayCount:trail.days};
   };
 
@@ -246,7 +270,8 @@ export function createSegmentController(
     state,
     enter,
     exit,
-    clear,
+    isDirty,
+    restore,
     insertPoint,
     deleteDay,
     moveBoundary,

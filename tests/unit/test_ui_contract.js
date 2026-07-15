@@ -40,7 +40,15 @@ T('command decoration is owned by the single Workbench UI module', () => {
 T('elevation analysis dock can collapse and persists its state', () => {
   assert.ok(ui.includes("elevationCollapsed: 'hiking_elevation_dock_collapsed'"));
   assert.ok(ui.includes("panel.classList.toggle('collapsed')"));
+  assert.ok(ui.includes("button.id = 'elev-toggle'"));
   assert.ok(css.includes('#elev-bar.collapsed'));
+});
+T('escape filters and segment dirty state have dedicated controls', () => {
+  assert.ok(css.includes('.escape-filter-bar'));
+  assert.ok(css.includes('.escape-direction-tag'));
+  assert.ok(css.includes('.segment-dirty-indicator'));
+  assert.ok(runtime.includes('addescape-day-select'));
+  assert.ok(runtime.includes('requestSegmentExit'));
 });
 T('sidebar becomes a mobile bottom sheet', () => {
   assert.ok(css.includes("@media (max-width:760px)"));
@@ -72,6 +80,7 @@ T('visual fixtures cover real Day, measurement, and segmentation states', () => 
   assert.ok(visual.includes('workbench-day-cards.png'));
   assert.ok(visual.includes('workbench-measure.png'));
   assert.ok(visual.includes('workbench-segment.png'));
+  assert.ok(visual.includes('workbench-elevation-collapsed.png'));
   assert.ok(visual.includes('toolbarZoomOverlap'));
 });
 
