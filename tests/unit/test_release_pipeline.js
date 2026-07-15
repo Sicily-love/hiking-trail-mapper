@@ -183,9 +183,9 @@ T('GitHub workflow verifies PRs and deploys dist from main', () => {
   assert.ok(workflow.includes('pull_request:'));
   assert.ok(workflow.includes('actions/checkout@v6'));
   assert.ok(workflow.includes('actions/setup-node@v6'));
-  assert.ok(workflow.includes('actions/configure-pages@v5'));
-  assert.ok(workflow.includes('actions/upload-pages-artifact@v4'));
-  assert.ok(workflow.includes('actions/deploy-pages@v4'));
+  assert.ok(workflow.includes('actions/configure-pages@v6'));
+  assert.ok(workflow.includes('actions/upload-pages-artifact@v5'));
+  assert.ok(workflow.includes('actions/deploy-pages@v5'));
   assert.ok(workflow.includes('path: dist'));
   assert.ok(workflow.includes('pages: write'));
   assert.ok(workflow.includes('id-token: write'));

@@ -233,9 +233,9 @@ def main() -> int:
     for action in (
         "actions/checkout@v6",
         "actions/setup-node@v6",
-        "actions/configure-pages@v5",
-        "actions/upload-pages-artifact@v4",
-        "actions/deploy-pages@v4",
+        "actions/configure-pages@v6",
+        "actions/upload-pages-artifact@v5",
+        "actions/deploy-pages@v5",
     ):
         runner.check(f"workflow uses {action}", action in workflow)
 
