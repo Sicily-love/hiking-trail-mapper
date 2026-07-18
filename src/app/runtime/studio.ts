@@ -280,6 +280,7 @@ export function startStudioRuntime(
   };
   let workspaceResetEpoch = 0;
   let pendingWorkspaceFit = null;
+  const trailBoundsCache = new WeakMap();
 
   function recordRenderPhase(context) {
     if(renderRuntimeStats.lastTimestamp !== context.timestamp) {
@@ -427,8 +428,8 @@ export function startStudioRuntime(
     center: [29.74, 99.65], zoom: 11,
     zoomControl: true, attributionControl: true,
     dragging: true, tap: false, touchZoom: true,  // v1.27.0：关闭 L.Tap 消除触屏 tap 延迟
-    // v1.31.7：+/- 按钮步进调大，滚轮仍保持半级吸附
-    zoomSnap: 0.5,             // 缩放对齐到 0.5 级
+    // +/- 保持快速步进；双指与滚轮结束时按四分之一级吸附。
+    zoomSnap: 0.25,
     zoomDelta: 1,              // +/- 按钮和键盘每次变化 1 级（更快放大/缩小）
     wheelPxPerZoomLevel: 120,  // 滚轮每 120px 触发 1 级缩放，比默认 60 更平滑
     wheelDebounceTime: 40,     // 滚轮防抖（默认 40，保留）
@@ -4878,6 +4879,22 @@ export function startStudioRuntime(
    * @param {boolean} [opts.restoreActive=false] 是否把 activeTrails 补齐为所有 trail（复位按钮用）
    * @param {boolean} [opts.gesture=false] 是否按当前与目标缩放级差执行平滑复位
    */
+  function cachedTrailBounds(trail) {
+    const track = trail && trail.track;
+    if(!track || !track.length) return null;
+    const revision = runtimeTrailRevision(trail);
+    const cached = trailBoundsCache.get(trail);
+    if(cached && cached.track === track && cached.revision === revision) return cached.bounds;
+
+    const bounds = L.latLngBounds([]);
+    for(const point of track) {
+      if(Number.isFinite(point[0]) && Number.isFinite(point[1])) bounds.extend([point[0], point[1]]);
+    }
+    if(!bounds.isValid()) return null;
+    trailBoundsCache.set(trail, {track, revision, bounds});
+    return bounds;
+  }
+
   function resetView(opts = {}) {
     const resetEpoch = ++workspaceResetEpoch;
     renderRuntimeStats.fit.lastResetEpoch = resetEpoch;
@@ -4925,22 +4942,24 @@ export function startStudioRuntime(
     // 计算 fit 目标：优先主轨迹，其次当前组所有 active 轨迹
     const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
     if(main && main.track && main.track.length) {
-      const latlngs = main.track.map(p => [p[0], p[1]]);
+      const bounds = cachedTrailBounds(main);
+      if(!bounds) return Promise.resolve(false);
       const fitPromise = fitWorkspaceBounds(
-        L.latLngBounds(latlngs),
+        bounds,
         {padding:[40,40]},
         {source:'reset-primary', resetEpoch, gesture:Boolean(opts.gesture)},
       );
       if(stateChanged) saveToStorage();
       return fitPromise;
     } else {
-      const allLatLngs = [];
+      const bounds = L.latLngBounds([]);
       DATA.trails.forEach(t => {
-        if(isTrailActive(t)) t.track.forEach(p => allLatLngs.push([p[0], p[1]]));
+        const trailBounds = isTrailActive(t) ? cachedTrailBounds(t) : null;
+        if(trailBounds) bounds.extend(trailBounds);
       });
-      if(allLatLngs.length) {
+      if(bounds.isValid()) {
         const fitPromise = fitWorkspaceBounds(
-          L.latLngBounds(allLatLngs),
+          bounds,
           {padding:[40,40]},
           {source:'reset-active', resetEpoch, gesture:Boolean(opts.gesture)},
         );
@@ -4970,21 +4989,11 @@ export function startStudioRuntime(
       return;
     }
     const applyFit = () => {
-      map.invalidateSize({pan:false});
-      if(request.gesture && typeof map.flyToBounds === 'function') {
-        const targetZoom = map.getBoundsZoom(request.bounds);
-        const zoomStep = Math.max(0.25, Number(map.options.zoomSnap) || 0.5);
-        const stepCount = Math.abs(targetZoom - map.getZoom()) / zoomStep;
-        const duration = Math.max(0.35, Math.min(1.1, 0.3 + stepCount * 0.045));
-        map.flyToBounds(request.bounds, {
-          ...request.options,
-          animate:true,
-          duration,
-          easeLinearity:0.25,
-        });
-      } else {
-        map.fitBounds(request.bounds, request.options);
-      }
+      if(request.closeOverlay) map.invalidateSize({pan:false, animate:false});
+      const fitOptions = request.gesture
+        ? {...request.options, animate:true, duration:0.28, easeLinearity:0.35}
+        : {...request.options, animate:false};
+      map.fitBounds(request.bounds, fitOptions);
     };
     if(!request.closeOverlay) {
       applyFit();

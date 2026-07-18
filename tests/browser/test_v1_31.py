@@ -507,8 +507,8 @@ try:
           source_has('function measureEnter', 'function segmentEnter', 'enterInteractionRenderMode', "type:'mode.set'"))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
           source_has('function buildDaysTab', '最低海拔', 'showDaySegmentPreview', 'segmentController.apply', 'dayPreviewState.active'))
-    check("地图 +/- 缩放步进已调大",
-          evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.5"))
+    check("地图按钮保持快速步进且双指缩放细化到四分之一级",
+          evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.25 && map.options.touchZoom === true"))
     check("海拔图与测距浮动栏支持拖动记忆和双击复位",
           evalj("""
             !!document.querySelector('#elev-bar [data-panel-drag]')

@@ -110,11 +110,14 @@ test('FIT is last-request-wins and reset is epoch guarded', () => {
   assert.ok(fit.includes('renderScheduler.requestFit'));
   assert.ok(fit.includes('pendingWorkspaceFit.resolve(false)'));
   assert.ok(reset.includes('gesture:Boolean(opts.gesture)'));
-  assert.ok(execute.includes("typeof map.flyToBounds === 'function'"));
-  assert.ok(execute.includes('stepCount'));
-  assert.ok(execute.includes('duration'));
+  assert.strictEqual(execute.includes('map.flyToBounds'), false);
+  assert.ok(execute.includes('duration:0.28'));
+  assert.ok(execute.includes('request.closeOverlay'));
+  assert.ok(execute.includes('animate:false'));
   assert.strictEqual((execute.match(/applyFit\(\)/g) || []).length, 2);
   assert.ok(reset.includes('if(stateChanged)'));
+  assert.ok(reset.includes('cachedTrailBounds(main)'));
+  assert.strictEqual(reset.includes('main.track.map'), false);
   assert.strictEqual(reset.includes('measureCompute()'), false);
   assert.ok(runtime.includes('resetView({restoreActive:true, gesture:true})'));
   assert.strictEqual((runtime.match(/map\.fitBounds\(/g) || []).length, 1);

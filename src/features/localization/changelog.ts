@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.14',
+    date: '2026-07-18',
+    items: {
+      zh: ['合并拼接轨迹中相同海拔色阶的断开路径，将地图渐变图层稳定限制为每轨最多 40 层，修复 Pages 的真实 Chrome 验证失败。', '双指缩放细化为四分之一级吸附；复位缓存轨迹边界并改用短时 fitBounds 动画，只在移动侧栏收起时重新测量地图尺寸。'],
+      en: ['Merge disconnected paths that share an elevation color band, keeping map gradient layers bounded to 40 per trail and fixing the real-Chrome Pages verification failure.', 'Refine pinch zoom snapping to quarter levels; cache trail bounds during reset, use a short fitBounds transition, and remeasure the map only after closing the mobile sidebar.'],
+    },
+  },
+  {
     version: 'v2.0.13',
     date: '2026-07-18',
     items: {
