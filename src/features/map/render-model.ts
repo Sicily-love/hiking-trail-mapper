@@ -198,23 +198,30 @@ export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): Tr
     }
 
     if(renderMode === 'elev') {
-      for(const [segmentIndex, segment] of splitTrackByBreaks(trail.track, trail.track_breaks).entries()) {
+      const bandCount = options.elevationBandCount ?? 40;
+      const bands = new Map<number, { ratio: number; paths: TrackLatLng[][] }>();
+      for(const segment of splitTrackByBreaks(trail.track, trail.track_breaks)) {
         const groups = buildElevationPolylineSegments(segment, {
-          bandCount:options.elevationBandCount ?? 40,
+          bandCount,
           minElevation,
           maxElevation,
         });
-        model.elevationBands += groups.length;
         for(const group of groups) {
-          model.polylines.push({
-            key:`${trail.id}:elev:${segmentIndex}:${group.bandIndex}`, trail, hoverable:true,
-            latLngs:group.paths.map(path => path.latLngs),
-            lineStyle:{
-              color:elevationTrackColor(minElevation + group.ratio * (maxElevation - minElevation), minElevation, maxElevation),
-              weight, opacity, smoothFactor:1, lineCap:'round',
-            },
-          });
+          const band = bands.get(group.bandIndex) ?? {ratio:group.ratio, paths:[]};
+          band.paths.push(...group.paths.map(path => path.latLngs));
+          bands.set(group.bandIndex, band);
         }
+      }
+      model.elevationBands += bands.size;
+      for(const [bandIndex, band] of [...bands.entries()].sort(([left], [right]) => left - right)) {
+        model.polylines.push({
+          key:`${trail.id}:elev:${bandIndex}`, trail, hoverable:true,
+          latLngs:band.paths,
+          lineStyle:{
+            color:elevationTrackColor(minElevation + band.ratio * (maxElevation - minElevation), minElevation, maxElevation),
+            weight, opacity, smoothFactor:1, lineCap:'round',
+          },
+        });
       }
       continue;
     }

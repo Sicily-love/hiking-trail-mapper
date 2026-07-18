@@ -96,6 +96,26 @@ T('map model keeps disconnected track parts as separate Leaflet paths', () => {
   assert.deepStrictEqual(bloom.latLngs.map(path => path.length), [2,2]);
 });
 
+T('disconnected elevation parts share at most 40 color-band layers per trail', () => {
+  const track = [];
+  const track_breaks = [];
+  for(let segment = 0; segment < 12; segment += 1) {
+    if(track.length) track_breaks.push(track.length);
+    for(let point = 0; point < 80; point += 1) {
+      track.push([30 + segment + point / 10000, 100 + point / 10000, 1000 + (point % 40) * 20]);
+    }
+  }
+  const trail = {id:'split', name:'Split', color:'#080', active:true, track, track_breaks};
+  const model = app.buildTrackRenderModel({
+    trails:[trail], primaryTrailId:'split', mode:'elev', showTrack:true,
+    activeEscape:null, dayPalette:['#123456'], elevationBandCount:40,
+  });
+  const elevationLayers = model.polylines.filter(line => line.key.startsWith('split:elev:'));
+  assert.ok(model.elevationBands > 0 && model.elevationBands <= 40);
+  assert.strictEqual(elevationLayers.length, model.elevationBands);
+  assert.ok(elevationLayers.some(line => line.latLngs.length > 1));
+});
+
 T('escape reference trail renders last with a visible halo while alternatives dim', () => {
   const points = [[30,100,1000],[31,101,1100]];
   const model = app.buildTrackRenderModel({

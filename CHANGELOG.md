@@ -9,12 +9,12 @@ All notable changes to Hiking Trail Mapper. Both Chinese and English entries pre
 **中文**
 
 - 轨迹拼接改为两阶段地图工作流：从零多选来源后，在地图中拖动每段 A/B、调整方向和顺序，并可复制或删除片段。
-- 新增 `track_breaks` 断点模型；地图、海拔图、测距、Day 预览、统计和 KML 导出不再跨空白区域连接或累计距离与高差。
+- 新增 track_breaks 断点模型；地图、海拔图、测距、Day 预览、统计和 KML 导出不再跨空白区域连接或累计距离与高差。
 
 **English**
 
 - Turn trail stitching into a two-stage map workflow: start with no selected sources, then drag each part's A/B handles, change direction and order, and duplicate or remove parts on the map.
-- Add the `track_breaks` gap model so maps, elevation profiles, measurement, Day preview, statistics, and KML export no longer bridge or accumulate distance and elevation across empty space.
+- Add the track_breaks gap model so maps, elevation profiles, measurement, Day preview, statistics, and KML export no longer bridge or accumulate distance and elevation across empty space.
 
 ## v2.0.12 — 2026-07-17
 
