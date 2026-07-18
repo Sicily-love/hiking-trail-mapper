@@ -9,6 +9,62 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.13',
+    date: '2026-07-18',
+    items: {
+      zh: ['轨迹拼接改为两阶段地图工作流：从零多选来源后，在地图中拖动每段 A/B、调整方向和顺序，并可复制或删除片段。', '新增 track_breaks 断点模型；地图、海拔图、测距、Day 预览、统计和 KML 导出不再跨空白区域连接或累计距离与高差。'],
+      en: ['Turn trail stitching into a two-stage map workflow: start with no selected sources, then drag each part\'s A/B handles, change direction and order, and duplicate or remove parts on the map.', 'Add the track_breaks gap model so maps, elevation profiles, measurement, Day preview, statistics, and KML export no longer bridge or accumulate distance and elevation across empty space.'],
+    },
+  },
+  {
+    version: 'v2.0.12',
+    date: '2026-07-17',
+    items: {
+      zh: ['新增标注点保留原生类型下拉框，并用固定预览槽显示当前图标；岔路、警示和其他统一改用 16px Lucide 矢量图标，在地图、侧栏与行程中保持相同尺寸和视觉中心。', '应用行程分段时先完成 IndexedDB 持久化再退出编辑态，确保重新打开 HTML 后恢复最新日程。'],
+      en: ['Keep the native waypoint-type select with a fixed selected-icon preview, and render junction, warning, and other as 16px Lucide vectors with identical visual centers across the map, sidebar, and itinerary.', 'Complete IndexedDB persistence before leaving itinerary segment editing so reopening the HTML restores the latest schedule.'],
+    },
+  },
+  {
+    version: 'v2.0.11',
+    date: '2026-07-17',
+    items: {
+      zh: ['将新增标注点的类型选择改为固定图标槽单选面板，统一岔路、警示与其他类型的图标对齐。', '每次打开 HTML 或恢复缓存后默认选择有效轨迹组，并进入轨迹页面与海拔模式。', '附近轨迹标注与主轨迹每日行程共用同一类型集合，避免两处显示口径不一致。'],
+      en: ['Replace the add-waypoint native type select with a fixed icon-slot radio picker so junction, warning, and other waypoint icons align consistently.', 'Select a valid trail group and open the Trails workspace in Elevation mode whenever the HTML is opened or restored from cache.', 'Use the same waypoint type set for nearby-trail choices and primary-trail itinerary waypoints.'],
+    },
+  },
+  {
+    version: 'v2.0.10',
+    date: '2026-07-17',
+    items: {
+      zh: ['修正地图标注图标的固定锚点与字形对齐，并将桥类型统一命名为桥梁。', '下撤路线支持同时关联多个 Day，并直接显示在每个对应的每日行程卡片中。', '每日行程可从当前轨迹组中选择距当日主轨迹段 200 米内的其他轨迹标注，并保存来源引用。'],
+      en: ['Align waypoint glyphs on a stable map anchor and rename the Chinese bridge type to 桥梁.', 'Allow one escape route to belong to multiple Days and render it directly inside every associated itinerary card.', 'Let each itinerary Day select waypoints from other trails in the active group when they are within 200 metres of that Day segment, preserving source references.'],
+    },
+  },
+  {
+    version: 'v2.0.9',
+    date: '2026-07-17',
+    items: {
+      zh: ['优化复位视图：移动端侧栏收起后只执行一次地图定位，常规复位不再触发无必要的全量重绘、测距重算和缓存写入。', '轨迹拼接支持为每条来源轨迹指定起止里程，可使用局部区间进行排序、反向和拼接，并正确筛选与重映射标注点。'],
+      en: ['Make view reset smoother by fitting once after mobile sidebar closure and skipping unnecessary full rendering, measurement recomputation, and storage writes.', 'Allow each stitch source to use a From/To distance range, then reorder, reverse, and join partial trails with correctly filtered and remapped waypoints.'],
+    },
+  },
+  {
+    version: 'v2.0.8',
+    date: '2026-07-17',
+    items: {
+      zh: ['修复测距模式下重新选点、反向和退出操作条在工作台海拔栏中不可见的问题，并在海拔栏收起时保持操作可用。', '新增已有轨迹拼接：支持多轨迹选择、顺序调整、逐段反向、接缝检查、标注点重映射和统计重算。'],
+      en: ['Keep Reset points, Reverse, and Exit measurement actions visible in the Workbench elevation dock, including its collapsed state.', 'Add existing-trail stitching with ordered selection, per-part reversal, junction checks, waypoint remapping, and recalculated statistics.'],
+    },
+  },
+  {
+    version: 'v2.0.7',
+    date: '2026-07-17',
+    items: {
+      zh: ['修复 KML 标注点类型识别，并在每日行程中去除与专用扎营栏重复的营地条目。', '行程分段的扎营点海拔固定采用当天终点轨迹点海拔，不再允许产生不一致的独立数值。', '轨迹悬停、轨迹点击和海拔图定位统一显示六位经纬度，并为点击检查提供短时地图标记。'],
+      en: ['Classify KML waypoints during import and remove camp entries duplicated by the dedicated itinerary camp row.', 'Use each day endpoint elevation as the itinerary camp elevation instead of allowing a conflicting independent value.', 'Show six-decimal coordinates consistently for trail hover, trail inspection, and elevation-chart location markers.'],
+    },
+  },
+  {
     version: 'v2.0.6',
     date: '2026-07-15',
     items: {

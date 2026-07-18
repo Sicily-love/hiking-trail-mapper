@@ -95,6 +95,14 @@ function createHarness(trails, overrides = {}) {
     assert.strictEqual(Object.keys(files).length, 4);
   });
 
+  await T('exports disconnected tracks as separate KML LineStrings', () => {
+    const source = trail();
+    source.track_breaks = [2];
+    const kml = core.buildTrailKml(source);
+    assert.strictEqual((kml.match(/<LineString>/g) || []).length, 2);
+    assert.match(kml, /<MultiGeometry>/);
+  });
+
   await T('builds Day Markdown with charts, camps, passes, and escape routes', () => {
     const markdown = core.buildItineraryMarkdown(trail(), 'zh', {
       1:'data:image/png;base64,D1',
@@ -107,6 +115,16 @@ function createHarness(trails, overrides = {}) {
     assert.match(markdown, /## 下撤方案/);
     assert.match(markdown, /Exit.*1\.2km/);
     assert.doesNotMatch(markdown, /undefined|NaN/);
+  });
+
+  await T('itinerary statistics exclude distances across route gaps', () => {
+    const source = trail();
+    source.track = [[0,0,100,0,0,1],[0,.001,120,.11,20,1],[1,1,4000,.11,20,1],[1,1.001,4020,.22,40,1]];
+    source.track_breaks = [2];
+    source.day_meta = [];
+    const markdown = core.buildItineraryMarkdown(source, 'en');
+    assert.match(markdown, /\| D1 \| 0\.2km/);
+    assert.doesNotMatch(markdown, /157\./);
   });
 
   await T('archive adapter owns UTF-8, unzip, and asynchronous ZIP encoding', async () => {

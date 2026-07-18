@@ -73,20 +73,22 @@ export function createElevationCanvasRenderer(
     }
     context.setLineDash([]);
 
-    if(chart.fillPolygon.length >= 3) {
+    for(const polygon of chart.fillPolygons || [chart.fillPolygon]) {
+      if(polygon.length < 3) continue;
       context.beginPath();
-      context.moveTo(chart.fillPolygon[0].x, chart.fillPolygon[0].y);
-      for(let index = 1; index < chart.fillPolygon.length; index += 1) {
-        context.lineTo(chart.fillPolygon[index].x, chart.fillPolygon[index].y);
+      context.moveTo(polygon[0].x, polygon[0].y);
+      for(let index = 1; index < polygon.length; index += 1) {
+        context.lineTo(polygon[index].x, polygon[index].y);
       }
       context.closePath();
       context.fillStyle = gradient(context, chart.fillStyle.gradient);
       context.fill();
     }
 
-    if(chart.curve.length) {
+    for(const curve of chart.curveSegments || [chart.curve]) {
+      if(!curve.length) continue;
       context.beginPath();
-      chart.curve.forEach((point, index) => index === 0
+      curve.forEach((point, index) => index === 0
         ? context.moveTo(point.x, point.y)
         : context.lineTo(point.x, point.y));
       applyLineStyle(context, chart.curveStyle);

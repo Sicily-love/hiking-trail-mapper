@@ -48,6 +48,7 @@ export interface EscapeController {
   compute: () => EscapeRoutePreviewResult;
   availableDays: () => number[];
   setDay: (day: number) => boolean;
+  setDays: (days: number[]) => boolean;
   commit: (name: string) => EscapeRoute | null;
   deleteRoute: (trailId: string, routeId: string) => boolean;
   selectDisplayedRoute: (trailId: string, routeId: string) => EscapeRoute | null;
@@ -163,8 +164,19 @@ export function createEscapeController(
   };
 
   const setDay = (day: number): boolean => {
-    if(!state._pending || !availableDays().includes(day)) return false;
-    state._pending.day = day;
+    return setDays([day]);
+  };
+
+  const setDays = (days: number[]): boolean => {
+    if(!state._pending) return false;
+    const available = new Set(availableDays());
+    const normalized = [...new Set(days
+      .map(day => Math.trunc(Number(day)))
+      .filter(day => available.has(day)))]
+      .sort((left, right) => left - right);
+    if(!normalized.length) return false;
+    state._pending.days = normalized;
+    state._pending.day = normalized[0];
     return true;
   };
 
@@ -225,6 +237,7 @@ export function createEscapeController(
     compute,
     availableDays,
     setDay,
+    setDays,
     commit,
     deleteRoute,
     selectDisplayedRoute,

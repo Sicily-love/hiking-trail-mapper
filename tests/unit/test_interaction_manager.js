@@ -86,6 +86,7 @@ T('exports the complete interaction vocabulary and starts in idle', () => {
     'segment',
     'waypoint',
     'escape',
+    'stitch',
     'day-preview',
   ]);
   assert.deepStrictEqual(interactions.ACTIVE_INTERACTION_KINDS, [
@@ -93,6 +94,7 @@ T('exports the complete interaction vocabulary and starts in idle', () => {
     'segment',
     'waypoint',
     'escape',
+    'stitch',
     'day-preview',
   ]);
 
@@ -229,7 +231,7 @@ T('phase transitions stay in-session and invalidate work from the old phase', ()
 
 T('Studio state machine declares every mode and rejects illegal phase jumps', () => {
   assert.deepStrictEqual(Object.keys(interactions.STUDIO_INTERACTION_PHASES), [
-    'measure', 'segment', 'waypoint', 'escape', 'day-preview',
+    'measure', 'segment', 'waypoint', 'escape', 'stitch', 'day-preview',
   ]);
   assert.strictEqual(interactions.isStudioInteractionPhase('measure', 'select-a'), true);
   assert.strictEqual(interactions.isStudioInteractionPhase('measure', 'committing'), false);
@@ -237,6 +239,7 @@ T('Studio state machine declares every mode and rejects illegal phase jumps', ()
   assert.strictEqual(interactions.canTransitionStudioInteraction('measure', 'select-a', 'ready'), false);
   assert.strictEqual(interactions.canTransitionStudioInteraction('segment', 'editing', 'dragging'), true);
   assert.strictEqual(interactions.canTransitionStudioInteraction('escape', 'preview', 'committing'), true);
+  assert.strictEqual(interactions.canTransitionStudioInteraction('stitch', 'editing', 'dragging'), true);
 
   const manager = interactions.createStudioInteractionManager();
   assert.throws(() => manager.activate('measure', {
@@ -261,6 +264,7 @@ T('Studio modes share one exclusive replacement lifecycle', () => {
     ['segment', 'editing'],
     ['waypoint', 'select'],
     ['escape', 'select-a'],
+    ['stitch', 'editing'],
     ['day-preview', 'preview'],
   ];
   let previous = null;
@@ -282,6 +286,7 @@ T('Studio modes share one exclusive replacement lifecycle', () => {
     ['segment', 'replaced'],
     ['waypoint', 'replaced'],
     ['escape', 'replaced'],
+    ['stitch', 'replaced'],
   ]);
   assert.strictEqual(manager.cancel('cancelled'), true);
   assert.deepStrictEqual(cancelled.at(-1), ['day-preview', 'cancelled']);

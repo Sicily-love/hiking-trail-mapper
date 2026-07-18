@@ -417,8 +417,44 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
 }
 .filter-chip:hover { background:var(--bg-3); }
 .filter-chip.on { background:var(--bg-3); border-color:var(--accent); color:var(--text); }
-.filter-chip .ic { font-size:13px; }
+.waypoint-filter-icon {
+  display:grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  flex:0 0 22px;
+  font-size:14px;
+  line-height:1;
+  text-align:center;
+}
+.waypoint-symbol {
+  display:block;
+  width:16px;
+  height:16px;
+  flex:0 0 16px;
+  line-height:1;
+}
+.waypoint-symbol--emoji {
+  font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',emoji;
+  font-size:14px;
+  text-align:center;
+}
+.waypoint-card-title {
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.filter-chip-label { min-width:0; }
 .filter-chip .cnt { color:var(--text-muted); font-size:10px; margin-left:auto; }
+.waypoint-mode-tag {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  width:100%;
+  gap:6px;
+  padding:6px 8px;
+  text-align:left;
+}
 
 /* ============ Day blocks ============ */
 .days-summary {
@@ -531,21 +567,92 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
 }
 .wp-item:hover { background:var(--bg-2); margin:0 -16px; padding:5px 16px; }
 .wp-item:last-child { border-bottom:none; }
-.wp-icon { font-size:14px; width:20px; flex-shrink:0; text-align:center; }
+.wp-icon {
+  display:grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  flex:0 0 22px;
+  font-size:14px;
+  line-height:1;
+  text-align:center;
+}
 .wp-name { font-size:11px; color:var(--text); font-weight:500; }
 .wp-meta { font-size:10px; color:var(--text-muted); margin-top:1px; }
 
+.nearby-waypoint-picker {
+  margin-top:8px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:var(--bg-2);
+  overflow:hidden;
+}
+.nearby-waypoint-picker summary {
+  padding:7px 9px;
+  color:var(--text-dim);
+  font-size:10px;
+  font-weight:650;
+  cursor:pointer;
+  user-select:none;
+}
+.nearby-waypoint-options { border-top:1px solid var(--line); }
+.nearby-waypoint-option {
+  display:grid;
+  grid-template-columns:16px 22px minmax(0, 1fr);
+  align-items:center;
+  gap:6px;
+  padding:7px 9px;
+  border-bottom:1px solid var(--line);
+  cursor:pointer;
+}
+.nearby-waypoint-option:last-child { border-bottom:0; }
+.nearby-waypoint-option:hover,
+.nearby-waypoint-option.selected { background:var(--surface-raised); }
+.nearby-waypoint-option input { margin:0; accent-color:var(--accent); }
+.nearby-waypoint-copy { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.nearby-waypoint-copy b {
+  overflow:hidden;
+  color:var(--text);
+  font-size:10px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.nearby-waypoint-copy small { color:var(--text-muted); font-size:9px; }
+
 /* ============ Escape Routes ============ */
-.itinerary-escape-section {
-  margin-top:12px;
-  padding:4px 0 14px;
+.itinerary-escape-tools {
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  background:var(--bg-2);
+}
+.itinerary-escape-tools .escape-filter-bar { margin:0; }
+.itinerary-escape-add {
+  width:100%;
+  min-height:30px;
+  border:1px dashed rgba(220,38,38,.42);
+  border-radius:5px;
+  background:rgba(220,38,38,.07);
+  color:var(--danger);
+  font-size:10px;
+  font-weight:650;
+  cursor:pointer;
+}
+.itinerary-escape-add:hover { background:rgba(220,38,38,.12); }
+.day-escape-section {
+  margin-top:10px;
+  padding-top:9px;
   border-top:1px solid var(--line);
 }
-.itinerary-escape-empty {
-  padding:8px 12px;
-  color:var(--text-muted);
-  font-size:11px;
+.day-escape-heading {
+  margin:0 0 6px;
+  color:var(--text-dim);
+  font-size:10px;
+  font-weight:700;
 }
+.day-escape-section .escape-item { margin:6px 0; }
 .escape-filter-bar {
   display:grid;
   grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -638,6 +745,7 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
 #tooltip .row { display:flex; gap:8px; align-items:baseline; }
 #tooltip .lab { color:var(--text-muted); font-size:10px; }
 #tooltip .val { color:var(--accent); font-weight:600; }
+#tooltip .coordinate { font-variant-numeric:tabular-nums; }
 
 #legend {
   position:absolute; bottom:14px; left:14px; z-index:500;
@@ -762,6 +870,14 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
   white-space:nowrap;
   z-index:2;
   font-family:'Source Serif 4',serif;
+}
+.elev-tip-coordinate {
+  display:block;
+  margin-top:1px;
+  color:#7A6E54;
+  font-family:var(--sans);
+  font-size:9px;
+  font-variant-numeric:tabular-nums;
 }
 .elev-label {
   position:absolute;
@@ -922,6 +1038,31 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
   margin-bottom:8px;
 }
 .escape-result-grid b { font-variant-numeric:tabular-nums; }
+.escape-day-options {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding-top:3px;
+}
+.escape-day-option {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:28px;
+  padding:3px 8px;
+  border:1px solid var(--line);
+  border-radius:4px;
+  background:var(--bg-1);
+  color:var(--text-dim);
+  font-size:10px;
+  cursor:pointer;
+}
+.escape-day-option:has(input:checked) {
+  border-color:var(--accent);
+  background:rgba(30,111,80,.1);
+  color:var(--text);
+}
+.escape-day-option input { margin:0; accent-color:var(--accent); }
 .escape-value-warn { color:#fbbf24; }
 .escape-value-info { color:#60a5fa; font-size:11px; }
 .escape-value-up { color:#22c55e; }
@@ -1058,6 +1199,23 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
   color:#64748b;
   font-size:10px;
 }
+.segment-field output {
+  min-width:0;
+  color:#e2e8f0;
+  font-size:11px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.segment-point-coordinate {
+  min-width:0;
+  overflow:hidden;
+  color:#64748b;
+  font-size:9px;
+  font-variant-numeric:tabular-nums;
+  text-align:right;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .floating-dragging {
   cursor:grabbing !important;
   opacity:0.96;
@@ -1116,6 +1274,15 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
 }
 
 /* WP marker custom div icon */
+.wp-marker-shell {
+  position:relative;
+  display:flex;
+  align-items:center;
+  width:max-content;
+  height:24px;
+  gap:4px;
+  overflow:visible;
+}
 .wp-marker-label {
   background:rgba(10,14,20,0.85); color:#fff;
   font-size:10px; padding:2px 6px; border-radius:3px;
@@ -1129,9 +1296,18 @@ body { font-family:var(--sans); background:var(--bg-0); color:var(--text); font-
   color:#fff; font-size:9px; line-height:1.3;
 }
 .wp-marker-emoji {
+  display:grid;
+  place-items:center;
+  flex:0 0 24px;
+  width:24px;
+  height:24px;
   font-size:20px; line-height:1;
   font-family: 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',emoji;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95));
+}
+.wp-marker-emoji .waypoint-symbol {
+  width:18px;
+  height:18px;
 }
 .network-dot {
   border-radius:50%; background:#ffd166;
@@ -1364,6 +1540,8 @@ textarea:focus-visible,
   border-color:var(--line);
   color:var(--text);
 }
+.segment-field output { color:var(--text); }
+.segment-point-coordinate { color:var(--text-muted); }
 .segment-field input:focus,
 .form-input:focus { border-color:var(--accent); outline:none; }
 .escape-result { border-top-color:var(--line); }

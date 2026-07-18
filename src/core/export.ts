@@ -1,5 +1,4 @@
-import { accumulatorAscent } from './elevation.ts';
-import { haversine } from './geo.ts';
+import { computeSegmentedTrackMetrics, normalizeTrackBreaks, splitTrackByBreaks } from './trackSegments.ts';
 import type { TrackTuple } from './types.ts';
 
 export interface ExportWaypoint {
@@ -44,6 +43,7 @@ export interface ExportTrail {
   color?: string;
   group?: string | null;
   track: TrackTuple[];
+  track_breaks?: number[];
   waypoints?: ExportWaypoint[];
   stats: ExportTrailStats;
   day_meta?: ExportDayMeta[];
@@ -53,6 +53,7 @@ export interface ExportTrail {
 export interface ItineraryDayGroup {
   day: number;
   points: TrackTuple[];
+  trackBreaks: number[];
 }
 
 export type ItineraryChartMap = Readonly<Record<number, string>>;
@@ -91,9 +92,13 @@ export function sanitizeExportFilename(value: string, fallback = 'route'): strin
 
 export function buildTrailKml(trail: ExportTrail): string {
   const group = trail.group || '默认';
-  const coordinates = trail.track
-    .map(point => `        ${point[1]},${point[0]},${point[2] || 0}`)
-    .join('\n');
+  const segments = splitTrackByBreaks(trail.track, trail.track_breaks);
+  const geometry = segments.map(segment => {
+    const coordinates = segment
+      .map(point => `          ${point[1]},${point[0]},${point[2] || 0}`)
+      .join('\n');
+    return `        <LineString><tessellate>1</tessellate><coordinates>\n${coordinates}\n        </coordinates></LineString>`;
+  }).join('\n');
   const waypoints = (trail.waypoints || []).map(point => waypointKml(point)).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
@@ -104,9 +109,9 @@ export function buildTrailKml(trail: ExportTrail): string {
     <Placemark>
       <name><![CDATA[${cdata(trail.name)}]]></name>
       <styleUrl>#trackStyle</styleUrl>
-      <LineString><tessellate>1</tessellate><coordinates>
-${coordinates}
-      </coordinates></LineString>
+      <MultiGeometry>
+${geometry}
+      </MultiGeometry>
     </Placemark>
 ${waypoints}  </Document>
 </kml>`;
@@ -118,18 +123,21 @@ export function buildMergedKml(
   exportedAt: string,
 ): string {
   const folders = trails.map((trail, index) => {
-    const coordinates = trail.track
-      .map(point => `          ${point[1]},${point[0]},${point[2] || 0}`)
-      .join('\n');
+    const geometry = splitTrackByBreaks(trail.track, trail.track_breaks).map(segment => {
+      const coordinates = segment
+        .map(point => `            ${point[1]},${point[0]},${point[2] || 0}`)
+        .join('\n');
+      return `          <LineString><tessellate>1</tessellate><coordinates>\n${coordinates}\n          </coordinates></LineString>`;
+    }).join('\n');
     const waypoints = (trail.waypoints || []).map(point => waypointKml(point, '      ')).join('');
     return `    <Style id="track_${index}"><LineStyle><color>${kmlColor(trail.color)}</color><width>3</width></LineStyle></Style>
     <Folder><name><![CDATA[${cdata(trail.name)}]]></name>
       <Placemark>
         <name><![CDATA[${cdata(trail.name)} 轨迹]]></name>
         <styleUrl>#track_${index}</styleUrl>
-        <LineString><tessellate>1</tessellate><coordinates>
-${coordinates}
-        </coordinates></LineString>
+        <MultiGeometry>
+${geometry}
+        </MultiGeometry>
       </Placemark>
 ${waypoints}    </Folder>`;
   }).join('\n');
@@ -187,43 +195,29 @@ ${trails.map((trail, index) => `${index + 1}. ${trail.name}  (${trail.stats.dist
   return files;
 }
 
-export function groupTrackByDay(track: readonly TrackTuple[]): ItineraryDayGroup[] {
-  const groups = new Map<number, TrackTuple[]>();
-  for(const point of track) {
+export function groupTrackByDay(track: readonly TrackTuple[], trackBreaks: number[] = []): ItineraryDayGroup[] {
+  const groups = new Map<number, ItineraryDayGroup>();
+  const breakSet = new Set(normalizeTrackBreaks(trackBreaks, track.length));
+  for(const [sourceIndex, point] of track.entries()) {
     const rawDay = Number(point[5]);
     const day = Number.isInteger(rawDay) && rawDay > 0 ? rawDay : 1;
-    const points = groups.get(day) || [];
-    points.push(point);
-    groups.set(day, points);
+    const group = groups.get(day) || {day, points:[], trackBreaks:[]};
+    if(breakSet.has(sourceIndex) && group.points.length) group.trackBreaks.push(group.points.length);
+    group.points.push(point);
+    groups.set(day, group);
   }
   return [...groups.entries()]
     .sort(([left], [right]) => left - right)
-    .map(([day, points]) => ({day, points}));
+    .map(([, group]) => group);
 }
 
-function dayStats(points: readonly TrackTuple[]) {
-  let distanceM = 0;
-  let max = -Infinity;
-  let min = Infinity;
-  const elevations: number[] = [];
-  for(let index = 0; index < points.length; index += 1) {
-    const elevation = Number.isFinite(points[index][2]) ? Number(points[index][2]) : 0;
-    elevations.push(elevation);
-    max = Math.max(max, elevation);
-    min = Math.min(min, elevation);
-    if(index > 0) {
-      distanceM += haversine(
-        points[index - 1][0], points[index - 1][1],
-        points[index][0], points[index][1],
-      );
-    }
-  }
-  const ascent = accumulatorAscent(elevations, 10).at(-1) || 0;
+function dayStats(points: readonly TrackTuple[], trackBreaks: number[] = []) {
+  const metrics = computeSegmentedTrackMetrics([...points], trackBreaks, 10);
   return {
-    km:(distanceM / 1000).toFixed(1),
-    ascent:Math.round(ascent),
-    max:Math.round(Number.isFinite(max) ? max : 0),
-    min:Math.round(Number.isFinite(min) ? min : 0),
+    km:metrics.stats.distance_km.toFixed(1),
+    ascent:metrics.stats.ascent_m,
+    max:metrics.stats.max_elev,
+    min:metrics.stats.min_elev,
   };
 }
 
@@ -233,7 +227,7 @@ export function buildItineraryMarkdown(
   charts: ItineraryChartMap = {},
 ): string {
   const isZh = language === 'zh';
-  const groups = groupTrackByDay(trail.track);
+  const groups = groupTrackByDay(trail.track, trail.track_breaks);
   let markdown = `# ${trail.name} ${isZh ? '行程表' : 'Itinerary'}\n\n`;
   markdown += `> 总里程 **${trail.stats.distance_km}km** · 爬升 **${trail.stats.ascent_m}m** · 最高 **${trail.stats.max_elev}m** · ${groups.length}天\n\n---\n\n`;
   markdown += '| 天数 | 里程 | 爬升 | 最高海拔 | 最低海拔 | 营地 |\n|---|---|---|---|---|---|\n';
@@ -244,7 +238,7 @@ export function buildItineraryMarkdown(
     }
   } else {
     groups.forEach((group, index) => {
-      const stats = dayStats(group.points);
+      const stats = dayStats(group.points, group.trackBreaks);
       const camp = (trail.waypoints || []).find(waypoint =>
         waypoint.tag === 'camp' && (waypoint.day || index + 1) === group.day);
       markdown += `| D${group.day} | ${stats.km}km | ${stats.ascent}m | ${stats.max}m | ${stats.min}m | ${camp ? `${waypointName(camp)} ${camp.elev || 0}m` : '-'} |\n`;
@@ -253,7 +247,7 @@ export function buildItineraryMarkdown(
   markdown += '\n---\n\n';
 
   groups.forEach((group, index) => {
-    const stats = dayStats(group.points);
+    const stats = dayStats(group.points, group.trackBreaks);
     const dayWaypoints = (trail.waypoints || []).filter(waypoint =>
       (waypoint.day || index + 1) === group.day);
     const camp = dayWaypoints.find(waypoint => waypoint.tag === 'camp');

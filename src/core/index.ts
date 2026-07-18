@@ -82,10 +82,29 @@ export {
 } from './elevationProfile.ts';
 
 export {
+  classifyWaypointTag,
   enrichWaypoints,
   generateNextTrailId,
   trailContentHash,
 } from './trail.ts';
+
+export {
+  stitchTrails,
+  type StitchJunction,
+  type StitchOptions,
+  type StitchPart,
+  type StitchedTrail,
+  type StitchTrail,
+  type StitchWaypoint,
+} from './stitch.ts';
+
+export {
+  computeSegmentedTrackMetrics,
+  normalizeTrackBreaks,
+  splitTrackByBreaks,
+  trackBreaksInRange,
+  type SegmentedTrackMetrics,
+} from './trackSegments.ts';
 
 export {
   buildKmlParseModel,
@@ -99,6 +118,7 @@ export {
 
 export {
   buildTrackLatLngs,
+  buildTrackLatLngSegments,
   clampTrackIndex,
   applyMeasureEndpointState,
   computeMeasureStats,
@@ -111,6 +131,7 @@ export {
 export {
   buildDayMetaFromSegments,
   buildDayMetaFromTrackDays,
+  collectNearbyItineraryWaypoints,
   computeDayRangeStats,
   deleteSegmentDay,
   getDayIndexRange,
@@ -124,6 +145,9 @@ export {
   segmentIndexesFromDayIds,
   segmentIndexesFromDayMeta,
   segmentIndexesToPoints,
+  type ItineraryWaypointRecord,
+  type ItineraryWaypointSourceTrail,
+  type NearbyItineraryWaypoint,
 } from './itinerary.ts';
 
 export {
@@ -135,6 +159,7 @@ export {
 export {
   buildManualEscapeRoute,
   escapeItineraryDays,
+  escapeRouteDays,
   resolveEscapeRouteDirection,
   resolveEscapeRouteDay,
   type EscapeAnchorPoint,

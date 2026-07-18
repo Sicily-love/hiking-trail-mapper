@@ -126,7 +126,7 @@ export const TRANSLATIONS: TranslationCatalog = {
     'tag.village': '村庄',
     'tag.view': '其他',
     'tag.other': '其他',
-    'tag.bridge': '桥',
+    'tag.bridge': '桥梁',
     'tag.river': '河流',
     'tag.peak': '山峰',
     'tag.viewpoint': '观景',

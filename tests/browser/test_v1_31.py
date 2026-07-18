@@ -248,7 +248,7 @@ try:
     check("Studio 主题变量已生效",
           evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
     check("旧命令节点已无损迁移到多项菜单或顶栏直接操作区",
-          evalj("['reverse-btn','clear-btn','segment-btn','add-escape-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup')) && ['add-trail-btn','measure-btn','add-waypoint-btn','export-btn','reset-btn','help-btn','lang-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-list')?.classList.contains('studio-menu-list'))"))
+          evalj("['reverse-btn','stitch-btn','clear-btn','segment-btn','add-escape-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup')) && ['add-trail-btn','measure-btn','add-waypoint-btn','export-btn','reset-btn','help-btn','lang-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-list')?.classList.contains('studio-menu-list'))"))
     check("轨迹组选择拥有独立入口和独立页面",
           evalj("!!document.getElementById('workbench-activity-groups') && !!document.querySelector('#tab-groups > #trail-group-panel #trail-group-list .group-tab') && !document.querySelector('#tab-trails #trail-group-panel, #trail-list .group-tab-bar')"))
     check("顶部、活动栏和分析栏均绑定语义命令",
@@ -345,7 +345,7 @@ try:
                'bindMeasureEndpointDrag', 'addMeasureEndpointMarker', 'measurePointFromHit',
                'buildTrackLatLngs', 'schedulePostRestoreReset',
                'bindPrimaryMiniDrag', 'applyPrimaryMiniPosition',
-               'schedulePrimaryMiniPositionApply', 'waypointIcon',
+               'schedulePrimaryMiniPositionApply', 'waypointIcon', 'waypointIconMarkup',
                'addManualWaypointAt', 'enterAddWaypointMode', 'exitAddWaypointMode',
                'nearestTrackIdxNearPrimary', 'getMeasureStatsCache',
                'computeMeasureStats', 'renderMeasureSegmentLine',
@@ -476,13 +476,18 @@ try:
             })()
           """) and source_has('function addWpMarker', 'function segmentApply', 'segmentController.apply'))
     check("标注点图标按 tag 统一渲染",
-          evalj("waypointIcon('supply') === '🏪'") and source_has('waypointIcon(wp)', 'waypointIcon(tag)'))
+          evalj("""
+            waypointIconMarkup('fork').includes('data-lucide=\"git-fork\"')
+              && waypointIconMarkup('warn').includes('data-lucide=\"triangle-alert\"')
+              && waypointIconMarkup('other').includes('data-lucide=\"map-pin\"')
+              && waypointIconMarkup('supply').includes('🏪')
+          """) and source_has('iconForWaypoint:waypointIconMarkup', 'waypointIconMarkup(tag)', 'waypointIconMarkup(wp)'))
     check("Workbench 顶栏含品牌、分组菜单和独立视图命令",
           evalj("""
             (() => {
               const toolbar = document.getElementById('map-toolbar');
               const commandIds = ['help-btn','reset-btn','measure-btn','segment-btn','add-waypoint-btn','lang-btn',
-                'add-escape-btn','reverse-btn','add-trail-btn','export-btn','clear-btn'];
+                'add-escape-btn','reverse-btn','stitch-btn','add-trail-btn','export-btn','clear-btn'];
               return document.documentElement.dataset.ui === 'studio'
                 && !!HTM_APP
                 && !!toolbar.querySelector('.studio-brand')
@@ -671,8 +676,15 @@ try:
           }};
           await handleFiles([fakeZipFile]);
           const after = DATA.trails.length;
+          const importedWaypoints = DATA.trails.slice(before).flatMap(trail => trail.waypoints || []);
           return {{ before, after, added: after - before,
-                   trailNames: DATA.trails.slice(before).map(t => t.name) }};
+                   trailNames: DATA.trails.slice(before).map(t => t.name),
+                   waypointCount: importedWaypoints.length,
+                   waypointFieldsReady: importedWaypoints.length > 0 && importedWaypoints.every(waypoint =>
+                     typeof waypoint.tag === 'string'
+                     && Number.isFinite(waypoint.km)
+                     && Number.isInteger(waypoint.day)
+                   ) }};
         }} catch(e) {{ return {{ error: e.message, stack: e.stack }}; }}
       }})()
     """)
@@ -681,8 +693,88 @@ try:
         check(f"轨迹数变化: {e2e['before']} → {e2e['after']}",
               e2e['after'] > e2e['before'],
               f"added={e2e['added']}, names={e2e['trailNames']}")
+        check("KML 标注点同步类型、里程和 Day",
+              e2e['waypointFieldsReady'] is True,
+              f"waypoints={e2e['waypointCount']}")
     else:
         check("端到端 zip 导入", False, str(e2e)[:200])
+
+    stitch_flow = evalj("""
+      (async () => {
+        const source = DATA.trails[0];
+        if(!source) return {error:'missing source trail'};
+        const fixture = JSON.parse(JSON.stringify(source));
+        fixture.id = 'browser-stitch-fixture';
+        fixture.name = 'Browser stitch fixture';
+        fixture.track = fixture.track.map(point => [point[0] + 1, point[1] + 1, point[2], point[3], point[4], point[5]]);
+        fixture.waypoints = [];
+        DATA.trails.push(fixture);
+        const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
+        registry.notifyChanged('trail.stitch');
+        const before = DATA.trails.length;
+        const pending = registry.dispatch('trail.stitch');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const rows = dialog?.querySelectorAll('.stitch-trail-row').length || 0;
+        const initialSelected = dialog?.querySelectorAll('.stitch-trail-check:checked').length || 0;
+        [...(dialog?.querySelectorAll('.stitch-trail-check') || [])].slice(0, 2).forEach(input => { input.checked = true; });
+        dialog?.querySelector('.workbench-dialog__button--primary')?.click();
+        await pending;
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const panelOpen = document.getElementById('stitch-panel')?.classList.contains('is-open');
+        const partCards = document.querySelectorAll('.stitch-part-card').length;
+        const firstPart = stitchState.parts[0];
+        const targetIndex = Math.max(1, Math.floor(firstPart.trail.track.length * .25));
+        const marker = stitchLayer.getLayers().find(layer => layer.dragging && layer._icon?.textContent === 'A');
+        if(marker) {
+          const target = firstPart.trail.track[targetIndex];
+          marker.fire('dragstart', {target:marker});
+          marker.setLatLng([target[0], target[1]]);
+          marker.fire('dragend', {target:marker});
+        }
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const name = document.getElementById('stitch-name');
+        if(name) name.value = 'Browser stitched trail';
+        document.getElementById('stitch-commit')?.click();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const created = DATA.trails.find(trail => trail.name === 'Browser stitched trail');
+        const result = {
+          rows,
+          initialSelected,
+          panelOpen,
+          partCards,
+          created:!!created,
+          sourceCount:created?.stitch_sources?.length || 0,
+          partialRange:Boolean(created?.stitch_sources?.[0])
+            && created.stitch_sources[0].startIndex > 0,
+          gapCount:created?.track_breaks?.length || 0,
+          disconnectedDistanceStable:Boolean(created?.track_breaks?.length)
+            && created.track[created.track_breaks[0]][3] === created.track[created.track_breaks[0] - 1][3],
+          pointCount:created?.track?.length || 0,
+          hasStats:Number(created?.stats?.distance_km) > 0,
+          originalPreserved:source.name !== 'Browser stitched trail',
+        };
+        if(created) trailController.deleteTrail(created.id);
+        trailController.deleteTrail(fixture.id);
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return result;
+      })()
+    """)
+    check("已有轨迹可排序拼接为独立新轨迹",
+          isinstance(stitch_flow, dict)
+          and stitch_flow.get('rows', 0) >= 2
+          and stitch_flow.get('initialSelected') == 0
+          and stitch_flow.get('panelOpen') is True
+          and stitch_flow.get('partCards') == 2
+          and stitch_flow.get('created') is True
+          and stitch_flow.get('sourceCount') >= 2
+          and stitch_flow.get('partialRange') is True
+          and stitch_flow.get('gapCount', 0) >= 1
+          and stitch_flow.get('disconnectedDistanceStable') is True
+          and stitch_flow.get('pointCount', 0) > 2
+          and stitch_flow.get('hasStats') is True
+          and stitch_flow.get('originalPreserved') is True,
+          str(stitch_flow))
 
     print("\n▸ Command 2.0：四类入口统一分发")
     command_flow = evalj("""
@@ -712,7 +804,7 @@ try:
         await Promise.resolve();
         const activityOpenedItinerary = document.querySelector('.tab[data-tab="days"]').classList.contains('active')
           && document.getElementById('workbench-activity-itinerary').classList.contains('is-active');
-        const escapeRoutesMerged = !!document.querySelector('#tab-days .itinerary-escape-section')
+        const escapeRoutesMerged = !!document.querySelector('#tab-days .itinerary-escape-tools')
           && !document.getElementById('tab-escape');
 
         document.getElementById('workbench-activity-trails').click();
@@ -816,6 +908,59 @@ try:
           && segmentState.points[boundaryIndex].idx === segmentDragIndex;
 
         segmentRestore();
+        const sidebarProbeWaypoints = ['fork','warn','other']
+          .filter(tag => !main.waypoints.some(waypoint => waypoint.tag === tag))
+          .map((tag, index) => ({
+            id:`sidebar-align-${tag}`,
+            name:tag,
+            label:tag,
+            tag,
+            lat:main.track[index][0],
+            lng:main.track[index][1],
+            elev:main.track[index][2],
+            km:main.track[index][3],
+            gps_idx:index,
+          }));
+        main.waypoints.push(...sidebarProbeWaypoints);
+        state.activeTrails.add(main.id);
+        buildFilterGrid();
+        const expectedVectorIcons = {fork:'git-fork', warn:'triangle-alert', other:'map-pin'};
+        const sidebarTagMetrics = ['fork','warn','other'].map(tag => {
+          const chip = document.querySelector(`#filter-grid .filter-chip[data-waypoint-tag="${tag}"]`);
+          const icon = chip?.querySelector('.waypoint-filter-icon');
+          const symbol = icon?.querySelector('svg.waypoint-symbol');
+          const label = chip?.querySelector('.filter-chip-label');
+          const chipRect = chip?.getBoundingClientRect();
+          const iconRect = icon?.getBoundingClientRect();
+          const symbolRect = symbol?.getBoundingClientRect();
+          const labelRect = label?.getBoundingClientRect();
+          return chipRect && iconRect && symbolRect && labelRect ? {
+            iconName:symbol.getAttribute('data-lucide'),
+            iconWidth:iconRect.width,
+            iconHeight:iconRect.height,
+            iconCenterY:iconRect.top + iconRect.height / 2,
+            chipCenterY:chipRect.top + chipRect.height / 2,
+            symbolWidth:symbolRect.width,
+            symbolHeight:symbolRect.height,
+            symbolCenterX:symbolRect.left + symbolRect.width / 2,
+            symbolCenterY:symbolRect.top + symbolRect.height / 2,
+            slotCenterX:iconRect.left + iconRect.width / 2,
+            slotCenterY:iconRect.top + iconRect.height / 2,
+            labelOffset:labelRect.left - chipRect.left,
+          } : null;
+        });
+        summary.sidebarWaypointAlignment = sidebarTagMetrics.every((metric, index) => metric
+          && metric.iconName === expectedVectorIcons[['fork','warn','other'][index]]
+          && Math.abs(metric.iconWidth - 22) < 0.5
+          && Math.abs(metric.iconHeight - 22) < 0.5
+          && Math.abs(metric.iconCenterY - metric.chipCenterY) < 0.5
+          && Math.abs(metric.symbolWidth - 16) < 0.5
+          && Math.abs(metric.symbolHeight - 16) < 0.5
+          && Math.abs(metric.symbolCenterX - metric.slotCenterX) < 0.5
+          && Math.abs(metric.symbolCenterY - metric.slotCenterY) < 0.5)
+          && sidebarTagMetrics.every(metric => Math.abs(metric.labelOffset - sidebarTagMetrics[0].labelOffset) < 0.5);
+        main.waypoints = main.waypoints.filter(waypoint => !sidebarProbeWaypoints.includes(waypoint));
+        buildFilterGrid();
         enterAddWaypointMode({announce:false});
         const waypointBefore = main.waypoints.length;
         dispatchRuntimeInteraction('waypoint', {
@@ -826,6 +971,24 @@ try:
         const waypointDialog = document.querySelector('dialog[open]');
         const waypointInput = waypointDialog?.querySelector('#manual-waypoint-name');
         if(waypointInput) {
+          const waypointTypeSelect = waypointDialog.querySelector('#manual-waypoint-tag');
+          const preview = waypointDialog.querySelector('.waypoint-type-select-preview');
+          const previewAligned = ['fork','warn','other'].every(tag => {
+            waypointTypeSelect.value = tag;
+            waypointTypeSelect.dispatchEvent(new Event('change', {bubbles:true}));
+            const symbol = preview.querySelector('svg.waypoint-symbol');
+            const previewRect = preview.getBoundingClientRect();
+            const symbolRect = symbol?.getBoundingClientRect();
+            return symbol?.getAttribute('data-lucide') === expectedVectorIcons[tag]
+              && Math.abs(symbolRect.width - 16) < 0.5
+              && Math.abs(symbolRect.height - 16) < 0.5
+              && Math.abs((symbolRect.left + symbolRect.width / 2) - (previewRect.left + previewRect.width / 2)) < 0.5
+              && Math.abs((symbolRect.top + symbolRect.height / 2) - (previewRect.top + previewRect.height / 2)) < 0.5;
+          });
+          summary.waypointTypeAlignment = waypointTypeSelect instanceof HTMLSelectElement
+            && waypointTypeSelect.options.length === 13
+            && ['fork','warn','other'].every(tag => [...waypointTypeSelect.options].some(option => option.value === tag))
+            && previewAligned;
           waypointInput.value = '状态机标注';
           waypointInput.dispatchEvent(new Event('input', {bubbles:true}));
           waypointDialog.querySelector('#manual-waypoint-tag').value = 'camp';
@@ -860,7 +1023,15 @@ try:
         const dayMetricLabels = [...document.querySelectorAll('#tab-days .day-stats .lab')]
           .map(element => element.textContent.trim());
         summary.campNotDuplicated = !dayMetricLabels.includes('扎营点')
-          && !!document.querySelector('#tab-days .day-camp');
+          && !!document.querySelector('#tab-days .day-camp')
+          && !document.querySelector('#tab-days [data-waypoint-tag="camp"]');
+        showTooltip(
+          {originalEvent:{clientX:120, clientY:120}},
+          main.track[0], main.track[Math.min(1, main.track.length - 1)], main,
+        );
+        summary.trackCoordinates = document.getElementById('tooltip').textContent.includes(main.track[0][0].toFixed(6))
+          && document.getElementById('tooltip').textContent.includes(main.track[0][1].toFixed(6));
+        hideTooltip();
         showDaySegmentPreview(main, day);
         summary.dayReplacedEscape = interactionManager.current.kind === 'day-preview'
           && interactionManager.current.phase === 'preview'
@@ -890,8 +1061,11 @@ try:
             ('segmentTap', '分段地图事件插入边界'),
             ('segmentDrag', '分段边界拖动经过 dragging 并回到 editing'),
             ('waypointCommitted', '标注提交后自动回到 idle'),
+            ('waypointTypeAlignment', '新增标注点使用原生类型下拉框'),
+            ('sidebarWaypointAlignment', '轨迹页侧栏的岔路、警示和其他图标对齐'),
             ('escapePreview', '下撤 A/B 选择进入 preview'),
             ('campNotDuplicated', 'Day 统计不再重复扎营点信息'),
+            ('trackCoordinates', '轨迹点信息显示经纬度'),
             ('dayReplacedEscape', 'Day 预览替换下撤'),
             ('dayToggleExit', '再次点击 Day 退出预览'),
             ('escapeKey', 'Escape 键统一取消当前模式'),
@@ -913,8 +1087,19 @@ try:
         if(!main?.track?.length) return {error:'missing-primary'};
 
         const originalDays = main.track.map(point => point[5]);
+        const originalDayMeta = main.day_meta;
         const half = Math.floor(main.track.length / 2);
         main.track.forEach((point, index) => { point[5] = index < half ? 1 : 2; });
+        const dayMeta = (day, start, end) => {
+          const stats = HTM_CORE.computeDayRangeStats(main, {iStart:start, iEnd:end});
+          return {
+            d:day, date:'', km:stats.km, asc:stats.asc, desc:stats.desc,
+            max:stats.max, min:stats.min, camp:`D${day} camp`,
+            camp_elev:Math.round(main.track[end][2] || 0), seg:`D${day} browser range`,
+            i_start:start, i_end:end,
+          };
+        };
+        main.day_meta = [dayMeta(1, 0, half - 1), dayMeta(2, half, main.track.length - 1)];
         const makeAnchor = index => {
           const point = main.track[index];
           return {
@@ -935,24 +1120,27 @@ try:
           && interactionManager.current.phase === 'preview'
           && !!addEscapeState._pending;
         const daySelect = document.getElementById('addescape-day-select');
-        const manualDayOptions = [...daySelect.options].map(option => option.value).join('|') === '1|2';
-        daySelect.value = '2';
-        daySelect.dispatchEvent(new Event('change', {bubbles:true}));
-        const manualDayApplied = addEscapeState._pending?.day === 2
-          && document.getElementById('ae-day').textContent === 'D2';
+        const dayInputs = [...daySelect.querySelectorAll('input[type="checkbox"]')];
+        const manualDayOptions = ['1','2'].every(day => dayInputs.some(input => input.value === day));
+        const dayTwoInput = dayInputs.find(input => input.value === '2');
+        dayTwoInput.checked = true;
+        dayTwoInput.dispatchEvent(new Event('change', {bubbles:true}));
+        const manualDayApplied = addEscapeState._pending?.days?.join('|') === '1|2'
+          && document.getElementById('ae-day').textContent === 'D1、D2';
         document.getElementById('addescape-name').value = 'Browser escape filter probe';
         const routeId = addEscapeState._pending?.id;
         addEscapeCommit();
         await waitFrames();
 
-        const routeItem = document.querySelector(`.escape-item[data-id="${routeId}"]`);
+        const routeItems = [...document.querySelectorAll(`.escape-item[data-id="${routeId}"]`)];
+        const routeItem = routeItems[0];
         const filterBar = document.querySelector('.escape-filter-bar');
         if(!routeItem || !filterBar) return {
           error:'missing-saved-route-filter',
           previewed,
           routeId,
           pendingDay:addEscapeState._pending?.day || null,
-          savedRoutes:(main.escape_routes || []).map(route => ({id:route.id, name:route.name, day:route.day})),
+          savedRoutes:(main.escape_routes || []).map(route => ({id:route.id, name:route.name, day:route.day, days:route.days})),
           dayTabHtml:document.getElementById('tab-days')?.innerHTML.slice(-500),
         };
         const nameFilter = filterBar?.querySelector('.escape-filter-input');
@@ -971,14 +1159,40 @@ try:
         referenceFilter.value = main.id;
         referenceFilter.dispatchEvent(new Event('change', {bubbles:true}));
         const combinedFiltersMatch = !!routeItem && !routeItem.hidden;
+        const multiDayPlacement = routeItems.length === 2
+          && routeItems.map(item => item.closest('.day-block')?.dataset.day).sort().join('|') === '1|2';
         directionFilter.value = 'reverse';
         directionFilter.dispatchEvent(new Event('change', {bubbles:true}));
         const directionFilterHides = routeItem?.hidden === true;
         nameFilter.value = 'no matching route';
         nameFilter.dispatchEvent(new Event('input', {bubbles:true}));
-        const filteredEmptyVisible = document.querySelector('.itinerary-escape-section .itinerary-escape-empty:not([hidden])')?.textContent.includes('筛选');
+        const filteredSectionsHidden = [...document.querySelectorAll('.day-escape-section')]
+          .filter(section => section.querySelector(`[data-id="${routeId}"]`))
+          .every(section => section.hidden);
+
+        const nearbySource = {
+          id:'browser-nearby-source', name:'Nearby source', group:state.activeGroup, track:[],
+          waypoints:[
+            {id:'near-bridge', lat:main.track[1][0], lng:main.track[1][1], tag:'bridge', label:'Nearby bridge', elev:main.track[1][2], km:0},
+            {id:'near-other', lat:main.track[1][0], lng:main.track[1][1], tag:'other', label:'Nearby other', elev:main.track[1][2], km:0},
+          ],
+        };
+        DATA.trails.push(nearbySource);
+        buildDaysTab();
+        const nearbyInput = document.querySelector('.nearby-waypoint-option[data-waypoint-ref="browser-nearby-source#near-bridge"] input');
+        const nearbyCandidateVisible = !!nearbyInput;
+        const nearbyTypesMatch = !document.querySelector('.nearby-waypoint-option[data-waypoint-ref="browser-nearby-source#near-other"]');
+        if(nearbyInput) {
+          nearbyInput.checked = true;
+          nearbyInput.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+        const nearbySelectionPersisted = Object.values(main.itinerary_waypoint_refs || {})
+          .some(refs => refs.includes('browser-nearby-source#near-bridge'));
+        DATA.trails.splice(DATA.trails.indexOf(nearbySource), 1);
+        delete main.itinerary_waypoint_refs;
         escapeController.deleteRoute(main.id, routeId);
         main.track.forEach((point, index) => { point[5] = originalDays[index]; });
+        main.day_meta = originalDayMeta;
         buildDaysTab();
 
         segmentEnter();
@@ -1029,9 +1243,13 @@ try:
           manualDayOptions,
           manualDayApplied,
           combinedFiltersMatch,
+          multiDayPlacement,
           filtersFit,
           directionFilterHides,
-          filteredEmptyVisible,
+          filteredSectionsHidden,
+          nearbyCandidateVisible,
+          nearbyTypesMatch,
+          nearbySelectionPersisted,
           dirtyVisible,
           restoreWorks,
           cancelDialogVisible,
@@ -1049,11 +1267,17 @@ try:
               and patch_interactions.get('manualDayOptions') is True
               and patch_interactions.get('manualDayApplied') is True,
               str(patch_interactions))
+        check("一条下撤方案显示在多个对应 Day 内", patch_interactions.get('multiDayPlacement') is True, str(patch_interactions))
         check("名称、方向、Day 与依据轨迹联合筛选有效",
               patch_interactions.get('combinedFiltersMatch') is True
               and patch_interactions.get('filtersFit') is True
               and patch_interactions.get('directionFilterHides') is True
-              and patch_interactions.get('filteredEmptyVisible') is True,
+              and patch_interactions.get('filteredSectionsHidden') is True,
+              str(patch_interactions))
+        check("每日行程可选取附近其他轨迹标注",
+              patch_interactions.get('nearbyCandidateVisible') is True
+              and patch_interactions.get('nearbyTypesMatch') is True
+              and patch_interactions.get('nearbySelectionPersisted') is True,
               str(patch_interactions))
         check("还原分段恢复进入编辑时的边界",
               patch_interactions.get('dirtyVisible') is True and patch_interactions.get('restoreWorks') is True,
@@ -1081,7 +1305,9 @@ try:
         state.showLabel = true;
         main.waypoints.forEach(waypoint => state.visibleTags.add(waypoint.tag));
         setMapMode('waypoint');
-        await waitFrames();
+        // Drain delayed sidebar/map resize work from the previous interaction group before measuring coalescing.
+        await new Promise(resolve => setTimeout(resolve, 350));
+        await waitFrames(3);
 
         const phaseBefore = {...window.__HTM_RENDER_STATS__.phases};
         const framesBefore = window.__HTM_RENDER_STATS__.frames;
@@ -1141,11 +1367,13 @@ try:
         const canvasLimit = Math.max(2, Math.floor(elevCanvas.offsetWidth || 340)) * 2;
 
         const fitBefore = {...window.__HTM_RENDER_STATS__.fit};
+        const resetRenderBefore = {...window.__HTM_RENDER_STATS__.phases};
         const firstReset = resetView({restoreActive:true});
         const secondReset = resetView({restoreActive:true});
         const resetResults = await Promise.all([firstReset, secondReset]);
         await waitFrames();
         const fitAfter = window.__HTM_RENDER_STATS__.fit;
+        const resetRenderAfter = window.__HTM_RENDER_STATS__.phases;
         const bounds = map.getBounds();
         const firstPoint = main.track[0];
         const lastPoint = main.track[main.track.length - 1];
@@ -1167,6 +1395,13 @@ try:
           resetApplied:fitAfter.applied - fitBefore.applied,
           resetRequested:fitAfter.requested - fitBefore.requested,
           latestResetEpoch:fitAfter.lastResetEpoch,
+          resetRenderDelta:{
+            tracks:resetRenderAfter.tracks - resetRenderBefore.tracks,
+            markers:resetRenderAfter.markers - resetRenderBefore.markers,
+            sidebar:resetRenderAfter.sidebar - resetRenderBefore.sidebar,
+            legend:resetRenderAfter.legend - resetRenderBefore.legend,
+            chart:resetRenderAfter.chart - resetRenderBefore.chart,
+          },
           boundsContainEndpoints:bounds.contains([firstPoint[0], firstPoint[1]])
             && bounds.contains([lastPoint[0], lastPoint[1]]),
           schedulerIdle:window.__HTM_RENDER_SCHEDULER__.pendingMask === 0
@@ -1206,6 +1441,10 @@ try:
               str(performance_flow))
         check("最终复位范围包含主轨迹端点",
               performance_flow.get('boundsContainEndpoints') is True)
+        reset_render_delta = performance_flow.get('resetRenderDelta', {})
+        check("稳定状态复位不触发业务图层全量重绘",
+              all(value == 0 for value in reset_render_delta.values()),
+              str(reset_render_delta))
         check("渲染队列最终归零", performance_flow.get('schedulerIdle') is True)
     else:
         check("Performance 2.0 真实运行时", False, str(performance_flow))

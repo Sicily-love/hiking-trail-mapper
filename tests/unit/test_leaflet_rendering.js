@@ -81,6 +81,21 @@ T('map controller owns active-group selection without classic globals', () => {
   assert.ok(model.polylines.every(line => line.trail.id === 'a'));
 });
 
+T('map model keeps disconnected track parts as separate Leaflet paths', () => {
+  const trail = {
+    id:'a', name:'A', color:'#080', active:true,
+    track:[[0,0,100],[0,.001,120],[1,1,4000],[1,1.001,4020]],
+    track_breaks:[2],
+  };
+  const model = app.buildTrackRenderModel({
+    trails:[trail], primaryTrailId:'a', mode:'waypoint', showTrack:true,
+    activeEscape:null, dayPalette:['#123456'], elevationBandCount:40,
+  });
+  const bloom = model.polylines.find(line => line.key === 'a:bloom-outer');
+  assert.strictEqual(bloom.latLngs.length, 2);
+  assert.deepStrictEqual(bloom.latLngs.map(path => path.length), [2,2]);
+});
+
 T('escape reference trail renders last with a visible halo while alternatives dim', () => {
   const points = [[30,100,1000],[31,101,1100]];
   const model = app.buildTrackRenderModel({
@@ -107,12 +122,14 @@ T('track adapter exclusively creates layers and throttles hover callbacks', () =
   const networkLayer = createLayer();
   let queued = null;
   let hovered = 0;
+  let inspected = 0;
   let selected = null;
   const renderer = app.createLeafletTrackRenderer({
     leaflet:leaflet.api, trackLayer, networkLayer,
     requestFrame:callback => { queued = callback; return 7; },
     cancelFrame:() => { queued = null; }, interactionBlocked:() => false,
-    onHover:() => { hovered++; }, onHoverEnd:() => {}, onSelectTrail:id => { selected = id; },
+    onHover:() => { hovered++; }, onHoverEnd:() => {},
+    onInspectPoint:() => { inspected++; }, onSelectTrail:id => { selected = id; },
   });
   const trail = {id:'a', name:'A', track:[[30,100,1000],[31,101,1100]]};
   renderer.render({polylines:[{
@@ -130,6 +147,13 @@ T('track adapter exclusively creates layers and throttles hover callbacks', () =
   assert.strictEqual(hovered, 1);
   line.events.click();
   assert.strictEqual(selected, 'a');
+  assert.strictEqual(inspected, 0);
+
+  renderer.render({polylines:[{
+    key:'a:inspect', trail, latLngs:[[30,100],[31,101]], lineStyle:{color:'#000'}, hoverable:true,
+  }], elevationBands:0, minElevation:1000, maxElevation:1100});
+  trackLayer.added[0].events.click({latlng:{lat:30,lng:100}});
+  assert.strictEqual(inspected, 1);
 });
 
 T('Marker adapter keeps stable instances and replaces only changed keys', () => {
@@ -146,6 +170,9 @@ T('Marker adapter keeps stable instances and replaces only changed keys', () => 
   const first = app.buildWaypointMarkerModel({
     trail, waypoint, isPrimary:true, waypointMode:false, color:'#22c55e', iconText:'C',
   });
+  assert.deepStrictEqual(first.iconSize, [24, 24]);
+  assert.deepStrictEqual(first.iconAnchor, [12, 12]);
+  assert.ok(first.iconHtml.includes('wp-marker-shell'));
   assert.deepStrictEqual(renderer.renderWaypoints([first]), {add:1, update:0, remove:0, keep:0});
   const stable = registry['a#1'];
   assert.deepStrictEqual(renderer.renderWaypoints([first]), {add:0, update:0, remove:0, keep:1});

@@ -1,4 +1,4 @@
-import { buildTrackLatLngs, normalizeTrackIndexRange } from './measure.ts';
+import { buildTrackLatLngs, buildTrackLatLngSegments, normalizeTrackIndexRange } from './measure.ts';
 import type { DayIndexRange, DayPreviewRenderModel, TrackIndexPoint, TrackTuple } from './types.ts';
 
 export function buildMeasureSegmentRenderModel(
@@ -6,12 +6,14 @@ export function buildMeasureSegmentRenderModel(
   ptA: TrackIndexPoint | null,
   ptB: TrackIndexPoint | null,
   maxPoints = 900,
+  trackBreaks: number[] = [],
 ) {
   if(!track.length || !ptA || !ptB) return null;
   const range = normalizeTrackIndexRange(track, ptA.idx, ptB.idx);
   if(!range) return null;
-  const latLngs = buildTrackLatLngs(track, range.iStart, range.iEnd, maxPoints);
-  if(latLngs.length < 2) return null;
+  const segments = buildTrackLatLngSegments(track, range.iStart, range.iEnd, trackBreaks, maxPoints);
+  if(!segments.length) return null;
+  const latLngs = segments.length === 1 ? segments[0] : segments;
   return {
     ...range,
     latLngs,
@@ -24,6 +26,7 @@ export function buildSegmentLayerModel(
   points: TrackIndexPoint[],
   dayColors: string[],
   maxPoints = 900,
+  trackBreaks: number[] = [],
 ) {
   const segments = [];
   for(let d = 1; d < points.length; d++) {
@@ -33,7 +36,10 @@ export function buildSegmentLayerModel(
       day: d,
       color: dayColors[(d - 1) % dayColors.length],
       ...range,
-      latLngs: buildTrackLatLngs(track, range.iStart, range.iEnd, maxPoints),
+      latLngs:(() => {
+        const paths = buildTrackLatLngSegments(track, range.iStart, range.iEnd, trackBreaks, maxPoints);
+        return paths.length === 1 ? paths[0] : paths;
+      })(),
       lineStyle: { color: dayColors[(d - 1) % dayColors.length], weight: 7, opacity: 0.85, interactive: false },
     });
   }
@@ -62,12 +68,14 @@ export function buildDayPreviewRenderModel(
   track: TrackTuple[],
   range: DayIndexRange | null | undefined,
   maxPoints = 1200,
+  trackBreaks: number[] = [],
 ): DayPreviewRenderModel | null {
   if(!track.length || !range) return null;
   const normalized = normalizeTrackIndexRange(track, range.iStart, range.iEnd);
   if(!normalized) return null;
-  const latLngs = buildTrackLatLngs(track, normalized.iStart, normalized.iEnd, maxPoints);
-  if(latLngs.length < 2) return null;
+  const segments = buildTrackLatLngSegments(track, normalized.iStart, normalized.iEnd, trackBreaks, maxPoints);
+  if(!segments.length) return null;
+  const latLngs = segments.length === 1 ? segments[0] : segments;
   const start = track[normalized.iStart];
   const end = track[normalized.iEnd];
   return {

@@ -1,4 +1,5 @@
 import { computeMeasureStats, computeSegmentStats, pointFromTrackIndex } from './measure.ts';
+import { haversine } from './geo.ts';
 import type {
   DayIndexRange,
   DayMeta,
@@ -12,6 +13,68 @@ import type {
 } from './types.ts';
 
 const KEY_WAYPOINT_TAGS = new Set(['start', 'camp', 'pass', 'village', 'supply', 'end']);
+
+export interface ItineraryWaypointRecord {
+  id?: string | number;
+  lat: number;
+  lng: number;
+  label?: string;
+  name?: string;
+  tag?: string;
+  km?: number;
+  elev?: number;
+  [key: string]: unknown;
+}
+
+export interface ItineraryWaypointSourceTrail {
+  id: string;
+  name: string;
+  waypoints?: ItineraryWaypointRecord[];
+}
+
+export interface NearbyItineraryWaypoint {
+  ref: string;
+  sourceTrailId: string;
+  sourceTrailName: string;
+  distanceM: number;
+  waypoint: ItineraryWaypointRecord;
+}
+
+export function collectNearbyItineraryWaypoints(
+  primaryTrack: TrackTuple[],
+  range: DayIndexRange | null | undefined,
+  sourceTrails: ItineraryWaypointSourceTrail[],
+  maxDistanceM = 200,
+): NearbyItineraryWaypoint[] {
+  if(!primaryTrack.length || !range || maxDistanceM < 0) return [];
+  const start = Math.max(0, Math.min(range.iStart, range.iEnd));
+  const end = Math.min(primaryTrack.length - 1, Math.max(range.iStart, range.iEnd));
+  if(end < start) return [];
+  const candidates: NearbyItineraryWaypoint[] = [];
+  for(const source of sourceTrails) {
+    (source.waypoints || []).forEach((waypoint, waypointIndex) => {
+      if(!Number.isFinite(waypoint.lat) || !Number.isFinite(waypoint.lng)) return;
+      let nearest = Infinity;
+      for(let trackIndex = start; trackIndex <= end; trackIndex += 1) {
+        const point = primaryTrack[trackIndex];
+        const distance = haversine(waypoint.lat, waypoint.lng, point[0], point[1]);
+        if(distance < nearest) nearest = distance;
+        if(nearest <= 0.5) break;
+      }
+      if(nearest > maxDistanceM) return;
+      const waypointId = waypoint.id == null ? `index-${waypointIndex}` : String(waypoint.id);
+      candidates.push({
+        ref:`${source.id}#${waypointId}`,
+        sourceTrailId:source.id,
+        sourceTrailName:source.name,
+        distanceM:Math.round(nearest),
+        waypoint,
+      });
+    });
+  }
+  return candidates.sort((left, right) => left.distanceM - right.distanceM
+    || left.sourceTrailName.localeCompare(right.sourceTrailName));
+}
 
 function clampIndex(length: number, idx: number): number {
   if(length <= 0) return 0;
@@ -151,7 +214,7 @@ export function computeDayRangeStats(
 
   const hasDistanceCum = trail.track.some(p => Number.isFinite(p[3]));
   if(hasDistanceCum) {
-    const measureStats = computeMeasureStats(trail.track, iStart, iEnd);
+    const measureStats = computeMeasureStats(trail.track, iStart, iEnd, trail._descCum);
     if(measureStats) {
       return {
         km: measureStats.distKm,
@@ -281,7 +344,7 @@ export function buildDayMetaFromSegments(
       max: stats.maxE,
       min: stats.minE,
       camp: campData.name && campData.name.trim() ? campData.name.trim() : '-',
-      camp_elev: campData.elev != null ? Math.round(campData.elev) : Math.round(points[d].elev),
+      camp_elev: Math.round(points[d].elev),
       seg,
       i_start: stats.iStart,
       i_end: stats.iEnd,
@@ -319,7 +382,7 @@ export function buildDayMetaFromTrackDays(
       max: stats?.maxE || 0,
       min: stats?.minE || 0,
       camp: camp ? camp.label : '未标注',
-      camp_elev: camp ? camp.elev : (stats?.maxE || 0),
+      camp_elev: Math.round(track[iEnd]?.[2] || 0),
       seg: keyWps.length ? keyWps.slice(0, 5).map(w => w.label).join(' → ') : `D${d}行程`,
       i_start: iStart,
       i_end: iEnd,

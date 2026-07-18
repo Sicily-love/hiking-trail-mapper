@@ -288,7 +288,34 @@ try:
       })()
     """)
     time.sleep(0.6)
-    measure_state = evaluate("measureState.active && !!measureState.ptA && !!measureState.ptB && getComputedStyle(document.getElementById('measure-panel')).display !== 'none'")
+    measure_state = evaluate("""
+      (() => {
+        const panel = document.getElementById('measure-panel');
+        const buttons = [...(panel?.querySelectorAll('button') || [])];
+        const visible = node => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return style.display !== 'none' && style.visibility !== 'hidden'
+            && rect.width > 0 && rect.height > 0
+            && rect.left >= 0 && rect.top >= 0
+            && rect.right <= innerWidth && rect.bottom <= innerHeight;
+        };
+        const panelRect = panel?.getBoundingClientRect();
+        const center = panelRect && document.elementFromPoint(
+          panelRect.left + panelRect.width / 2,
+          panelRect.top + panelRect.height / 2,
+        );
+        return {
+          active:measureState.active && !!measureState.ptA && !!measureState.ptB,
+          visible:!!panel && visible(panel),
+          buttonCount:buttons.length,
+          buttonsVisible:buttons.every(visible),
+          rect:panelRect ? {left:panelRect.left, top:panelRect.top, right:panelRect.right, bottom:panelRect.bottom, width:panelRect.width, height:panelRect.height} : null,
+          opacity:panel ? getComputedStyle(panel).opacity : null,
+          topElement:center ? `${center.tagName.toLowerCase()}#${center.id}.${center.className}` : null,
+        };
+      })()
+    """)
     hide_transient_ui()
     wait_for_map_tiles()
     measure_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
@@ -316,6 +343,49 @@ try:
     evaluate("""
       (() => {
         segmentExit();
+        enterAddWaypointMode({announce:false});
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        const point = main.track[Math.floor(main.track.length * 0.35)];
+        dispatchRuntimeInteraction('waypoint', {
+          type:'tap', source:'visual-regression', latlng:{lat:point[0], lng:point[1]}, requireNear:true,
+        });
+      })()
+    """)
+    time.sleep(0.3)
+    waypoint_dialog_state = evaluate("""
+      (() => {
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const surface = dialog?.querySelector('.workbench-dialog__surface');
+        const select = dialog?.querySelector('#manual-waypoint-tag');
+        const preview = dialog?.querySelector('.waypoint-type-select-preview');
+        if(select) {
+          select.value = 'fork';
+          select.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+        const symbol = preview?.querySelector('svg.waypoint-symbol');
+        const previewRect = preview?.getBoundingClientRect();
+        const symbolRect = symbol?.getBoundingClientRect();
+        const rect = surface?.getBoundingClientRect();
+        return !!dialog && !!surface && select instanceof HTMLSelectElement
+          && select.options.length === 13
+          && ['fork','warn','other'].every(tag => [...select.options].some(option => option.value === tag))
+          && symbol?.getAttribute('data-lucide') === 'git-fork'
+          && Math.abs(symbolRect.width - 16) < .5
+          && Math.abs(symbolRect.height - 16) < .5
+          && Math.abs((symbolRect.left + symbolRect.width / 2) - (previewRect.left + previewRect.width / 2)) < .5
+          && Math.abs((symbolRect.top + symbolRect.height / 2) - (previewRect.top + previewRect.height / 2)) < .5
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && surface.scrollWidth <= surface.clientWidth;
+      })()
+    """)
+    waypoint_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-waypoint-types.png").write_bytes(base64.b64decode(waypoint_dialog_shot["result"]["data"]))
+    evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__actions .workbench-dialog__button:not([type=\"submit\"])')?.click()")
+    time.sleep(0.1)
+
+    evaluate("""
+      (() => {
         window.__visualDialogPromise = window.__OUTDOOR_ROUTE_STUDIO__?.dialogs.prompt({
           title:'Rename trail',
           message:'Update the route name used across the workspace.',
@@ -347,6 +417,54 @@ try:
     (OUTPUT / "workbench-dialog.png").write_bytes(base64.b64decode(dialog_shot["result"]["data"]))
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
     time.sleep(0.1)
+
+    evaluate("""
+      (() => {
+        const source = DATA.trails[0];
+        const fixture = JSON.parse(JSON.stringify(source));
+        fixture.id = 'visual-stitch-fixture';
+        fixture.name = 'Stitch range fixture';
+        fixture.track.reverse();
+        fixture.waypoints = [];
+        DATA.trails.push(fixture);
+        window.__visualStitchPromise = window.__OUTDOOR_ROUTE_STUDIO__.commands.dispatch('trail.stitch');
+        return true;
+      })()
+    """)
+    time.sleep(0.3)
+    stitch_dialog_state = evaluate("""
+      (() => {
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const surface = dialog?.querySelector('.workbench-dialog__surface');
+        const body = dialog?.querySelector('.workbench-dialog__body');
+        const rows = [...(dialog?.querySelectorAll('.stitch-trail-row') || [])];
+        const rect = surface?.getBoundingClientRect();
+        return !!dialog && !!surface && rows.length === 2
+          && rows.every(row => row.querySelector('.stitch-trail-check'))
+          && rows.every(row => !row.querySelector('.stitch-trail-check').checked)
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && surface.scrollWidth <= surface.clientWidth
+          && body.scrollWidth <= body.clientWidth;
+      })()
+    """)
+    stitch_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-stitch-sources.png").write_bytes(base64.b64decode(stitch_dialog_shot["result"]["data"]))
+    evaluate("""
+      (async () => {
+        document.querySelectorAll('dialog.workbench-dialog[open] .stitch-trail-check').forEach(input => { input.checked = true; });
+        document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--primary')?.click();
+        await window.__visualStitchPromise;
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        window.__visualStitchWorkbenchValid = document.getElementById('stitch-panel')?.classList.contains('is-open')
+          && document.querySelectorAll('.stitch-part-card').length === 2
+          && stitchLayer.getLayers().length >= 6;
+        await requestStitchExit(true);
+        DATA.trails = DATA.trails.filter(trail => trail.id !== 'visual-stitch-fixture');
+      })()
+    """)
+    time.sleep(0.1)
+    stitch_dialog_state = bool(stitch_dialog_state and evaluate("!!window.__visualStitchWorkbenchValid"))
 
     cdp("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
     evaluate("toggleSidebar(true)")
@@ -397,12 +515,22 @@ try:
         elevation_collapse_state.get("compact"),
         elevation_collapse_state.get("mapExpanded"),
     ])
-    if not group_state or not day_state or not measure_state or not segment_state or not dialog_state or not mobile_dialog_state or not elevation_collapse_valid:
+    measure_state_valid = all([
+        measure_state.get("active"),
+        measure_state.get("visible"),
+        measure_state.get("buttonCount") == 3,
+        measure_state.get("buttonsVisible"),
+        measure_state.get("opacity") != "0",
+        measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
+    ])
+    if not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not stitch_dialog_state or not mobile_dialog_state or not elevation_collapse_valid:
         invalid.append("interaction-states")
     if invalid:
+        print(json.dumps({"measure":measure_state}, ensure_ascii=False))
         raise RuntimeError(f"Visual layout contract failed: {', '.join(invalid)}")
     ws.close()
     print(OUTPUT)
+    print(json.dumps({"measure":measure_state}, ensure_ascii=False))
     print(json.dumps(report, ensure_ascii=False))
 finally:
     process.terminate()

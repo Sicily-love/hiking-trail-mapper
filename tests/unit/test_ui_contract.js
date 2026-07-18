@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const root = path.resolve(__dirname, '../..');
 const css = fs.readFileSync(path.join(root, 'src/styles/components.css'), 'utf8');
+const studioCss = fs.readFileSync(path.join(root, 'src/styles/studio.css'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const { runtimeSource: runtime } = require('./runtime_source');
 const visual = fs.readFileSync(path.join(root, 'tests/visual/capture_workbench.py'), 'utf8');
@@ -24,7 +25,7 @@ T('desktop toolbar is one grouped command surface with stable controls', () => {
   assert.ok(css.includes('.toolbar-brand {'));
   assert.ok(css.includes('width:54px;'));
   assert.ok(css.includes('left:52px;'));
-  assert.strictEqual((html.match(/class="tb-btn"/g) || []).length, 10);
+  assert.strictEqual((html.match(/class="tb-btn"/g) || []).length, 11);
 });
 T('toolbar brand text is clipped within its own column', () => {
   assert.ok(css.includes('.toolbar-brand > span:last-child'));
@@ -43,11 +44,17 @@ T('elevation analysis dock can collapse and persists its state', () => {
   assert.ok(ui.includes("button.id = 'elev-toggle'"));
   assert.ok(css.includes('#elev-bar.collapsed'));
 });
-T('escape filters and segment dirty state have dedicated controls', () => {
+T('waypoint select, escape filters, and segment dirty state have dedicated controls', () => {
   assert.ok(css.includes('.escape-filter-bar'));
+  assert.ok(studioCss.includes('.waypoint-type-select'));
+  assert.ok(css.includes('.waypoint-filter-icon'));
+  assert.strictEqual(studioCss.includes('.waypoint-type-picker'), false);
   assert.ok(css.includes('.escape-direction-tag'));
   assert.ok(css.includes('.segment-dirty-indicator'));
   assert.ok(runtime.includes('addescape-day-select'));
+  assert.ok(runtime.includes('DAY_ITINERARY_WAYPOINT_TAGS'));
+  assert.ok(runtime.includes("const tag = document.createElement('select')"));
+  assert.strictEqual(runtime.includes("tag.type = 'hidden'"), false);
   assert.ok(runtime.includes('requestSegmentExit'));
 });
 T('sidebar becomes a mobile bottom sheet', () => {

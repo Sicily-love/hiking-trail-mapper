@@ -8,6 +8,7 @@ Detailed feature list, interactions, shortcuts, and design considerations.
 
 - [Import KML](#import-kml)
 - [Multi-trail overlay & primary trail](#multi-trail-overlay--primary-trail)
+- [Stitch existing trails](#stitch-existing-trails)
 - [Three coloring modes](#three-coloring-modes)
 - [Waypoint system](#waypoint-system)
 - [Elevation chart](#elevation-chart)
@@ -37,6 +38,19 @@ Detailed feature list, interactions, shortcuts, and design considerations.
 - **Other trails**: `opacity: 0.45`, `weight: 2.5`, tracks only (waypoints hidden to prevent clutter)
 - Click `⭐ Set as primary` on any trail card to switch
 - First trail in `DATA.trails` is primary by default
+
+## Stitch existing trails
+
+- **Entry**: top bar `Edit` → `Stitch trails`
+- Source selection starts at zero; choose at least two existing trails to enter a dedicated map composer
+- Every part has draggable A/B handles that snap only to its source trail; restore the full range, duplicate, or remove any part
+- Reorder with drag-and-drop or buttons and reverse parts independently; map colors and direction arrows match the sequence list
+- Duplicate seam points within 5 m are merged; farther endpoints become explicit gaps, shown only as editor guides and never as final route lines
+- Gap distance and elevation change are excluded from distance, ascent, and descent; elevation, measurement, and Day preview also break at each gap
+- The result is an independent trail and never mutates its sources
+- Distance, ascent, descent, high/low elevation, and waypoint indexes are recalculated for the result
+- KML export writes disconnected route parts as separate `LineString` geometries so other map software does not draw straight lines across empty areas
+- Source itinerary days are not mixed together; use `Plan` → `Plan segments` to create a fresh itinerary for the stitched trail
 
 ## Three coloring modes
 

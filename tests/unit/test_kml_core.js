@@ -68,6 +68,12 @@ T('normalizeKmlTitle falls back when title is blank', () => {
   assert.strictEqual(core.normalizeKmlTitle('   '), 'KML 轨迹');
 });
 
+T('classifyWaypointTag recognizes itinerary waypoint names', () => {
+  assert.strictEqual(core.classifyWaypointTag('12. 仲达营地'), 'camp');
+  assert.strictEqual(core.classifyWaypointTag('翻越山口垭口'), 'pass');
+  assert.strictEqual(core.classifyWaypointTag('普通拍照位置'), 'other');
+});
+
 T('buildKmlParseModel combines LineString track points and metadata', () => {
   const model = core.buildKmlParseModel({
     title: ' Route A ',
@@ -84,6 +90,13 @@ T('buildKmlParseModel combines LineString track points and metadata', () => {
   ]);
   assert.strictEqual(model.trackId, 'T-1');
   assert.strictEqual(model.beginTime, '2026-01-01 08:00');
+});
+
+T('buildKmlParseModel records gaps between disconnected LineStrings', () => {
+  const model = core.buildKmlParseModel({
+    lineStringCoordinateTexts:['100,30,100 100.001,30,110', '101,31,4000 101.001,31,4010'],
+  });
+  assert.deepStrictEqual(model.trackBreaks, [2]);
 });
 
 T('buildKmlParseModel falls back to gx:Track only when LineString is empty', () => {
@@ -109,8 +122,8 @@ T('buildKmlParseModel extracts waypoint coordinates and photos', () => {
     ],
   });
   assert.deepStrictEqual(model.waypoints, [
-    { id: 1, name: '12. 营地', time: '', lng: 100, lat: 30, photo: 'https://example.com/a.jpg' },
-    { id: 2, name: '标注点2', time: '', lng: 101, lat: 31, photo: '' },
+    { id: 1, name: '12. 营地', tag: 'camp', time: '', lng: 100, lat: 30, photo: 'https://example.com/a.jpg' },
+    { id: 2, name: '标注点2', tag: 'other', time: '', lng: 101, lat: 31, photo: '' },
   ]);
 });
 

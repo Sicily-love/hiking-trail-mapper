@@ -55,7 +55,7 @@ T('restores remembered boundaries and camp edits on enter', () => {
   assert.strictEqual(controller.state, state);
   assert.strictEqual(controller.isDirty(), false);
   assert.deepStrictEqual(state.points.map(item => item.idx), [0, 2, 4]);
-  assert.deepStrictEqual(state.campEdits, {1:{name:'Lake', elev:1050}});
+  assert.deepStrictEqual(state.campEdits, {1:{name:'Lake'}});
   controller.exit();
   assert.strictEqual(state.active, false);
   assert.strictEqual(state.trailId, null);
@@ -105,8 +105,8 @@ T('owns drag suppression while restore returns to the entry snapshot', () => {
   assert.strictEqual(controller.restore(), true);
   assert.deepStrictEqual(controller.state.points.map(item => item.idx), [0, 2, 4]);
   assert.deepStrictEqual(controller.state.campEdits, {
-    1:{name:'Lake', elev:1050},
-    2:{name:'Ridge', elev:1150},
+    1:{name:'Lake'},
+    2:{name:'Ridge'},
   });
   assert.strictEqual(controller.isDirty(), false);
 });
@@ -122,7 +122,7 @@ T('commits day ids, metadata, waypoint days, and one revision', () => {
   const {controller, effects} = createHarness([trail]);
   controller.enter('a');
   controller.insertPoint(point(trail, 2));
-  controller.updateCamp(1, {name:' Ridge ', elev:1060.4});
+  controller.updateCamp(1, {name:' Ridge '});
   const result = controller.apply();
   assert.strictEqual(result.trail, trail);
   assert.strictEqual(result.dayCount, 2);
@@ -131,7 +131,7 @@ T('commits day ids, metadata, waypoint days, and one revision', () => {
     [1, 0, 2], [2, 2, 4],
   ]);
   assert.strictEqual(trail.day_meta[0].camp, 'Ridge');
-  assert.strictEqual(trail.day_meta[0].camp_elev, 1060);
+  assert.strictEqual(trail.day_meta[0].camp_elev, 1050);
   assert.deepStrictEqual(trail.waypoints.map(item => item.day), [1, 2]);
   assert.strictEqual(effects.revisions, 1);
   assert.strictEqual(controller.isDirty(), false);
@@ -162,6 +162,8 @@ T('direct runtime delegates segment state and project writes to the controller',
   assert.match(segment, /requestSegmentExit/);
   assert.match(segment, /studioDialogs\.confirm/);
   assert.match(segment, /segmentController\.apply/);
+  assert.match(segment, /async function segmentApply\(\)/);
+  assert.match(segment, /const saved = await _doSave\(\)/);
   assert.match(map, /segmentController\.suppressFastTap/);
   assert.doesNotMatch(segment, directBusinessWrite);
   assert.doesNotMatch(map, directBusinessWrite);

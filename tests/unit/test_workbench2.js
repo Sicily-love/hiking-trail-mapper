@@ -49,6 +49,8 @@ test('Lucide uses named tree-shakeable imports and one icon helper', () => {
   assert.strictEqual(iconSource.includes('import * as'), false);
   assert.strictEqual(/\bicons\s+as\s+/.test(iconSource), false);
   assert.ok(iconSource.includes('export function createWorkbenchIcon('));
+  assert.ok(iconSource.includes("'git-fork': GitFork"));
+  assert.ok(iconSource.includes("'triangle-alert': TriangleAlert"));
   assert.ok(iconSource.includes('document.createElementNS('));
   assert.strictEqual(iconSource.includes('createIcons('), false);
 });
@@ -92,7 +94,7 @@ test('icon helper renders against a supplied pure DOM document', () => {
 test('top toolbar keeps only multi-command menus and flattens direct commands', () => {
   const expectedLabels = ['Edit', 'Plan'];
   const expectedZhLabels = ['编辑', '规划'];
-  const expectedMenuCommands = ['reverse-btn', 'clear-btn', 'segment-btn', 'add-escape-btn'];
+  const expectedMenuCommands = ['reverse-btn', 'stitch-btn', 'clear-btn', 'segment-btn', 'add-escape-btn'];
   const expectedDirect = [
     'add-trail-btn', 'measure-btn', 'add-waypoint-btn', 'export-btn',
     'reset-btn', 'help-btn', 'lang-btn',
@@ -173,11 +175,38 @@ test('bottom dock is a fixed elevation surface without duplicate navigation tabs
   assert.strictEqual(workbenchSource.includes('studio-bottom-tab'), false);
 });
 
+test('measurement actions remain available inside expanded and collapsed elevation docks', () => {
+  assert.ok(shellSource.includes('id="measure-reset"'));
+  assert.ok(shellSource.includes('id="measure-reverse"'));
+  assert.ok(shellSource.includes('id="measure-exit"'));
+  assert.ok(css.includes('#measure-panel.studio-elevation-measure-actions[style*="display: block"]'));
+  assert.ok(css.includes('#elev-bar.collapsed ~ #measure-panel.studio-elevation-measure-actions'));
+});
+
+test('trail stitching selects from zero then edits ordered parts on the map', () => {
+  assert.ok(workbenchSource.includes("'stitch-btn'"));
+  assert.ok(workbenchSource.includes('STUDIO_COMMANDS.TRAIL_STITCH'));
+  assert.ok(shellSource.includes('id="stitch-btn"'));
+  assert.ok(runtimeSource.includes('async function stitchTrailsCommand()'));
+  assert.ok(runtimeSource.includes('studioDialogs.openCustom'));
+  assert.ok(runtimeSource.includes('stitchTrails(stitchState.parts.map'));
+  assert.ok(runtimeSource.includes('fileImportController.addTrail(trail)'));
+  assert.ok(css.includes('.stitch-trail-row'));
+  assert.ok(shellSource.includes('id="stitch-panel"'));
+  assert.ok(shellSource.includes('id="stitch-parts"'));
+  assert.ok(runtimeSource.includes('checkbox.checked = false'));
+  assert.ok(runtimeSource.includes("beginRuntimeInteraction('stitch', 'editing'"));
+  assert.ok(runtimeSource.includes('createPrimaryTrackDragSnapper(marker'));
+  assert.ok(runtimeSource.includes('track_breaks'));
+  assert.ok(css.includes('.stitch-part-card'));
+});
+
 test('layout moves existing ID nodes without cloning or HTML string copies', () => {
   assert.ok(workbenchSource.includes('pane.appendChild(elevationPanel)'));
   assert.ok(workbenchSource.includes('pane.appendChild(measurePanel)'));
   assert.ok(workbenchSource.includes('mapStage.append(map, analysisDock)'));
   assert.ok(workbenchSource.includes('mapStage.appendChild(segmentPanel)'));
+  assert.ok(workbenchSource.includes('mapStage.appendChild(stitchPanel)'));
   assert.ok(workbenchSource.includes('workspace.append(activityRail.root, sidebarElement, mapStage)'));
   assert.ok(workbenchSource.includes('main.replaceChildren(header, workspace)'));
   assert.strictEqual(workbenchSource.includes('cloneNode'), false);
@@ -221,6 +250,8 @@ test('upgrade is idempotent and persists only meaningful activity state', () => 
   assert.ok(workbenchSource.includes("main?.dataset.workbenchLayout === '2'"));
   assert.ok(workbenchSource.includes("activity: 'hiking_workbench2_activity'"));
   assert.ok(workbenchSource.includes('writeStorage(storage, WORKBENCH_STORAGE_KEYS.activity'));
+  assert.ok(workbenchSource.includes("syncActivitySelection('trails', false)"));
+  assert.strictEqual(workbenchSource.includes('const initialActivity = readStorage'), false);
   assert.strictEqual(workbenchSource.includes('hiking_workbench2_bottom_tab'), false);
 });
 

@@ -1,4 +1,5 @@
 import { buildElevationPolylineSegments } from '../../core/performance/elevation.ts';
+import { splitTrackByBreaks } from '../../core/trackSegments.ts';
 import type { TrackTuple } from '../../core/types.ts';
 import type { RuntimeContext } from '../../app/runtime/context.ts';
 
@@ -11,6 +12,7 @@ export interface TrackRenderTrail {
   color?: string;
   group?: string;
   track: TrackTuple[];
+  track_breaks?: number[];
 }
 
 export interface TrackRenderInputTrail extends TrackRenderTrail {
@@ -116,6 +118,11 @@ function latLngs(track: TrackTuple[]): TrackLatLng[] {
   return track.map(point => [point[0], point[1]]);
 }
 
+function segmentedLatLngs(trail: TrackRenderTrail): TrackPolylineLatLngs {
+  const segments = splitTrackByBreaks(trail.track, trail.track_breaks).map(latLngs);
+  return segments.length === 1 ? segments[0] : segments;
+}
+
 /** Builds Leaflet-independent track drawing instructions in stable z-order. */
 export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): TrackRenderModel {
   const [minElevation, maxElevation] = elevationRange(options.trails);
@@ -140,13 +147,13 @@ export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): Tr
     const escapeSelecting = Boolean(options.escapeReferenceTrailId);
     if(isEscapeReference) {
       model.polylines.push({
-        key:`${trail.id}:escape-reference-halo`, trail, latLngs:latLngs(trail.track),
+        key:`${trail.id}:escape-reference-halo`, trail, latLngs:segmentedLatLngs(trail),
         lineStyle:{color:'#F59E0B', weight:9, opacity:0.92, smoothFactor:1, lineCap:'round', lineJoin:'round', interactive:false},
       });
     }
     if(options.mode === 'waypoint' && !isMain) {
       model.polylines.push({
-        key:`${trail.id}:waypoint-reference`, trail, latLngs:latLngs(trail.track), selectable:true,
+        key:`${trail.id}:waypoint-reference`, trail, latLngs:segmentedLatLngs(trail), selectable:true,
         tooltip:trail.name,
         lineStyle:{
           color:trail.color || '#888',
@@ -170,14 +177,14 @@ export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): Tr
 
     if(renderMode === 'day' && !isMain) {
       model.polylines.push({
-        key:`${trail.id}:day-base`, trail, latLngs:latLngs(trail.track), hoverable:true,
+        key:`${trail.id}:day-base`, trail, latLngs:segmentedLatLngs(trail), hoverable:true,
         lineStyle:{color:trail.color, weight, opacity, smoothFactor:1, lineCap:'round'},
       });
       continue;
     }
 
     if(isMain && (renderMode === 'elev' || renderMode === 'day') && !options.activeEscape) {
-      const allLatLngs = latLngs(trail.track);
+      const allLatLngs = segmentedLatLngs(trail);
       model.polylines.push(
         {
           key:`${trail.id}:bloom-outer`, trail, latLngs:allLatLngs,
@@ -191,21 +198,23 @@ export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): Tr
     }
 
     if(renderMode === 'elev') {
-      const groups = buildElevationPolylineSegments(trail.track, {
-        bandCount:options.elevationBandCount ?? 40,
-        minElevation,
-        maxElevation,
-      });
-      model.elevationBands += groups.length;
-      for(const group of groups) {
-        model.polylines.push({
-          key:`${trail.id}:elev:${group.bandIndex}`, trail, hoverable:true,
-          latLngs:group.paths.map(path => path.latLngs),
-          lineStyle:{
-            color:elevationTrackColor(minElevation + group.ratio * (maxElevation - minElevation), minElevation, maxElevation),
-            weight, opacity, smoothFactor:1, lineCap:'round',
-          },
+      for(const [segmentIndex, segment] of splitTrackByBreaks(trail.track, trail.track_breaks).entries()) {
+        const groups = buildElevationPolylineSegments(segment, {
+          bandCount:options.elevationBandCount ?? 40,
+          minElevation,
+          maxElevation,
         });
+        model.elevationBands += groups.length;
+        for(const group of groups) {
+          model.polylines.push({
+            key:`${trail.id}:elev:${segmentIndex}:${group.bandIndex}`, trail, hoverable:true,
+            latLngs:group.paths.map(path => path.latLngs),
+            lineStyle:{
+              color:elevationTrackColor(minElevation + group.ratio * (maxElevation - minElevation), minElevation, maxElevation),
+              weight, opacity, smoothFactor:1, lineCap:'round',
+            },
+          });
+        }
       }
       continue;
     }
@@ -220,19 +229,23 @@ export function buildTrackRenderModel(options: BuildTrackRenderModelOptions): Tr
         lineStyle:{color:currentColor, weight, opacity, smoothFactor:1, lineCap:'round'},
       });
     };
-    for(let index = 0; index < trail.track.length; index += 1) {
-      const point = trail.track[index];
-      const day = Number(point[5]) || 1;
-      const color = options.dayPalette[(day - 1) % options.dayPalette.length];
-      if(color !== currentColor) {
-        flush();
-        currentColor = color;
-        currentPath = index > 0
-          ? [[trail.track[index - 1][0], trail.track[index - 1][1]], [point[0], point[1]]]
-          : [[point[0], point[1]]];
-      } else currentPath.push([point[0], point[1]]);
+    for(const segment of splitTrackByBreaks(trail.track, trail.track_breaks)) {
+      currentColor = null;
+      currentPath = [];
+      for(let index = 0; index < segment.length; index += 1) {
+        const point = segment[index];
+        const day = Number(point[5]) || 1;
+        const color = options.dayPalette[(day - 1) % options.dayPalette.length];
+        if(color !== currentColor) {
+          flush();
+          currentColor = color;
+          currentPath = index > 0
+            ? [[segment[index - 1][0], segment[index - 1][1]], [point[0], point[1]]]
+            : [[point[0], point[1]]];
+        } else currentPath.push([point[0], point[1]]);
+      }
+      flush();
     }
-    flush();
   }
   return model;
 }

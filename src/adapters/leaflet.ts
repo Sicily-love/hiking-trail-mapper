@@ -1,14 +1,14 @@
 export interface PolylineModel {
-  latLngs: Array<[number, number]>;
+  latLngs: Array<[number, number]> | Array<Array<[number, number]>>;
   lineStyle: Record<string, unknown>;
 }
 interface LeafletPolyline {
-  setLatLngs?(latLngs: Array<[number, number]>): void;
+  setLatLngs?(latLngs: Array<[number, number]> | Array<Array<[number, number]>>): void;
   bringToBack?(): void;
 }
 
 interface LeafletLayer {
-  polyline(latLngs: Array<[number, number]>, style: Record<string, unknown>): {
+  polyline(latLngs: Array<[number, number]> | Array<Array<[number, number]>>, style: Record<string, unknown>): {
     addTo(layer: unknown): LeafletPolyline;
   };
 }
@@ -57,6 +57,7 @@ export interface LeafletTrackRendererOptions {
   interactionBlocked: () => boolean;
   onHover: (event: any, model: TrackPolylineRenderModel) => void;
   onHoverEnd: () => void;
+  onInspectPoint: (event: any, model: TrackPolylineRenderModel) => void;
   onSelectTrail: (trailId: string) => void;
 }
 
@@ -75,6 +76,10 @@ export function createLeafletTrackRenderer(options: LeafletTrackRendererOptions)
       if(lineModel.selectable) {
         line.on('click', () => {
           if(!options.interactionBlocked()) options.onSelectTrail(lineModel.trail.id);
+        });
+      } else if(lineModel.hoverable) {
+        line.on('click', event => {
+          if(!options.interactionBlocked()) options.onInspectPoint(event, lineModel);
         });
       }
       if(lineModel.hoverable) {

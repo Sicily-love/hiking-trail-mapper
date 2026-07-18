@@ -123,6 +123,13 @@
   font-size: 12px !important;
   padding: 4px 8px !important;
 }
+.leaflet-tooltip.measure-tip .track-point-coordinate {
+  color:#c8d3c0;
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size:10px;
+  font-variant-numeric:tabular-nums;
+  font-weight:500;
+}
 .leaflet-tooltip.measure-tip.leaflet-tooltip-top:before {
   border-top-color: #1d2630 !important;
 }

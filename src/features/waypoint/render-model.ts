@@ -70,7 +70,7 @@ export function buildWaypointMarkerModel(options: BuildWaypointMarkerOptions): L
   const label = onlyEmoji ? '' : `<div class="wp-marker-label" style="color:${color};border-color:${color};opacity:${opacity}">${dayBadge}${waypoint.km}km · ${waypoint.elev}m</div>`;
   const emojiSize = onlyEmoji ? 'font-size:16px;' : '';
   const emojiShadow = onlyEmoji ? 'filter:drop-shadow(0 1px 2px rgba(0,0,0,0.7));' : '';
-  const iconHtml = `<div style="display:flex;align-items:center;gap:4px"><span class="wp-marker-emoji" style="opacity:${opacity};${emojiSize}${emojiShadow}">${iconText}</span>${label}</div>`;
+  const iconHtml = `<div class="wp-marker-shell"><span class="wp-marker-emoji" style="color:${color};opacity:${opacity};${emojiSize}${emojiShadow}">${iconText}</span>${label}</div>`;
   const photo = String(waypoint.photo || '');
   const signature = JSON.stringify([
     trail.name, trail.color, waypointMode, isPrimary,
@@ -80,7 +80,7 @@ export function buildWaypointMarkerModel(options: BuildWaypointMarkerOptions): L
   ]);
   return {
     key:`${trail.id}#${waypoint.id}`, signature, kind:'waypoint',
-    position:[waypoint.lat, waypoint.lng], iconHtml, iconSize:[null, 24], iconAnchor:[12, 12],
+    position:[waypoint.lat, waypoint.lng], iconHtml, iconSize:[24, 24], iconAnchor:[12, 12],
     markerOptions:{zIndexOffset:isPrimary ? 700 : 600, opacity:1},
     trail, waypoint,
   };

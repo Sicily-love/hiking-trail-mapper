@@ -44,6 +44,7 @@ npm run dev
 | 路段检查 | 在主轨迹上选择 A/B 点，计算沿迹距离、爬升、下降并查看路段海拔 |
 | 标注管理 | 在主轨迹选点，选择图标与类型、填写描述并添加可选图片，也可筛选和改名 |
 | 下撤方案 | 切换同组依据轨迹并选择 A/B 路段，方案归档到主轨迹行程中 |
+| 轨迹拼接 | 从零多选来源轨迹，在地图中裁剪、反向和排序多个片段；断点不产生虚构里程或高差 |
 | 数据迁移 | 将当前分组导出为 KML ZIP，将主轨迹行程导出为 Markdown |
 
 完整交互说明见 [功能说明](docs/FEATURES.md)，实现边界见 [架构说明](docs/ARCHITECTURE.md)。
@@ -79,7 +80,7 @@ index.html
 - `src/app/bootstrap.ts` 挂载 Workbench DOM，通过 Vite 模块图加载 vendor，并显式启动 Studio runtime；业务代码不再通过字符串脚本执行。
 - `src/core` 负责无 DOM 的计算、解析、数据转换和渲染模型。
 - `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench 与对话框。
-- `InteractionManager` 保证测距、分段、标注、下撤和 Day 预览等交互互斥。
+- `InteractionManager` 保证测距、分段、标注、下撤、轨迹拼接和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
@@ -124,7 +125,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v2.0.6
+版本：v2.0.13
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。

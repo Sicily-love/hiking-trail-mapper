@@ -71,6 +71,19 @@ T('renderer owns DPR setup and every Canvas drawing instruction', () => {
   assert.ok(context.calls.some(call => call[0] === 'fillText' && call[1] === 'distance'));
 });
 
+T('disconnected tracks render separate elevation paths and skip gap ascent', () => {
+  const points = [
+    [0,0,100,0,0,1], [0,.001,120,.1,20,1],
+    [1,1,4000,.1,20,1], [1,1.001,4020,.2,40,1],
+  ];
+  const scene = app.buildElevationCanvasScene(points, {
+    width:300, height:150, axisLabel:'distance', trackBreaks:[2],
+  });
+  assert.strictEqual(scene.chart.curveSegments.length, 2);
+  assert.strictEqual(scene.chart.fillPolygons.length, 2);
+  assert.ok(scene.chart.badges.ascent < 100);
+});
+
 T('clear resets the backing store using supplied dimensions', () => {
   const context = createCanvasContext();
   const renderer = app.createElevationCanvasRenderer(context);

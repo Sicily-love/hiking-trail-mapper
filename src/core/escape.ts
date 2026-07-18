@@ -27,10 +27,19 @@ export interface EscapeRoute {
   straight_km?: number;
   drop_m: number;
   day?: number;
+  days?: number[];
   direction?: EscapeRouteDirection;
   line: Array<[number, number]>;
   _manual?: boolean;
   _anchor?: EscapeRouteAnchor;
+}
+
+export function escapeRouteDays(route: Pick<EscapeRoute, 'day' | 'days'>): number[] {
+  const values = Array.isArray(route.days) && route.days.length ? route.days : [route.day];
+  return [...new Set(values
+    .map(value => Math.trunc(Number(value)))
+    .filter(value => value > 0))]
+    .sort((left, right) => left - right);
 }
 
 export interface EscapeReferenceTrail {
@@ -86,13 +95,15 @@ export function resolveEscapeRouteDay(
 }
 
 export function escapeItineraryDays(trail: EscapeReferenceTrail): number[] {
+  const metadataDays = new Set<number>();
+  for(const meta of trail.day_meta || []) {
+    const day = Math.trunc(Number(meta.d));
+    if(day > 0) metadataDays.add(day);
+  }
+  if(metadataDays.size) return [...metadataDays].sort((left, right) => left - right);
   const days = new Set<number>();
   for(const point of trail.track) {
     const day = Math.trunc(Number(point[5]));
-    if(day > 0) days.add(day);
-  }
-  for(const meta of trail.day_meta || []) {
-    const day = Math.trunc(Number(meta.d));
     if(day > 0) days.add(day);
   }
   if(!days.size && trail.track.length) days.add(1);

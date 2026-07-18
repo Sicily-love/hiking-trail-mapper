@@ -95,7 +95,7 @@ function campEditsFromDayMeta(dayMeta: Array<Partial<DayMeta>> = []): SegmentCam
   const ordered = dayMeta.slice().sort((left, right) => (left.d || 0) - (right.d || 0));
   ordered.forEach((meta, index) => {
     if(!meta.camp || meta.camp === '-') return;
-    edits[meta.d || index + 1] = {name:meta.camp, elev:meta.camp_elev ?? null};
+    edits[meta.d || index + 1] = {name:meta.camp};
   });
   return edits;
 }
@@ -171,7 +171,7 @@ export function createSegmentController(
 
   const selectionSignature = (points: TrackIndexPoint[], campEdits: SegmentCampEdits): string => {
     const camps = Object.entries(campEdits)
-      .map(([day, edit]) => [Number(day), String(edit.name || '').trim(), edit.elev ?? null])
+      .map(([day, edit]) => [Number(day), String(edit.name || '').trim()])
       .sort((left, right) => Number(left[0]) - Number(right[0]));
     return JSON.stringify({indexes:points.map(point => point.idx), camps});
   };
@@ -241,7 +241,7 @@ export function createSegmentController(
     if(!Number.isInteger(dayNo) || dayNo < 1 || dayNo >= state.points.length) return false;
     state.campEdits = {
       ...state.campEdits,
-      [dayNo]: {...(state.campEdits[dayNo] || {}), ...edit},
+      [dayNo]: {...(state.campEdits[dayNo] || {}), name:edit.name},
     };
     return true;
   };

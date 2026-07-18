@@ -113,7 +113,7 @@ export function createFileExportController(
     }
     emit({type:'export.progress', kind:'itinerary'});
     const charts: Record<number, string> = {};
-    groupTrackByDay(trail.track).forEach((group, index) => {
+    groupTrackByDay(trail.track, trail.track_breaks).forEach((group, index) => {
       charts[group.day] = dependencies.renderDayChart(
         group.points,
         dependencies.dayPalette[index % dependencies.dayPalette.length],

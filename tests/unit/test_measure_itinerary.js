@@ -125,6 +125,23 @@ T('render models separate geometry data from Leaflet rendering', () => {
   assert.deepStrictEqual(dayPreview.endpoints.map(endpoint => endpoint.lat), [30.01, 30.03]);
 });
 
+T('nearby itinerary waypoints come from other trails within the selected day range', () => {
+  const sources = [{
+    id:'other',
+    name:'Other trail',
+    waypoints:[
+      {id:'near', lat:30.0101, lng:100, label:'Near bridge', tag:'bridge'},
+      {id:'wrong-day', lat:30.0399, lng:100, label:'Day 3 water', tag:'water'},
+      {id:'far', lat:31, lng:101, label:'Far', tag:'other'},
+    ],
+  }];
+  const candidates = core.collectNearbyItineraryWaypoints(track, {iStart:0, iEnd:2}, sources, 200);
+  assert.deepStrictEqual(candidates.map(candidate => candidate.ref), ['other#near']);
+  assert.strictEqual(candidates[0].sourceTrailName, 'Other trail');
+  assert.ok(candidates[0].distanceM < 20);
+  assert.deepStrictEqual(core.collectNearbyItineraryWaypoints(track, null, sources), []);
+});
+
 T('collectElevationAnnotations builds peak/low, A/B, and camp labels', () => {
   const layout = {
     alts: track.map(p => p[2]),
@@ -433,21 +450,21 @@ T('camp edit renumbering preserves user edits across insert and delete', () => {
   });
 });
 
-T('buildDayMetaFromSegments emits stable day stats and camp edits', () => {
+T('buildDayMetaFromSegments uses each day endpoint as the camp elevation', () => {
   const pts = core.segmentIndexesToPoints(track, [0, 2, 4]);
   const meta = core.buildDayMetaFromSegments(track, pts, { 1: { name: 'Camp A', elev: 1099 } });
   assert.strictEqual(meta.length, 2);
   assert.strictEqual(meta[0].d, 1);
   assert.strictEqual(meta[0].camp, 'Camp A');
-  assert.strictEqual(meta[0].camp_elev, 1099);
+  assert.strictEqual(meta[0].camp_elev, pts[1].elev);
   assert.strictEqual(meta[0].i_start, 0);
   assert.strictEqual(meta[0].i_end, 2);
   assert.ok(meta[0].km > 2);
   assert.ok(meta[0].seg.includes('起 1000m'));
 });
 
-T('buildDayMetaFromTrackDays attaches nearby camp waypoints to the containing day', () => {
-  const wps = [{ lat: 30.03, lng: 100, name: 'Night 2', label: 'Night 2', tag: 'camp', gps_idx: 3, elev: 1260 }];
+T('buildDayMetaFromTrackDays attaches camps but keeps endpoint elevation', () => {
+  const wps = [{ lat: 30.03, lng: 100, name: 'Night 2', label: 'Night 2', tag: 'camp', gps_idx: 3, elev: 999 }];
   const meta = core.buildDayMetaFromTrackDays(track, wps);
   const day2 = meta.find(d => d.d === 2);
   assert.strictEqual(day2.camp, 'Night 2');

@@ -32,6 +32,7 @@ T('translation catalogs stay aligned and provide deterministic fallback', () => 
   assert.strictEqual(app.resolveLocalizationLanguage('fr'), 'zh');
   assert.strictEqual(app.translateMessage('en', 'help.title'), app.TRANSLATIONS.en['help.title']);
   assert.strictEqual(app.translateMessage('en', 'missing.key'), 'missing.key');
+  assert.strictEqual(app.translateMessage('zh', 'tag.bridge'), '桥梁');
 });
 
 T('changelog model preserves release order and selected language', () => {

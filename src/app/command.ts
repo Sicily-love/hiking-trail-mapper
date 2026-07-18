@@ -28,6 +28,7 @@ export const STUDIO_COMMANDS = Object.freeze({
   FILE_EXPORT: 'file.export',
   PROJECT_CLEAR: 'project.clear',
   TRAIL_REVERSE: 'trail.reverse',
+  TRAIL_STITCH: 'trail.stitch',
   MEASURE_TOGGLE: 'measure.toggle',
   SEGMENT_TOGGLE: 'segment.toggle',
   WAYPOINT_TOGGLE: 'waypoint.toggle',

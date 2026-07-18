@@ -96,9 +96,15 @@ T('resolves the itinerary day from point metadata with day_meta fallback', () =>
   };
   assert.strictEqual(core.resolveEscapeRouteDay(fallback, anchor(fallback, 260)), 2);
   assert.deepStrictEqual(core.escapeItineraryDays(fallback), [1, 2]);
+  assert.deepStrictEqual(core.escapeItineraryDays({
+    id:'stale', name:'Stale', track:explicit.track, day_meta:[{d:1, i_start:0, i_end:400}],
+  }), [1]);
   assert.deepStrictEqual(core.escapeItineraryDays({id:'plain', name:'Plain', track:track()}), [1]);
   assert.strictEqual(core.resolveEscapeRouteDirection({desc:'原路返回（反向）'}), 'reverse');
   assert.strictEqual(core.resolveEscapeRouteDirection({direction:'forward', desc:'反向'}), 'forward');
+  assert.deepStrictEqual(core.escapeRouteDays({day:2}), [2]);
+  assert.deepStrictEqual(core.escapeRouteDays({day:1, days:[3, 1, 3]}), [1, 3]);
+  assert.deepStrictEqual(core.escapeRouteDays({}), []);
   assert.strictEqual(core.resolveEscapeRouteDay({id:'empty', name:'Empty', track:[]}, {lat:0, lng:0}), null);
 });
 
@@ -139,12 +145,13 @@ T('owns lifecycle, selection, preview, commit, and stale-primary rejection', () 
   assert.ok(state._pending);
   assert.deepStrictEqual(controller.availableDays(), [1, 2]);
   assert.strictEqual(controller.setDay(3), false);
-  assert.strictEqual(controller.setDay(2), true);
+  assert.strictEqual(controller.setDays([2, 1, 2, 9]), true);
   const committed = controller.commit(' Ridge exit ');
   assert.strictEqual(committed.name, 'Ridge exit');
   assert.strictEqual(first.escape_routes.length, 1);
   assert.strictEqual(committed._anchor.trailId, 'b');
-  assert.strictEqual(committed.day, 2);
+  assert.strictEqual(committed.day, 1);
+  assert.deepStrictEqual(committed.days, [1, 2]);
   assert.strictEqual(effects.revisions, 1);
 
   controller.selectA(anchor(second, 20));
@@ -183,7 +190,7 @@ T('direct runtime retains escape effects but delegates business state and writes
   assert.match(source, /const addEscapeState = escapeController\.state/);
   for(const method of [
     'enter', 'setReferenceTrail', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute',
-    'availableDays', 'setDay', 'commit',
+    'availableDays', 'setDay', 'setDays', 'commit',
     'deleteRoute', 'selectDisplayedRoute', 'clearDisplayedRoute',
   ]) assert.match(source, new RegExp(`escapeController\\.${method}`), method);
   assert.doesNotMatch(source, directBusinessWrite);

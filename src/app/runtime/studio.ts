@@ -2,6 +2,7 @@
 import * as HTM_CORE from '../../core/index.ts';
 import * as HTM_APP from '../index.ts';
 import { STUDIO_VERSION } from '../version.ts';
+import { createWorkbenchIcon } from '../../ui/icons.ts';
 
 export interface StudioBootResult {
   restored: boolean;
@@ -53,6 +54,9 @@ export function startStudioRuntime(
   const pointFromTrackIndex = HTM_CORE.pointFromTrackIndex;
   const normalizeTrackIndexRange = HTM_CORE.normalizeTrackIndexRange;
   const buildTrackLatLngs = HTM_CORE.buildTrackLatLngs;
+  const buildTrackLatLngSegments = HTM_CORE.buildTrackLatLngSegments;
+  const splitTrackByBreaks = HTM_CORE.splitTrackByBreaks;
+  const trackBreaksInRange = HTM_CORE.trackBreaksInRange;
   const buildMeasureSegmentRenderModel = HTM_CORE.buildMeasureSegmentRenderModel;
   const buildDayPreviewRenderModel = HTM_CORE.buildDayPreviewRenderModel;
   const applyMeasureEndpointState = HTM_CORE.applyMeasureEndpointState;
@@ -79,9 +83,12 @@ export function startStudioRuntime(
   const shortLabel = HTM_CORE.shortKmlLabel;
   const normalizeKmlTitle = HTM_CORE.normalizeKmlTitle;
   const buildKmlParseModel = HTM_CORE.buildKmlParseModel;
+  const classifyWaypointTag = HTM_CORE.classifyWaypointTag;
   const enrichWaypoints = HTM_CORE.enrichWaypoints;
   const computeCumulativeDistance = HTM_CORE.computeCumulativeDistance;
   const computeTrailStats = HTM_CORE.computeTrailStats;
+  const stitchTrails = HTM_CORE.stitchTrails;
+  const computeSegmentedTrackMetrics = HTM_CORE.computeSegmentedTrackMetrics;
 
 
   const APP_VERSION = STUDIO_VERSION;
@@ -496,6 +503,15 @@ export function startStudioRuntime(
   const highPointLayer = L.layerGroup().addTo(map);
   const escapeLayer = L.layerGroup().addTo(map);
   const networkLayer = L.layerGroup().addTo(map);
+  const stitchLayer = L.layerGroup().addTo(map);
+
+  const stitchPalette = ['#1E6F50','#D96C4A','#5577B8','#8A6BBE','#C45D83','#B7791F','#2B7A78','#9B4A3C'];
+  const stitchState = {
+    active:false,
+    parts:[],
+    selectedPartId:null,
+    dirty:false,
+  };
 
   /* ============ Color helpers ============ */
   // 天数分色：柔和但有区分度，适合卫星图与米色面板上的连续天数阅读
@@ -509,13 +525,14 @@ export function startStudioRuntime(
     networkLayer,
     requestFrame:callback => requestAnimationFrame(callback),
     cancelFrame:handle => cancelAnimationFrame(handle),
-    interactionBlocked:() => measureState.active || (typeof segmentState !== 'undefined' && segmentState.active),
+    interactionBlocked:() => interactionManager.current.kind !== 'idle',
     onHover:(event, model) => {
       const track = model.trail.track;
       const i = nearestTrackIdx(track, event.latlng.lat, event.latlng.lng);
       showTooltip(event, track[i], track[Math.min(i + 1, track.length - 1)], model.trail);
     },
     onHoverEnd:() => hideTooltip(),
+    onInspectPoint:(event, model) => inspectTrackPoint(event, model.trail),
     onSelectTrail:trailId => {
       dispatchState({type:'primary-trail.set', trailId});
       rebuildAll({fit:false});
@@ -590,18 +607,41 @@ export function startStudioRuntime(
     const tag = typeof wpOrTag === 'string' ? wpOrTag : (wpOrTag && wpOrTag.tag);
     return tagIcons[tag] || (wpOrTag && wpOrTag.icon) || '📍';
   }
+  const waypointVectorIconNames = {
+    fork:'git-fork',
+    warn:'triangle-alert',
+    other:'map-pin',
+  };
+  function waypointIconMarkup(wpOrTag, className = '') {
+    const tag = typeof wpOrTag === 'string' ? wpOrTag : (wpOrTag && wpOrTag.tag);
+    const vectorName = waypointVectorIconNames[tag];
+    if(vectorName) {
+      return createWorkbenchIcon(document, vectorName, {
+        size:16,
+        strokeWidth:2.2,
+        className:`waypoint-symbol waypoint-symbol--${tag} ${className}`.trim(),
+      }).outerHTML;
+    }
+    const symbol = document.createElement('span');
+    symbol.className = `waypoint-symbol waypoint-symbol--emoji ${className}`.trim();
+    symbol.textContent = waypointIcon(wpOrTag);
+    return symbol.outerHTML;
+  }
   const tagLabels = {
     start:'起终点', end:'起终点',
     fork:'分叉点', camp:'营地', pass:'垭口',
     water:'水源', supply:'补给', warn:'高强度',
-    shelter:'庇护', village:'村落/牧民', bridge:'桥/河',
+    shelter:'庇护', village:'村落/牧民', bridge:'桥梁',
     river:'小溪', other:'其他'
   };
+  const DAY_ITINERARY_WAYPOINT_TAGS = new Set([
+    'pass','water','supply','bridge','river','village','shelter','warn','fork','start','end','highpoint',
+  ]);
 
   const wpMarkers = {};
   const markerRenderController = HTM_APP.createMarkerRenderController(runtimeContext, {
     tagColors,
-    iconForWaypoint:waypointIcon,
+    iconForWaypoint:waypointIconMarkup,
   });
 
   const leafletMarkerRenderer = HTM_APP.createLeafletMarkerRenderer({
@@ -636,7 +676,7 @@ export function startStudioRuntime(
   function addWpMarker(trail, wp, isPrimary) {
         const color = tagColors[wp.tag] || '#aaa';
         const isWpMode = state.mode === 'waypoint';
-        const iconText = waypointIcon(wp);
+        const iconText = waypointIconMarkup(wp);
         return HTM_APP.buildWaypointMarkerModel({trail, waypoint:wp, isPrimary, waypointMode:isWpMode, color, iconText});
   }
 
@@ -657,7 +697,7 @@ export function startStudioRuntime(
   function pinWpCard(e, wp, trail) {
     // 点击标注点 → 固定显示卡片，卡片中图片可点击放大
     const photoSrc = wp.photo || '';
-    const iconText = waypointIcon(wp);
+    const iconMarkup = waypointIconMarkup(wp);
     const photoHtml = photoSrc ? `<img id="pin-card-img" src="${photoSrc}" loading="lazy" style="display:block;max-width:260px;max-height:200px;border-radius:4px;cursor:zoom-in" onerror="this.style.display='none'">` : '';
     const trailLine = trail ? `<div style="color:${trail.color || '#aaa'};font-size:10px;font-weight:600;margin-bottom:3px">${t('popup.trailLabel')}: ${escapeUiText(trail.name)}</div>` : '';
     const description = wp.description || (wp.name && wp.name !== wp.label ? wp.name : '');
@@ -666,7 +706,7 @@ export function startStudioRuntime(
       <button id="pin-card-close" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.4);border:none;color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>
       ${trailLine}
       ${photoHtml}
-      <div style="color:#cfd6e0;font-size:11px;margin-top:${photoHtml ? '4px' : '0'};padding:0 2px">${iconText} <b>${escapeUiText(wp.label)}</b> · ${wp.km}${t('header.km')} · ${wp.elev}m</div>
+      <div class="waypoint-card-title" style="color:#cfd6e0;font-size:11px;margin-top:${photoHtml ? '4px' : '0'};padding:0 2px">${iconMarkup}<b>${escapeUiText(wp.label)}</b><span>· ${wp.km}${t('header.km')} · ${wp.elev}m</span></div>
       ${descLine}
       ${photoSrc ? `<div style="color:var(--text-dim);font-size:9px;margin-top:3px">${t('popup.clickPhotoZoom')}</div>` : ''}
     `;
@@ -686,7 +726,7 @@ export function startStudioRuntime(
     const imgEl = document.getElementById('pin-card-img');
     if(imgEl) imgEl.addEventListener('click', ev => {
       ev.stopPropagation();
-      openLightbox(photoSrc, `${iconText} ${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`);
+      openLightbox(photoSrc, `${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`);
     });
 
     // 阻止事件冒泡到地图（否则 map click 会立即关掉）
@@ -717,6 +757,8 @@ export function startStudioRuntime(
       <div class="row"><span class="lab">爬升</span><span class="val">${a[4]} m</span></div>
       <div class="row"><span class="lab">下降</span><span class="val">${descVal}</span></div>
       <div class="row"><span class="lab">天数</span><span class="val">D${a[5]}</span></div>
+      <div class="row"><span class="lab">纬度</span><span class="val coordinate">${formatCoordinate(a[0])}</span></div>
+      <div class="row"><span class="lab">经度</span><span class="val coordinate">${formatCoordinate(a[1])}</span></div>
       <div class="row"><span class="lab">轨迹</span><span style="color:${trail.color}">${trail.name}</span></div>
     `;
     if(heat !== undefined) {
@@ -728,6 +770,43 @@ export function startStudioRuntime(
     tooltipEl.style.top = e.originalEvent.clientY + 'px';
   }
   function hideTooltip() { tooltipEl.style.display = 'none'; }
+
+  let trackPointInspectMarker = null;
+  function formatCoordinate(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric.toFixed(6) : '-';
+  }
+  function formatTrackPointCoordinates(point) {
+    return `${formatCoordinate(point && point[0])}, ${formatCoordinate(point && point[1])}`;
+  }
+  function inspectTrackPoint(event, trail) {
+    if(!trail || !trail.track || !trail.track.length || !event || !event.latlng) return;
+    const index = nearestTrackIdx(trail.track, event.latlng.lat, event.latlng.lng);
+    const point = trail.track[index];
+    if(!point) return;
+    if(trackPointInspectMarker) {
+      clearTimeout(trackPointInspectMarker._autoRemove);
+      trackPointInspectMarker.remove();
+    }
+    const content = `
+      <b>${point[3] != null ? point[3] + ' km · ' : ''}${Math.round(point[2] || 0)} m</b><br>
+      <span class="track-point-coordinate">${formatTrackPointCoordinates(point)}</span>
+    `;
+    trackPointInspectMarker = L.circleMarker([point[0], point[1]], {
+      radius:7, color:'#fff', weight:2, fillColor:trail.color || '#F59E0B', fillOpacity:1,
+      pane:'tooltipPane',
+    }).addTo(map);
+    trackPointInspectMarker
+      .bindTooltip(content, {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip track-point-inspect-tip'})
+      .openTooltip();
+    clearTimeout(trackPointInspectMarker._autoRemove);
+    trackPointInspectMarker._autoRemove = setTimeout(() => {
+      if(trackPointInspectMarker) {
+        trackPointInspectMarker.remove();
+        trackPointInspectMarker = null;
+      }
+    }, 8000);
+  }
   /* ============ Escape ============ */
   const escapeController = HTM_APP.createEscapeController(runtimeContext, {
     markRevision:markTrailRevision,
@@ -1650,7 +1729,8 @@ export function startStudioRuntime(
       if(!counts[tag]) return;
       const chip = document.createElement('div');
       chip.className = 'filter-chip' + (state.visibleTags.has(tag) ? ' on' : '');
-      chip.innerHTML = `<span class="ic">${waypointIcon(tag)}</span><span>${t('tag.'+tag)}</span><span class="cnt">${counts[tag]}</span>`;
+      chip.dataset.waypointTag = tag;
+      chip.innerHTML = `<span class="ic waypoint-filter-icon" aria-hidden="true" style="color:${tagColors[tag] || '#64748b'}">${waypointIconMarkup(tag)}</span><span class="filter-chip-label">${t('tag.'+tag)}</span><span class="cnt">${counts[tag]}</span>`;
       chip.addEventListener('click', () => {
         dispatchState({type:'visible-tag.set', tag, visible:!state.visibleTags.has(tag)});
         buildFilterGrid();
@@ -1740,15 +1820,21 @@ export function startStudioRuntime(
     `;
     tab.appendChild(trailHdr);
 
+    const escapeFilters = appendEscapeTools(tab, trail);
+
     // v1.26.0：若无 day_meta，显示占位提示
     if(!trail.day_meta || trail.day_meta.length === 0) {
       const empty = document.createElement('div');
       empty.style.cssText = 'padding:12px;color:var(--text-muted);font-size:11px;line-height:1.6';
       empty.innerHTML = '尚未设置每日行程。<br>点工具栏 <b>📅 分段</b> 在主轨迹上选点标记每天。';
       tab.appendChild(empty);
-      appendEscapeRoutes(tab, trail);
+      appendEscapeRoutesForDay(tab, trail, null, true);
+      if(escapeFilters) applyEscapeFilters(tab, escapeFilters);
       return;
     }
+
+    const unassignedRoutes = (trail.escape_routes || []).filter(route => HTM_CORE.escapeRouteDays(route).length === 0);
+    if(unassignedRoutes.length) appendEscapeRoutesForDay(tab, trail, null);
 
     trail.day_meta.forEach((dm, dIdx) => {
         const range = HTM_CORE.getDayIndexRange(trail, dm);
@@ -1769,10 +1855,14 @@ export function startStudioRuntime(
         });
         const block = document.createElement('div');
         block.className = 'day-block';
+        block.dataset.day = String(dm.d);
         const color = dayPalette[dIdx % dayPalette.length];
         const routeText = dm.seg || ((dayKm || '-') + 'km · ↑' + (Math.round(dayAsc) || '-') + ' · ↓' + (Math.round(dayDesc) || '-') + ' · ⛰' + (Math.round(dayMax) || '-'));
         const campName = dm.camp || '未设置扎营点';
-        const campElevNum = (dm.camp_elev == null || dm.camp_elev === '') ? NaN : Number(dm.camp_elev);
+        const dayEndPoint = range ? trail.track[range.iEnd] : null;
+        const campElevNum = dayEndPoint && Number.isFinite(Number(dayEndPoint[2]))
+          ? Number(dayEndPoint[2])
+          : ((dm.camp_elev == null || dm.camp_elev === '') ? NaN : Number(dm.camp_elev));
         const campElevText = Number.isFinite(campElevNum) ? Math.round(campElevNum) + ' m' : '-';
         block.style.setProperty('--day-color', color);
         block.innerHTML = `
@@ -1797,6 +1887,8 @@ export function startStudioRuntime(
             </div>
             <div class="day-camp"><span>🏕</span><span>扎营点</span><b>${campName}</b><em>${campElevText}</em></div>
             <div class="wp-list"></div>
+            <div class="nearby-waypoint-slot"></div>
+            <div class="day-escape-slot"></div>
           </div>
         `;
         tab.appendChild(block);
@@ -1808,13 +1900,13 @@ export function startStudioRuntime(
         });
         const list = block.querySelector('.wp-list');
         // v1.27.0：行程 tab 固定显示这几类关键信息（不受 filter 影响）
-        const DAYTAB_TAGS = new Set(['camp','pass','water','supply','bridge','river','village','shelter','warn','fork','start','end','highpoint']);
         dayWps.forEach(wp => {
-          if(!DAYTAB_TAGS.has(wp.tag)) return;
+          if(!DAY_ITINERARY_WAYPOINT_TAGS.has(wp.tag)) return;
           const item = document.createElement('div');
           item.className = 'wp-item';
+          item.dataset.waypointTag = wp.tag;
           item.innerHTML = `
-            <div class="wp-icon">${waypointIcon(wp)}</div>
+            <div class="wp-icon" style="color:${tagColors[wp.tag] || '#64748b'}">${waypointIconMarkup(wp)}</div>
             <div style="flex:1">
               <div class="wp-name" style="color:${tagColors[wp.tag]}">${wp.label}</div>
               <div class="wp-meta">km ${wp.km} · ${wp.elev}m · ${t('tag.'+wp.tag) || wp.tag}</div>
@@ -1830,68 +1922,168 @@ export function startStudioRuntime(
           });
           list.appendChild(item);
         });
+        appendNearbyWaypointPicker(block.querySelector('.nearby-waypoint-slot'), trail, dm, range);
+        appendEscapeRoutesForDay(block.querySelector('.day-escape-slot'), trail, dm.d);
       });
-    appendEscapeRoutes(tab, trail);
-    // 函数体结束（移除原 trails forEach 闭合）
+    if(escapeFilters) applyEscapeFilters(tab, escapeFilters);
   }
-  function appendEscapeRoutes(container, trail) {
-    const section = document.createElement('section');
-    section.className = 'itinerary-escape-section';
-    section.innerHTML = currentLang === 'zh'
-      ? '<div class="section" style="padding-bottom:0"><h3>下撤方案</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">点击任意方案在地图上高亮，再次点击退出</div></div>'
-      : '<div class="section" style="padding-bottom:0"><h3>Escape routes</h3><div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Select a route to highlight it on the map; select it again to exit.</div></div>';
-    if(!trail.escape_routes || trail.escape_routes.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'itinerary-escape-empty';
-      empty.textContent = currentLang === 'zh' ? '暂无下撤方案（可手动添加）' : 'No escape routes yet';
-      section.appendChild(empty);
-    } else {
-      const routes = trail.escape_routes;
-      const filters = document.createElement('div');
-      filters.className = 'escape-filter-bar';
-      const nameFilter = document.createElement('input');
-      nameFilter.type = 'search';
-      nameFilter.className = 'escape-filter-input';
-      nameFilter.placeholder = currentLang === 'zh' ? '筛选名称' : 'Filter name';
-      nameFilter.setAttribute('aria-label', nameFilter.placeholder);
-      const directionFilter = document.createElement('select');
-      const dayFilter = document.createElement('select');
-      const referenceFilter = document.createElement('select');
-      for(const select of [directionFilter, dayFilter, referenceFilter]) select.className = 'escape-filter-select';
-      const addOption = (select, value, label) => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = label;
-        select.append(option);
-      };
-      addOption(directionFilter, 'all', currentLang === 'zh' ? '全部方向' : 'All directions');
-      addOption(directionFilter, 'forward', currentLang === 'zh' ? '正向' : 'Forward');
-      addOption(directionFilter, 'reverse', currentLang === 'zh' ? '反向' : 'Reverse');
-      addOption(dayFilter, 'all', currentLang === 'zh' ? '全部 Day' : 'All days');
-      [...new Set(routes.map(route => Number(route.day)).filter(day => day > 0))]
-        .sort((left, right) => left - right)
-        .forEach(day => addOption(dayFilter, String(day), `D${day}`));
-      if(routes.some(route => !route.day)) addOption(dayFilter, 'none', currentLang === 'zh' ? '未关联 Day' : 'No day');
-      addOption(referenceFilter, 'all', currentLang === 'zh' ? '全部依据轨迹' : 'All references');
-      const references = new Map();
-      routes.forEach(route => {
-        references.set(route._anchor?.trailId || trail.id, route._anchor?.trailName || trail.name);
-      });
-      references.forEach((name, id) => addOption(referenceFilter, id, name));
-      const count = document.createElement('span');
-      count.className = 'escape-filter-count';
-      filters.append(nameFilter, directionFilter, dayFilter, referenceFilter, count);
-      section.appendChild(filters);
 
-      const routeList = document.createElement('div');
-      routeList.className = 'escape-route-list';
-      const filteredEmpty = document.createElement('div');
-      filteredEmpty.className = 'itinerary-escape-empty';
-      filteredEmpty.textContent = currentLang === 'zh' ? '没有符合当前筛选条件的方案' : 'No routes match these filters';
-      filteredEmpty.hidden = true;
-      section.append(routeList, filteredEmpty);
-      const routeRows = [];
-      trail.escape_routes.forEach(r => {
+  function selectedNearbyWaypointRefs(trail, day) {
+    const stored = trail.itinerary_waypoint_refs;
+    if(!stored || typeof stored !== 'object') return new Set();
+    return new Set(Array.isArray(stored[String(day)]) ? stored[String(day)] : []);
+  }
+
+  function appendNearbyWaypointPicker(container, trail, dm, range) {
+    if(!container || !range) return;
+    const sources = DATA.trails.filter(candidate =>
+      candidate.id !== trail.id && trailGroup(candidate) === state.activeGroup);
+    const candidates = HTM_CORE.collectNearbyItineraryWaypoints(trail.track, range, sources, 200)
+      .filter(candidate => DAY_ITINERARY_WAYPOINT_TAGS.has(candidate.waypoint.tag));
+    if(!candidates.length) return;
+    const selected = selectedNearbyWaypointRefs(trail, dm.d);
+    const details = document.createElement('details');
+    details.className = 'nearby-waypoint-picker';
+    const summary = document.createElement('summary');
+    const updateSummary = () => {
+      const count = [...details.querySelectorAll('input[type="checkbox"]')].filter(input => input.checked).length;
+      summary.textContent = `${currentLang === 'zh' ? '附近轨迹标注' : 'Nearby trail waypoints'} · ${count}/${candidates.length}`;
+    };
+    details.append(summary);
+    const options = document.createElement('div');
+    options.className = 'nearby-waypoint-options';
+    candidates.forEach(candidate => {
+      const wp = candidate.waypoint;
+      const item = document.createElement('label');
+      item.className = 'nearby-waypoint-option';
+      item.dataset.waypointRef = candidate.ref;
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selected.has(candidate.ref);
+      const icon = document.createElement('span');
+      icon.className = 'wp-icon';
+      icon.style.color = tagColors[wp.tag] || '#64748b';
+      icon.innerHTML = waypointIconMarkup(wp);
+      const copy = document.createElement('span');
+      copy.className = 'nearby-waypoint-copy';
+      const title = document.createElement('b');
+      title.textContent = wp.label || wp.name || t('tag.' + (wp.tag || 'other'));
+      const meta = document.createElement('small');
+      meta.textContent = `${candidate.sourceTrailName} · ${candidate.distanceM} m · ${t('tag.' + (wp.tag || 'other'))}`;
+      copy.append(title, meta);
+      item.append(checkbox, icon, copy);
+      checkbox.addEventListener('change', () => {
+        const refs = selectedNearbyWaypointRefs(trail, dm.d);
+        if(checkbox.checked) refs.add(candidate.ref);
+        else refs.delete(candidate.ref);
+        trail.itinerary_waypoint_refs = {...(trail.itinerary_waypoint_refs || {}), [String(dm.d)]:[...refs]};
+        item.classList.toggle('selected', checkbox.checked);
+        markTrailRevision(trail);
+        saveToStorage();
+        updateSummary();
+      });
+      item.classList.toggle('selected', checkbox.checked);
+      options.append(item);
+    });
+    details.append(options);
+    container.append(details);
+    updateSummary();
+  }
+
+  function appendEscapeTools(container, trail) {
+    const routes = trail.escape_routes || [];
+    const tools = document.createElement('section');
+    tools.className = 'itinerary-escape-tools';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'itinerary-escape-add';
+    addBtn.textContent = currentLang === 'zh' ? '＋ 规划下撤路线' : '+ Plan escape route';
+    addBtn.dataset.commandId = STUDIO_COMMANDS.ESCAPE_TOGGLE;
+    addBtn.addEventListener('click', () => dispatchStudioCommand(STUDIO_COMMANDS.ESCAPE_TOGGLE));
+    if(!routes.length) {
+      tools.append(addBtn);
+      container.append(tools);
+      return null;
+    }
+    const filters = document.createElement('div');
+    filters.className = 'escape-filter-bar';
+    const nameFilter = document.createElement('input');
+    nameFilter.type = 'search';
+    nameFilter.className = 'escape-filter-input';
+    nameFilter.placeholder = currentLang === 'zh' ? '筛选下撤方案' : 'Filter escape routes';
+    nameFilter.setAttribute('aria-label', nameFilter.placeholder);
+    const directionFilter = document.createElement('select');
+    const dayFilter = document.createElement('select');
+    const referenceFilter = document.createElement('select');
+    for(const select of [directionFilter, dayFilter, referenceFilter]) select.className = 'escape-filter-select';
+    const addOption = (select, value, label) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      select.append(option);
+    };
+    addOption(directionFilter, 'all', currentLang === 'zh' ? '全部方向' : 'All directions');
+    addOption(directionFilter, 'forward', currentLang === 'zh' ? '正向' : 'Forward');
+    addOption(directionFilter, 'reverse', currentLang === 'zh' ? '反向' : 'Reverse');
+    addOption(dayFilter, 'all', currentLang === 'zh' ? '全部 Day' : 'All days');
+    [...new Set(routes.flatMap(route => HTM_CORE.escapeRouteDays(route)))]
+      .sort((left, right) => left - right)
+      .forEach(day => addOption(dayFilter, String(day), `D${day}`));
+    if(routes.some(route => HTM_CORE.escapeRouteDays(route).length === 0)) {
+      addOption(dayFilter, 'none', currentLang === 'zh' ? '未关联 Day' : 'No day');
+    }
+    addOption(referenceFilter, 'all', currentLang === 'zh' ? '全部依据轨迹' : 'All references');
+    const references = new Map();
+    routes.forEach(route => references.set(route._anchor?.trailId || trail.id, route._anchor?.trailName || trail.name));
+    references.forEach((name, id) => addOption(referenceFilter, id, name));
+    const count = document.createElement('span');
+    count.className = 'escape-filter-count';
+    filters.append(nameFilter, directionFilter, dayFilter, referenceFilter, count);
+    tools.append(filters, addBtn);
+    container.append(tools);
+    for(const control of [nameFilter, directionFilter, dayFilter, referenceFilter]) {
+      control.addEventListener(control === nameFilter ? 'input' : 'change', () => applyEscapeFilters(container, {nameFilter, directionFilter, dayFilter, referenceFilter, count}));
+    }
+    return {nameFilter, directionFilter, dayFilter, referenceFilter, count};
+  }
+
+  function applyEscapeFilters(container, filters) {
+    const query = filters.nameFilter.value.trim().toLocaleLowerCase();
+    const visibleRouteIds = new Set();
+    container.querySelectorAll('.escape-item').forEach(item => {
+      const days = (item.dataset.days || '').split(',').filter(Boolean);
+      const dayMatches = filters.dayFilter.value === 'all'
+        || (filters.dayFilter.value === 'none' ? days.length === 0 : days.includes(filters.dayFilter.value));
+      const matches = (!query || (item.dataset.name || '').includes(query))
+        && (filters.directionFilter.value === 'all' || item.dataset.direction === filters.directionFilter.value)
+        && dayMatches
+        && (filters.referenceFilter.value === 'all' || item.dataset.reference === filters.referenceFilter.value);
+      item.hidden = !matches;
+      if(matches) visibleRouteIds.add(item.dataset.id);
+    });
+    container.querySelectorAll('.day-escape-section').forEach(section => {
+      section.hidden = !section.querySelector('.escape-item:not([hidden])');
+    });
+    filters.count.textContent = `${visibleRouteIds.size}/${new Set([...container.querySelectorAll('.escape-item')].map(item => item.dataset.id)).size}`;
+  }
+
+  function appendEscapeRoutesForDay(container, trail, day, includeAll = false) {
+    if(!container) return;
+    const routes = (trail.escape_routes || []).filter(route => {
+      if(includeAll) return true;
+      const days = HTM_CORE.escapeRouteDays(route);
+      return day == null ? days.length === 0 : days.includes(Number(day));
+    });
+    if(!routes.length) return;
+    const section = document.createElement('section');
+    section.className = 'day-escape-section';
+    const heading = document.createElement('h4');
+    heading.className = 'day-escape-heading';
+    heading.textContent = day == null
+      ? (currentLang === 'zh' ? '未关联行程的下撤方案' : 'Unassigned escape routes')
+      : `${currentLang === 'zh' ? '本日下撤方案' : 'Escape routes'} · ${routes.length}`;
+    const routeList = document.createElement('div');
+    routeList.className = 'escape-route-list';
+    routes.forEach(r => {
         const item = document.createElement('div');
         item.className = 'escape-item';
         item.dataset.trail = trail.id;
@@ -1899,6 +2091,11 @@ export function startStudioRuntime(
         const direction = HTM_CORE.resolveEscapeRouteDirection(r);
         const referenceId = r._anchor?.trailId || trail.id;
         const referenceName = r._anchor?.trailName || trail.name;
+        const routeDays = HTM_CORE.escapeRouteDays(r);
+        item.dataset.name = String(r.name || '').toLocaleLowerCase();
+        item.dataset.direction = direction;
+        item.dataset.reference = referenceId;
+        item.setAttribute('data-days', routeDays.join(','));
         const isOtherTrail = r._anchor && r._anchor.trailId !== trail.id;
         const crossTag = isOtherTrail
           ? `<span style="background:#1e3a5f;color:#60a5fa;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">跨轨迹</span>`
@@ -1906,8 +2103,8 @@ export function startStudioRuntime(
         const manualTag = r._manual
           ? `<span style="background:#1a2e1a;color:#4ade80;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">手动</span>`
           : '';
-        const dayTag = r.day
-          ? `<span class="escape-day-tag">D${r.day}</span>`
+        const dayTag = routeDays.length
+          ? `<span class="escape-day-tag">${routeDays.map(value => `D${value}`).join(' · ')}</span>`
           : '';
         const directionTag = `<span class="escape-direction-tag ${direction}">${direction === 'reverse' ? (currentLang === 'zh' ? '反向' : 'Reverse') : (currentLang === 'zh' ? '正向' : 'Forward')}</span>`;
         const delBtn = r._manual
@@ -1937,43 +2134,15 @@ export function startStudioRuntime(
             clearEscape();
           } else {
             document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-            item.classList.add('active');
+            document.querySelectorAll('.escape-item').forEach(el => {
+              if(el.dataset.id === r.id && el.dataset.trail === trail.id) el.classList.add('active');
+            });
             showEscape(trail.id, r.id);
           }
         });
-        routeRows.push({item, route:r, direction, referenceId, referenceName});
         routeList.appendChild(item);
       });
-      const applyFilters = () => {
-        const query = nameFilter.value.trim().toLocaleLowerCase();
-        let visible = 0;
-        routeRows.forEach(row => {
-          const dayValue = row.route.day ? String(row.route.day) : 'none';
-          const matches = (!query || row.route.name.toLocaleLowerCase().includes(query))
-            && (directionFilter.value === 'all' || row.direction === directionFilter.value)
-            && (dayFilter.value === 'all' || dayValue === dayFilter.value)
-            && (referenceFilter.value === 'all' || row.referenceId === referenceFilter.value);
-          row.item.hidden = !matches;
-          if(matches) visible += 1;
-        });
-        filteredEmpty.hidden = visible > 0;
-        count.textContent = `${visible}/${routeRows.length}`;
-      };
-      nameFilter.addEventListener('input', applyFilters);
-      directionFilter.addEventListener('change', applyFilters);
-      dayFilter.addEventListener('change', applyFilters);
-      referenceFilter.addEventListener('change', applyFilters);
-      applyFilters();
-    }
-    // 手动添加按钮
-    const addBtn = document.createElement('button');
-    addBtn.textContent = currentLang === 'zh' ? '＋ 手动添加下撤路线' : '+ Add escape route';
-    addBtn.style.cssText = 'width:100%;margin-top:10px;padding:7px;background:rgba(127,29,29,0.3);border:1px dashed #7f1d1d;border-radius:5px;color:#fca5a5;font-size:11px;cursor:pointer';
-    addBtn.addEventListener('mouseenter', () => addBtn.style.background = 'rgba(127,29,29,0.5)');
-    addBtn.addEventListener('mouseleave', () => addBtn.style.background = 'rgba(127,29,29,0.3)');
-    addBtn.dataset.commandId = STUDIO_COMMANDS.ESCAPE_TOGGLE;
-    addBtn.addEventListener('click', () => dispatchStudioCommand(STUDIO_COMMANDS.ESCAPE_TOGGLE));
-    section.appendChild(addBtn);
+    section.append(heading, routeList);
     container.appendChild(section);
   }
   function buildLegend() {
@@ -2092,9 +2261,8 @@ export function startStudioRuntime(
     TAG_RULES_JS.forEach(([tag, kws, icon, color]) => {
       const btn = document.createElement('button');
       const on = state.waypointModeTags.has(tag);
-      btn.className = 'btn-mini' + (on ? ' on' : '');
-      btn.style.cssText = 'padding:6px 8px;font-size:11px;display:flex;align-items:center;gap:6px;justify-content:flex-start;text-align:left;width:100%';
-      btn.innerHTML = `<span style="color:${color}">${waypointIcon(tag)}</span> ${t('tag.'+tag)}`;
+      btn.className = 'btn-mini waypoint-mode-tag' + (on ? ' on' : '');
+      btn.innerHTML = `<span class="waypoint-filter-icon" aria-hidden="true" style="color:${color}">${waypointIconMarkup(tag)}</span><span>${t('tag.'+tag)}</span>`;
       btn.addEventListener('click', () => {
         dispatchState({type:'waypoint-tag.set', tag, visible:!state.waypointModeTags.has(tag)});
         buildWaypointModeTagGrid();
@@ -2590,6 +2758,31 @@ export function startStudioRuntime(
     return nearestTrackIdxOnPrimary(lat, lng);
   }
 
+  function nearestTrackIdxOnTrail(trail, lat, lng, centerIdx = null, windowSize = 1000) {
+    const track = trail?.track || [];
+    if(!track.length) return null;
+    let lo = 0;
+    let hi = track.length - 1;
+    if(Number.isFinite(centerIdx)) {
+      lo = Math.max(0, Math.round(centerIdx) - windowSize);
+      hi = Math.min(track.length - 1, Math.round(centerIdx) + windowSize);
+    }
+    const cosLat = Math.max(.15, Math.cos(lat * Math.PI / 180));
+    let bestIndex = lo;
+    let bestDistance = Infinity;
+    for(let index = lo; index <= hi; index += 1) {
+      const dy = track[index][0] - lat;
+      const dx = (track[index][1] - lng) * cosLat;
+      const distance = dx * dx + dy * dy;
+      if(distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+    const point = track[bestIndex];
+    return {idx:bestIndex, point, dist:haversine(lat, lng, point[0], point[1]), trail};
+  }
+
   function measurePointFromHit(hit) {
     const p = hit.point;
     return { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
@@ -2710,6 +2903,7 @@ export function startStudioRuntime(
 
     function resolveLatLng(ll) {
       const centerIdx = typeof opts.getCenterIdx === 'function' ? opts.getCenterIdx() : null;
+      if(opts.trail) return nearestTrackIdxOnTrail(opts.trail, ll.lat, ll.lng, centerIdx, opts.windowSize || 1000);
       return centerIdx != null
         ? nearestTrackIdxNearPrimary(ll.lat, ll.lng, centerIdx, opts.windowSize || 700)
         : nearestTrackIdxOnPrimary(ll.lat, ll.lng);
@@ -2953,7 +3147,13 @@ export function startStudioRuntime(
     if(!measureState.layer || !measureState.ptA || !measureState.ptB) return;
     const main = DATA.trails.find(t => t.id === (measureState.trailId || state.primaryTrailId));
     if(!main || !main.track) return;
-    const model = buildMeasureSegmentRenderModel(main.track, measureState.ptA, measureState.ptB, maxPoints);
+    const model = buildMeasureSegmentRenderModel(
+      main.track,
+      measureState.ptA,
+      measureState.ptB,
+      maxPoints,
+      main.track_breaks,
+    );
     if(!model) return;
     measureState.segmentLine = HTM_APP.upsertLeafletPolyline(
       L,
@@ -3086,26 +3286,28 @@ export function startStudioRuntime(
       : 'Click <b style="color:#22c55e">point A</b>, then <b style="color:#ef4444">point B</b> on the selected reference trail.<br><span style="font-size:10px">A/B snap only to that trail.</span>';
   }
 
-  function refreshEscapeDaySelect(selectedDay = null) {
-    const select = document.getElementById('addescape-day-select');
-    if(!select) return null;
+  function refreshEscapeDaySelect(selectedDays = []) {
+    const group = document.getElementById('addescape-day-select');
+    if(!group) return [];
     const days = escapeController.availableDays();
-    select.replaceChildren();
+    const requested = Array.isArray(selectedDays) ? selectedDays.map(Number) : [Number(selectedDays)];
+    const nextDays = days.filter(day => requested.includes(day));
+    if(!nextDays.length && days.length) nextDays.push(days[0]);
+    group.replaceChildren();
     days.forEach(day => {
-      const option = document.createElement('option');
-      option.value = String(day);
-      option.textContent = `D${day}`;
-      select.append(option);
+      const label = document.createElement('label');
+      label.className = 'escape-day-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = String(day);
+      input.checked = nextDays.includes(day);
+      label.append(input, document.createTextNode(`D${day}`));
+      group.append(label);
     });
-    const nextDay = days.includes(Number(selectedDay)) ? Number(selectedDay) : (days[0] || null);
-    select.disabled = days.length < 2;
-    if(nextDay != null) {
-      select.value = String(nextDay);
-      escapeController.setDay(nextDay);
-    }
+    if(nextDays.length) escapeController.setDays(nextDays);
     const dayValue = document.getElementById('ae-day');
-    if(dayValue) dayValue.textContent = nextDay == null ? '-' : `D${nextDay}`;
-    return nextDay;
+    if(dayValue) dayValue.textContent = nextDays.length ? nextDays.map(day => `D${day}`).join('、') : '-';
+    return nextDays;
   }
 
   function handleEscapeInteractionEvent(event, session) {
@@ -3204,7 +3406,7 @@ export function startStudioRuntime(
     // 填充面板
     document.getElementById('ae-dist').textContent = route.distance_km + ' km';
     document.getElementById('ae-trail').textContent = route._anchor.trailName;
-    refreshEscapeDaySelect(route.day || null);
+    refreshEscapeDaySelect(HTM_CORE.escapeRouteDays(route));
     document.getElementById('ae-asc').textContent = preview.ascentM + ' m';
     document.getElementById('ae-desc').textContent = preview.descentM + ' m';
     document.getElementById('ae-eA').textContent = Math.round(pointA.elev) + ' m';
@@ -3255,8 +3457,16 @@ export function startStudioRuntime(
   document.getElementById('addescape-reset').addEventListener('click', addEscapeReset);
   document.getElementById('addescape-commit').addEventListener('click', addEscapeCommit);
   document.getElementById('addescape-day-select').addEventListener('change', event => {
-    const day = Number(event.target.value);
-    if(escapeController.setDay(day)) document.getElementById('ae-day').textContent = `D${day}`;
+    if(!event.target.matches('input[type="checkbox"]')) return;
+    const inputs = [...event.currentTarget.querySelectorAll('input[type="checkbox"]')];
+    let days = inputs.filter(input => input.checked).map(input => Number(input.value));
+    if(!days.length) {
+      event.target.checked = true;
+      days = [Number(event.target.value)];
+    }
+    if(escapeController.setDays(days)) {
+      document.getElementById('ae-day').textContent = days.map(day => `D${day}`).join('、');
+    }
   });
   function measureCompute() {
     if(!measureState.ptA || !measureState.ptB) return;
@@ -3500,7 +3710,8 @@ export function startStudioRuntime(
       const color = DAY_COLORS[(d-1) % DAY_COLORS.length];
       const campData = segmentState.campEdits[d] || {};
       const campName = campData.name || '';
-      const campElev = campData.elev != null ? campData.elev : Math.round(pts[d].elev);
+      const campElev = Math.round(pts[d].elev);
+      const campCoordinates = formatTrackPointCoordinates([pts[d].lat, pts[d].lng]);
       html += '<div class="segment-day-card" style="--day-color:'+color+'">' +
         '<div class="segment-day-head">' +
           '<b class="segment-day-title">D'+d+'</b>' +
@@ -3513,8 +3724,8 @@ export function startStudioRuntime(
         '</div>' +
         '<div class="segment-field">' +
           '<label>营地海拔</label>' +
-          '<input class="seg-camp-elev" data-day="'+d+'" type="number" placeholder="米" value="'+campElev+'">' +
-          '<span class="unit">m</span>' +
+          '<output class="seg-camp-elev" data-day="'+d+'">'+campElev+' m</output>' +
+          '<span class="segment-point-coordinate">'+campCoordinates+'</span>' +
         '</div>' +
       '</div>';
     }
@@ -3524,14 +3735,6 @@ export function startStudioRuntime(
       inp.addEventListener('input', e => {
         const d = +e.target.dataset.day;
         segmentController.updateCamp(d, {name:e.target.value});
-        updateSegmentDirtyIndicator();
-      });
-    });
-    list.querySelectorAll('.seg-camp-elev').forEach(inp => {
-      inp.addEventListener('input', e => {
-        const d = +e.target.dataset.day;
-        const v = parseFloat(e.target.value);
-        segmentController.updateCamp(d, {elev:isNaN(v) ? null : v});
         updateSegmentDirtyIndicator();
       });
     });
@@ -3553,7 +3756,7 @@ export function startStudioRuntime(
     const tk = main.track;
     const pts = segmentState.points;
     const DAY_COLORS = dayPalette;
-    const model = buildSegmentLayerModel(tk, pts, DAY_COLORS, 900);
+    const model = buildSegmentLayerModel(tk, pts, DAY_COLORS, 900, main.track_breaks);
     // 为每天绘制不同颜色高亮线段
     model.segments.forEach(seg => {
       L.polyline(seg.latLngs, seg.lineStyle).addTo(segmentState.layer);
@@ -3587,24 +3790,28 @@ export function startStudioRuntime(
     });
   }
 
-  function segmentApply() {
+  async function segmentApply() {
     if(segmentState.points.length < 2) {
       showToast('至少需要 2 个分段点（1 天）', 'error');
-      return;
+      return false;
     }
     if(!setRuntimeInteractionPhase('segment', 'committing')) return;
     const result = segmentController.apply();
     if(!result) {
       setRuntimeInteractionPhase('segment', 'editing');
       showToast('分段状态已失效，请重新进入分段模式', 'error');
-      return;
+      return false;
     }
-    showToast('✓ 已应用 ' + result.dayCount + ' 天分段');
-    // 保存 + 完整重绘（fit:false 保持当前视野，但同步地图标注、行程、主轨迹小卡等所有 UI）
-    saveToStorage();
+    // 在离开编辑态前完成 IndexedDB 事务，避免应用后立即关闭 HTML 丢失最新日程。
+    const saved = await _doSave();
+    showToast(saved
+      ? '✓ 已应用并保存 ' + result.dayCount + ' 天分段'
+      : '已应用分段，但浏览器缓存保存失败', saved ? 'info' : 'error');
+    // 完整重绘（fit:false 保持当前视野，但同步地图标注、行程、主轨迹小卡等所有 UI）
     rebuildAll({fit:false});
     if(typeof refreshElevBar === 'function') refreshElevBar();
     segmentExit({reason:'committed'});
+    return saved;
   }
 
   const segmentCloseBtn = document.getElementById('segment-close');
@@ -3768,6 +3975,7 @@ export function startStudioRuntime(
         if(reversed) segPts = segPts.slice().reverse();
         drawElevBar(segPts, '#3F5238', t('elev.measure'), {
           kmFromZero: true,
+          trackBreaks:trackBreaksInRange(main.track_breaks, i1, i2, reversed),
           waypoints: main.waypoints,
           segIdxStart: i1, segIdxEnd: i2, reversed,
           measureMode: true,
@@ -3778,12 +3986,14 @@ export function startStudioRuntime(
         const segPts = main.track.slice(i1, i2 + 1);
         drawElevBar(segPts, '#fbbf24', `D${dayPreviewState.day} · ${t('elev.measure')}`, {
           kmFromZero: true,
+          trackBreaks:trackBreaksInRange(main.track_breaks, i1, i2, false),
           waypoints: main.waypoints,
           segIdxStart: i1, segIdxEnd: i2, reversed: false,
           measureMode: true,
         });
       } else {
         drawElevBar(main.track, main.color, (main.name || t('mini.primary')) + ' · ' + t('elev.title'), {
+          trackBreaks:main.track_breaks,
           waypoints: main.waypoints,
           segIdxStart: 0, segIdxEnd: main.track.length - 1, reversed: false,
         });
@@ -3792,7 +4002,7 @@ export function startStudioRuntime(
 
     function currentElevStackContext() {
       let segPts = main.track;
-      const layoutOpts = { width: elevCanvas.offsetWidth || 340, height: 140 };
+      const layoutOpts = { width: elevCanvas.offsetWidth || 340, height: 140, trackBreaks:main.track_breaks };
       const annoOpts = {
         waypoints: main.waypoints,
         segIdxStart: 0,
@@ -3808,6 +4018,7 @@ export function startStudioRuntime(
         if(reversed) segPts = segPts.slice().reverse();
         layoutOpts.kmFromZero = true;
         layoutOpts.measureMode = true;
+        layoutOpts.trackBreaks = trackBreaksInRange(main.track_breaks, i1, i2, reversed);
         Object.assign(annoOpts, { segIdxStart: i1, segIdxEnd: i2, reversed, measureMode: true });
       } else if(dayPreviewState.active && dayPreviewState.trailId === main.id && dayPreviewState.iStart != null && dayPreviewState.iEnd != null) {
         const i1 = Math.min(dayPreviewState.iStart, dayPreviewState.iEnd);
@@ -3815,6 +4026,7 @@ export function startStudioRuntime(
         segPts = main.track.slice(i1, i2 + 1);
         layoutOpts.kmFromZero = true;
         layoutOpts.measureMode = true;
+        layoutOpts.trackBreaks = trackBreaksInRange(main.track_breaks, i1, i2, false);
         Object.assign(annoOpts, { segIdxStart: i1, segIdxEnd: i2, reversed: false, measureMode: true });
       }
       return { segPts, layoutOpts, annoOpts };
@@ -3881,8 +4093,8 @@ export function startStudioRuntime(
       elevCrosshair.style.left = mx + 'px';
       elevTip.style.display = 'block';
       const rect = elevCanvas.getBoundingClientRect();
-      elevTip.style.left = Math.min(mx + 8, rect.width - 140) + 'px';
-      elevTip.innerHTML = `<b>${pt[3] !== undefined ? pt[3] + 'km' : ''}</b> · ${pt[2]}m · ↑<b>${pt[4]}m</b>`;
+      elevTip.style.left = Math.max(4, Math.min(mx + 8, rect.width - 210)) + 'px';
+      elevTip.innerHTML = `<b>${pt[3] !== undefined ? pt[3] + 'km' : ''}</b> · ${pt[2]}m · ↑<b>${pt[4]}m</b><span class="elev-tip-coordinate">${formatTrackPointCoordinates(pt)}</span>`;
     });
 
     elevCanvas.addEventListener('mouseleave', () => {
@@ -3899,7 +4111,11 @@ export function startStudioRuntime(
       if(!pt || pt[0] == null) return;
 
       // 移除旧标记
-      if(_elevClickMarker) { _elevClickMarker.remove(); _elevClickMarker = null; }
+      if(_elevClickMarker) {
+        clearTimeout(_elevClickMarker._autoRemove);
+        _elevClickMarker.remove();
+        _elevClickMarker = null;
+      }
 
       const latlng = [pt[0], pt[1]];
       const color = (_elevBarData && _elevBarData.color) || '#fbbf24';
@@ -3907,14 +4123,14 @@ export function startStudioRuntime(
         radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1,
         pane: 'tooltipPane'
       }).addTo(map);
-      const tipTxt = `${pt[3] !== undefined ? pt[3] + 'km · ' : ''}${Math.round(pt[2])}m`;
+      const tipTxt = `<b>${pt[3] !== undefined ? pt[3] + 'km · ' : ''}${Math.round(pt[2])}m</b><br><span class="track-point-coordinate">${formatTrackPointCoordinates(pt)}</span>`;
       _elevClickMarker.bindTooltip(tipTxt, { permanent: true, direction: 'top', offset: [0,-8], className: 'measure-tip' }).openTooltip();
       map.panTo(latlng, { animate: true, duration: 0.4 });
 
       clearTimeout(_elevClickMarker._autoRemove);
       _elevClickMarker._autoRemove = setTimeout(() => {
         if(_elevClickMarker) { _elevClickMarker.remove(); _elevClickMarker = null; }
-      }, 3000);
+      }, 8000);
     });
   }
 
@@ -3962,14 +4178,17 @@ export function startStudioRuntime(
       DATA.trails = restored.trails;
       // 兼容旧数据：缺 descent_m 则现场补算
       DATA.trails.forEach(tr => {
+        const segmentedMetrics = tr.track?.length && tr.track_breaks?.length
+          ? computeSegmentedTrackMetrics(tr.track, tr.track_breaks, 10)
+          : null;
         if(tr.stats && (tr.stats.descent_m === undefined || tr.stats.descent_m === null) && tr.track && tr.track.length) {
           const elevs = tr.track.map(p => p[2] || 0);
-          const arr = accumulatorDescent(elevs, 10);
+          const arr = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(elevs, 10);
           tr.stats.descent_m = Math.round(arr[arr.length-1] || 0);
         }
         // 兼容旧数据：补算 _descCum
         if(!tr._descCum && tr.track && tr.track.length) {
-          tr._descCum = accumulatorDescent(tr.track.map(p => p[2] || 0), 10);
+          tr._descCum = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(tr.track.map(p => p[2] || 0), 10);
         }
         // 兼容旧数据：escape_routes 为空则从 waypoints + track 重新推算（v1.12.3：默认关闭，仅 state.autoGenerateEscape=true 时启用）
         if(state.autoGenerateEscape && (!tr.escape_routes || tr.escape_routes.length === 0) && tr.waypoints && tr.track && tr.track.length) {
@@ -4254,11 +4473,8 @@ export function startStudioRuntime(
     ['highpoint', [], '⛰', '#fbbf24'],
   ];
   function classifyTag(name) {
-    if(!name) return ['other', '📍', '#aaa'];
-    for(const [tag, kws, icon, color] of TAG_RULES_JS) {
-      for(const kw of kws) if(name.includes(kw)) return [tag, icon, color];
-    }
-    return ['other', '📍', '#aaa'];
+    const tag = classifyWaypointTag(name);
+    return [tag, tagIcons[tag] || '📍', tagColors[tag] || '#aaa'];
   }
 
 
@@ -4308,15 +4524,9 @@ export function startStudioRuntime(
     return buildKmlParseModel(extractKmlParseModelInput(doc));
   }
 
-  function processTrack(pts) {
-    const cumD = [0];
-    for(let i=1; i<pts.length; i++) {
-      cumD.push(cumD[i-1] + haversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng));
-    }
+  function processTrack(pts, trackBreaks = []) {
     const elevs = pts.map(p => p.elev);
     const smoothE = smoothElev(elevs, 7);
-    const cumA = accumulatorAscent(elevs, 10);
-    const cumDesc = accumulatorDescent(elevs, 10);
     // 分天：基于时间戳，没时间戳全归 1
     const days = pts.map(p => {
       if(!p.t) return null;
@@ -4329,11 +4539,17 @@ export function startStudioRuntime(
     uniqDays.forEach((d, i) => { dayMap[d] = i+1; });
     const dayOfIdx = days.map(d => dayMap[d] || 1);
 
-    return pts.map((p, i) => [
+    const track = pts.map((p, i) => [
       +p.lat.toFixed(6), +p.lng.toFixed(6),
-      Math.round(smoothE[i]), +(cumD[i]/1000).toFixed(2),
-      Math.round(cumA[i]), dayOfIdx[i],
+      Math.round(smoothE[i]), 0,
+      0, dayOfIdx[i],
     ]);
+    const metrics = computeSegmentedTrackMetrics(track, trackBreaks, 10);
+    track.forEach((point, index) => {
+      point[3] = +(metrics.cumulativeDistanceM[index] / 1000).toFixed(2);
+      point[4] = Math.round(metrics.cumulativeAscentM[index]);
+    });
+    return track;
   }
 
 
@@ -4512,7 +4728,7 @@ export function startStudioRuntime(
         max: Math.round(maxE),
         min: Math.round(minE),
         camp: camp ? camp.label : '未标注',
-        camp_elev: camp ? camp.elev : Math.round(maxE),
+        camp_elev: Math.round(track[i_e][2] || 0),
         seg: keyWps.length ? keyWps.slice(0,5).map(w => w.label).join(' → ') : `D${d}行程`,
         i_start: i_s, i_end: i_e,
       };
@@ -4532,30 +4748,38 @@ export function startStudioRuntime(
   }
 
   function parseAndProcessKml(xmlText, filename) {
-    const { title, trackPoints, waypoints } = parseKml(xmlText);
+    const { title, trackPoints, waypoints, trackBreaks } = parseKml(xmlText);
     if(trackPoints.length === 0) return null;
 
-    const track = processTrack(trackPoints);
-    const enrichedWps = enrichWaypoints(waypoints, trackPoints).filter(w => w.name);
+    const track = processTrack(trackPoints, trackBreaks);
+    const enrichedWps = enrichWaypoints(waypoints, trackPoints)
+      .filter(w => w.name)
+      .map(w => {
+        const point = track[w.gps_idx] || [];
+        return {
+          ...w,
+          km:Number.parseFloat(Number(point[3] || 0).toFixed(1)),
+          day:Number(point[5]) || 1,
+        };
+      });
     const escapeRoutes = state.autoGenerateEscape
       ? buildEscapeRoutes(enrichedWps, trackPoints, DATA.trails)
       : [];
 
-    const cumD = computeCumulativeDistance(trackPoints);
+    const segmentedMetrics = computeSegmentedTrackMetrics(track, trackBreaks, 10);
+    const cumD = segmentedMetrics.cumulativeDistanceM;
     const dayMeta = buildDayMeta(trackPoints, track, enrichedWps, cumD);
-    const elevs = trackPoints.map(p => p.elev);
-    const smoothE = smoothElev(elevs, 7);
-
     return {
       id: generateNextTrailId(),
       name: title,
       source: '',
       color: '#f97316',
       days: dayMeta.length,
-      stats: computeTrailStats(elevs, cumD, smoothE),
+      stats: segmentedMetrics.stats,
       day_meta: dayMeta,
       track,
-      _descCum: accumulatorDescent(elevs, 10),
+      track_breaks:trackBreaks,
+      _descCum: segmentedMetrics.cumulativeDescentM,
       waypoints: enrichedWps,
       escape_routes: escapeRoutes,
       calc_method: {
@@ -4603,12 +4827,24 @@ export function startStudioRuntime(
     if(DATA.trails.length && (!state.activeTrails || state.activeTrails.size === 0)) {
       dispatchState({type:'active-trails.replace', trailIds:DATA.trails.map(t => t.id)});
     }
+    // 每次打开工作台都进入一个有效轨迹组；缓存中的“无分组”仅保留在当前会话。
+    if(DATA.trails.length && (state.activeGroup == null
+        || !DATA.trails.some(trail => trailGroup(trail) === state.activeGroup))) {
+      dispatchState({type:'group.set-active', group:trailGroup(DATA.trails[0])});
+    }
     // 兜底主轨迹
     // v1.21.0：兜底选当前组内的第一条（而不是 DATA.trails[0]，可能不在当前组）
     if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
       const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
       dispatchState({type:'primary-trail.set', trailId:(inGroup[0] || DATA.trails[0]).id});
     }
+    dispatchState({type:'mode.set', mode:'elev'});
+    document.querySelectorAll('[data-mode]').forEach(control => {
+      const active = control.dataset.mode === 'elev';
+      control.classList.toggle('on', active);
+      control.setAttribute('aria-pressed', String(active));
+    });
+    activateSidebarTab('trails');
     // 无论是否从 storage 恢复，都做一次 rebuildAll 以保证 UI/绘制/视野一致
     rebuildAll({fit: !restored});
     // 若处于标注点模式，确保面板显示
@@ -4646,21 +4882,26 @@ export function startStudioRuntime(
     const resetEpoch = ++workspaceResetEpoch;
     renderRuntimeStats.fit.lastResetEpoch = resetEpoch;
     if(map && typeof map.stop === 'function') map.stop();
+    let stateChanged = false;
     if(opts.restoreActive && (!state.activeTrails || state.activeTrails.size === 0)) {
       dispatchState({type:'active-trails.replace', trailIds:DATA.trails.map(t => t.id)});
+      stateChanged = true;
     }
     // 兜底主轨迹（当前组内）
     if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
       const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
       dispatchState({type:'primary-trail.set', trailId:(inGroup[0] || DATA.trails[0]).id});
+      stateChanged = true;
     }
-    invalidateRender(
-      HTM_APP.RENDER_DIRTY.TRACKS
-      | HTM_APP.RENDER_DIRTY.MARKERS
-      | HTM_APP.RENDER_DIRTY.SIDEBAR
-      | HTM_APP.RENDER_DIRTY.LEGEND
-      | HTM_APP.RENDER_DIRTY.CHART,
-    );
+    if(stateChanged) {
+      invalidateRender(
+        HTM_APP.RENDER_DIRTY.TRACKS
+        | HTM_APP.RENDER_DIRTY.MARKERS
+        | HTM_APP.RENDER_DIRTY.SIDEBAR
+        | HTM_APP.RENDER_DIRTY.LEGEND
+        | HTM_APP.RENDER_DIRTY.CHART,
+      );
+    }
 
     // v1.24.0：测距模式下，若已选中段（A+B），复位到该段
     if(typeof measureState !== 'undefined' && measureState.active && measureState.ptA && measureState.ptB) {
@@ -4670,13 +4911,12 @@ export function startStudioRuntime(
         const i2 = Math.max(measureState.ptA.idx, measureState.ptB.idx);
         const segLL = buildTrackLatLngs(main.track, i1, i2, 1600);
         if(segLL.length >= 2) {
-          if(typeof measureCompute === 'function') measureCompute();
           const fitPromise = fitWorkspaceBounds(
             L.latLngBounds(segLL),
             {padding:[60,60]},
             {source:'reset-measure', resetEpoch, gesture:Boolean(opts.gesture)},
           );
-          saveToStorage();
+          if(stateChanged) saveToStorage();
           return fitPromise;
         }
       }
@@ -4691,7 +4931,7 @@ export function startStudioRuntime(
         {padding:[40,40]},
         {source:'reset-primary', resetEpoch, gesture:Boolean(opts.gesture)},
       );
-      saveToStorage();
+      if(stateChanged) saveToStorage();
       return fitPromise;
     } else {
       const allLatLngs = [];
@@ -4704,11 +4944,11 @@ export function startStudioRuntime(
           {padding:[40,40]},
           {source:'reset-active', resetEpoch, gesture:Boolean(opts.gesture)},
         );
-        saveToStorage();
+        if(stateChanged) saveToStorage();
         return fitPromise;
       }
     }
-    saveToStorage();
+    if(stateChanged) saveToStorage();
     return Promise.resolve(false);
   }
 
@@ -4746,8 +4986,8 @@ export function startStudioRuntime(
         map.fitBounds(request.bounds, request.options);
       }
     };
-    applyFit();
     if(!request.closeOverlay) {
+      applyFit();
       finishWorkspaceFit(context.epoch, true);
       return;
     }
@@ -4758,7 +4998,7 @@ export function startStudioRuntime(
       }
       applyFit();
       finishWorkspaceFit(context.epoch, true);
-    }, 260);
+    }, 220);
   }
 
   function fitWorkspaceBounds(bounds, options = {}, meta = {}) {
@@ -4897,14 +5137,27 @@ export function startStudioRuntime(
 
         const tag = document.createElement('select');
         tag.id = 'manual-waypoint-tag';
-        tag.className = 'workbench-dialog__input workbench-dialog__select';
+        tag.className = 'workbench-dialog__input workbench-dialog__select waypoint-type-select';
         ['other','camp','water','supply','pass','fork','warn','shelter','village','bridge','river','start','end'].forEach(value => {
           const option = document.createElement('option');
           option.value = value;
-          option.textContent = `${waypointIcon(value)} ${t('tag.'+value) || value}`;
+          option.textContent = t('tag.'+value) || value;
           tag.append(option);
         });
-        createField(isZh ? '图标与类型' : 'Icon and type', tag);
+        tag.value = 'other';
+        const tagControl = document.createElement('div');
+        tagControl.className = 'waypoint-type-select-control';
+        const tagPreview = document.createElement('span');
+        tagPreview.className = 'waypoint-type-select-preview';
+        tagPreview.setAttribute('aria-hidden', 'true');
+        const updateTagPreview = () => {
+          tagPreview.style.color = tagColors[tag.value] || '#64748b';
+          tagPreview.innerHTML = waypointIconMarkup(tag.value);
+        };
+        tag.addEventListener('change', updateTagPreview);
+        tagControl.append(tagPreview, tag);
+        createField(isZh ? '图标与类型' : 'Icon and type', tagControl);
+        updateTagPreview();
 
         const description = document.createElement('textarea');
         description.id = 'manual-waypoint-description';
@@ -5082,6 +5335,7 @@ export function startStudioRuntime(
   }
 
   async function toggleMeasureCommand() {
+    if(interactionManager.current.kind === 'stitch' && !await requestStitchExit()) return false;
     if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-measure')) return false;
     if(interactionManager.current.kind === 'measure') measureExit();
     else measureEnter();
@@ -5089,12 +5343,14 @@ export function startStudioRuntime(
   }
 
   async function toggleSegmentCommand() {
+    if(interactionManager.current.kind === 'stitch' && !await requestStitchExit()) return false;
     if(interactionManager.current.kind === 'segment') return requestSegmentExit('toggle');
     else segmentEnter();
     return true;
   }
 
   async function toggleWaypointCommand() {
+    if(interactionManager.current.kind === 'stitch' && !await requestStitchExit()) return false;
     if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-waypoint')) return false;
     if(interactionManager.current.kind === 'waypoint') exitAddWaypointMode();
     else enterAddWaypointMode();
@@ -5102,11 +5358,475 @@ export function startStudioRuntime(
   }
 
   async function toggleEscapeCommand() {
+    if(interactionManager.current.kind === 'stitch' && !await requestStitchExit()) return false;
     if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-escape')) return false;
     if(interactionManager.current.kind === 'escape') addEscapeExit();
     else addEscapeEnter();
     return true;
   }
+
+  let stitchPartSequence = 0;
+
+  function createStitchDraftPart(trail) {
+    return {
+      id:`stitch-part-${++stitchPartSequence}`,
+      trail,
+      startIndex:0,
+      endIndex:Math.max(1, trail.track.length - 1),
+      reversed:false,
+    };
+  }
+
+  function stitchPartEndpointIndex(part, label) {
+    if(label === 'A') return part.reversed ? part.endIndex : part.startIndex;
+    return part.reversed ? part.startIndex : part.endIndex;
+  }
+
+  function stitchPartEndpoint(part, label) {
+    return part.trail.track[stitchPartEndpointIndex(part, label)];
+  }
+
+  function stitchPartDistanceKm(part) {
+    const start = part.trail.track[part.startIndex];
+    const end = part.trail.track[part.endIndex];
+    if(Number.isFinite(start?.[3]) && Number.isFinite(end?.[3])) {
+      return Math.max(0, Number(end[3]) - Number(start[3]));
+    }
+    let distanceM = 0;
+    const breakSet = new Set(part.trail.track_breaks || []);
+    for(let index = part.startIndex + 1; index <= part.endIndex; index += 1) {
+      if(!breakSet.has(index)) {
+        const previous = part.trail.track[index - 1];
+        const point = part.trail.track[index];
+        distanceM += haversine(previous[0], previous[1], point[0], point[1]);
+      }
+    }
+    return distanceM / 1000;
+  }
+
+  function stitchDraftJunctions() {
+    const junctions = [];
+    for(let index = 1; index < stitchState.parts.length; index += 1) {
+      const previous = stitchState.parts[index - 1];
+      const current = stitchState.parts[index];
+      const from = stitchPartEndpoint(previous, 'B');
+      const to = stitchPartEndpoint(current, 'A');
+      if(!from || !to) continue;
+      const distanceM = haversine(from[0], from[1], to[0], to[1]);
+      junctions.push({index, distanceM, connected:distanceM <= 5, from, to});
+    }
+    return junctions;
+  }
+
+  function applyStitchEndpoint(part, label, hit) {
+    if(!part || !hit || !Number.isInteger(hit.idx)) return false;
+    const last = part.trail.track.length - 1;
+    const index = Math.max(0, Math.min(last, hit.idx));
+    if(label === 'A') {
+      if(part.reversed) part.endIndex = Math.max(part.startIndex + 1, index);
+      else part.startIndex = Math.min(part.endIndex - 1, index);
+    } else if(part.reversed) part.startIndex = Math.min(part.endIndex - 1, index);
+    else part.endIndex = Math.max(part.startIndex + 1, index);
+    stitchState.dirty = true;
+    return true;
+  }
+
+  function stitchEndpointIcon(label, color) {
+    return L.divIcon({
+      className:'',
+      html:`<div class="stitch-endpoint-marker" style="--stitch-color:${color}">${label}</div>`,
+      iconSize:[26,26],
+      iconAnchor:[13,13],
+    });
+  }
+
+  function renderStitchMap() {
+    stitchLayer.clearLayers();
+    if(!stitchState.active) return;
+    const junctions = stitchDraftJunctions();
+    stitchState.parts.forEach((part, index) => {
+      const color = stitchPalette[index % stitchPalette.length];
+      const isSelected = part.id === stitchState.selectedPartId;
+      const sourcePaths = splitTrackByBreaks(part.trail.track, part.trail.track_breaks)
+        .map(segment => segment.map(point => [point[0], point[1]]));
+      L.polyline(sourcePaths, {
+        color:'#6B756E', weight:2, opacity:isSelected ? .48 : .22,
+        dashArray:'4,7', interactive:false,
+      }).addTo(stitchLayer);
+
+      const selectedPaths = buildTrackLatLngSegments(
+        part.trail.track,
+        part.startIndex,
+        part.endIndex,
+        part.trail.track_breaks,
+        1400,
+      );
+      const selectedLine = L.polyline(selectedPaths, {
+        color, weight:isSelected ? 7 : 5, opacity:isSelected ? 1 : .78,
+        lineCap:'round', lineJoin:'round', interactive:true,
+      }).addTo(stitchLayer);
+      selectedLine.bindTooltip(`${index + 1}. ${part.trail.name}`, {sticky:true});
+      selectedLine.on('click', event => {
+        if(event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
+        stitchState.selectedPartId = part.id;
+        renderStitchWorkbench();
+      });
+      if(L.polylineDecorator && L.Symbol?.arrowHead) {
+        L.polylineDecorator(selectedLine, {
+          patterns:[{
+            offset:'12%', repeat:'24%',
+            symbol:L.Symbol.arrowHead({pixelSize:7, polygon:false, pathOptions:{color, weight:2, opacity:.9}}),
+          }],
+        }).addTo(stitchLayer);
+      }
+
+      for(const label of ['A','B']) {
+        const point = stitchPartEndpoint(part, label);
+        if(!point) continue;
+        const marker = L.marker([point[0], point[1]], {
+          draggable:true, autoPan:true, icon:stitchEndpointIcon(label, color), zIndexOffset:1000 + index,
+        }).addTo(stitchLayer);
+        const snapper = createPrimaryTrackDragSnapper(marker, {
+          trail:part.trail,
+          getCenterIdx:() => stitchPartEndpointIndex(part, label),
+          scheduleFrame:callback => scheduleRuntimeInteractionFrame('stitch', callback),
+        });
+        marker.on('dragstart', () => {
+          stitchState.selectedPartId = part.id;
+          dispatchRuntimeInteraction('stitch', {type:'drag-start', partId:part.id, endpoint:label});
+        });
+        marker.on('drag', event => snapper.schedule(event));
+        marker.on('dragend', event => {
+          const hit = snapper.resolve(event.target.getLatLng());
+          snapper.cancel();
+          dispatchRuntimeInteraction('stitch', {type:'drag-end', partId:part.id, endpoint:label, hit});
+        });
+      }
+    });
+
+    junctions.forEach(junction => {
+      if(junction.connected) return;
+      L.polyline(
+        [[junction.from[0], junction.from[1]], [junction.to[0], junction.to[1]]],
+        {color:'#A66A17', weight:2, opacity:.7, dashArray:'3,8', interactive:true},
+      ).bindTooltip(
+        currentLang === 'zh'
+          ? `断点 ${Math.round(junction.distanceM)} m（不计入里程）`
+          : `Gap ${Math.round(junction.distanceM)} m (excluded)`,
+        {sticky:true},
+      ).addTo(stitchLayer);
+    });
+  }
+
+  function stitchActionButton(label, title, action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'stitch-part-action';
+    button.textContent = label;
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      action();
+    });
+    return button;
+  }
+
+  function moveStitchPart(partId, direction) {
+    const index = stitchState.parts.findIndex(part => part.id === partId);
+    const target = index + direction;
+    if(index < 0 || target < 0 || target >= stitchState.parts.length) return;
+    const [part] = stitchState.parts.splice(index, 1);
+    stitchState.parts.splice(target, 0, part);
+    stitchState.dirty = true;
+    renderStitchWorkbench();
+  }
+
+  function renderStitchPanel() {
+    const panel = document.getElementById('stitch-panel');
+    const list = document.getElementById('stitch-parts');
+    const summary = document.getElementById('stitch-summary');
+    if(!panel || !list || !summary) return;
+    panel.classList.toggle('is-open', stitchState.active);
+    if(!stitchState.active) return;
+    list.replaceChildren();
+    const junctions = stitchDraftJunctions();
+    const gapByIndex = new Map(junctions.filter(item => !item.connected).map(item => [item.index, item]));
+    stitchState.parts.forEach((part, index) => {
+      const color = stitchPalette[index % stitchPalette.length];
+      const card = document.createElement('article');
+      card.className = 'stitch-part-card';
+      card.classList.toggle('is-active', part.id === stitchState.selectedPartId);
+      card.style.setProperty('--stitch-color', color);
+      card.draggable = true;
+      card.dataset.partId = part.id;
+      const order = document.createElement('span');
+      order.className = 'stitch-part-order';
+      order.textContent = String(index + 1);
+      const copy = document.createElement('div');
+      copy.className = 'stitch-part-copy';
+      const title = document.createElement('strong');
+      title.textContent = part.trail.name;
+      const meta = document.createElement('small');
+      meta.textContent = `${part.reversed ? 'B → A' : 'A → B'} · ${stitchPartDistanceKm(part).toFixed(2)} km · ${part.startIndex}–${part.endIndex}`;
+      copy.append(title, meta);
+      const actions = document.createElement('div');
+      actions.className = 'stitch-part-actions';
+      actions.append(
+        stitchActionButton('↑', currentLang === 'zh' ? '上移' : 'Move up', () => moveStitchPart(part.id, -1)),
+        stitchActionButton('↓', currentLang === 'zh' ? '下移' : 'Move down', () => moveStitchPart(part.id, 1)),
+        stitchActionButton('⇄', currentLang === 'zh' ? '反向' : 'Reverse', () => {
+          part.reversed = !part.reversed;
+          stitchState.dirty = true;
+          renderStitchWorkbench();
+        }),
+        stitchActionButton('↔', currentLang === 'zh' ? '恢复完整轨迹' : 'Use full trail', () => {
+          part.startIndex = 0;
+          part.endIndex = part.trail.track.length - 1;
+          stitchState.dirty = true;
+          renderStitchWorkbench();
+        }),
+        stitchActionButton('⧉', currentLang === 'zh' ? '复制片段' : 'Duplicate part', () => {
+          const copyPart = {...part, id:`stitch-part-${++stitchPartSequence}`};
+          stitchState.parts.splice(index + 1, 0, copyPart);
+          stitchState.selectedPartId = copyPart.id;
+          stitchState.dirty = true;
+          renderStitchWorkbench();
+        }),
+        stitchActionButton('×', currentLang === 'zh' ? '删除片段' : 'Delete part', () => {
+          stitchState.parts.splice(index, 1);
+          stitchState.selectedPartId = stitchState.parts[Math.min(index, stitchState.parts.length - 1)]?.id || null;
+          stitchState.dirty = true;
+          renderStitchWorkbench();
+        }),
+      );
+      card.append(order, copy, actions);
+      const gap = gapByIndex.get(index);
+      if(gap) {
+        const gapLabel = document.createElement('span');
+        gapLabel.className = 'stitch-part-gap';
+        gapLabel.textContent = currentLang === 'zh'
+          ? `前一段后有 ${Math.round(gap.distanceM)} m 断点，不连接且不计入统计`
+          : `${Math.round(gap.distanceM)} m gap before this part; excluded from stats`;
+        card.append(gapLabel);
+      }
+      card.addEventListener('click', () => {
+        stitchState.selectedPartId = part.id;
+        renderStitchWorkbench();
+      });
+      card.addEventListener('dragstart', event => event.dataTransfer?.setData('text/plain', part.id));
+      card.addEventListener('dragover', event => event.preventDefault());
+      card.addEventListener('drop', event => {
+        event.preventDefault();
+        const sourceId = event.dataTransfer?.getData('text/plain');
+        const sourceIndex = stitchState.parts.findIndex(item => item.id === sourceId);
+        const targetIndex = stitchState.parts.findIndex(item => item.id === part.id);
+        if(sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+        const [moved] = stitchState.parts.splice(sourceIndex, 1);
+        stitchState.parts.splice(targetIndex, 0, moved);
+        stitchState.dirty = true;
+        renderStitchWorkbench();
+      });
+      list.append(card);
+    });
+    const totalKm = stitchState.parts.reduce((sum, part) => sum + stitchPartDistanceKm(part), 0);
+    const gaps = junctions.filter(item => !item.connected).length;
+    summary.innerHTML = '';
+    for(const [value, gap] of [
+      [`${stitchState.parts.length} ${currentLang === 'zh' ? '个片段' : 'parts'}`, false],
+      [`${totalKm.toFixed(2)} km`, false],
+      [`${gaps} ${currentLang === 'zh' ? '个断点' : 'gaps'}`, gaps > 0],
+    ]) {
+      const chip = document.createElement('span');
+      chip.className = `stitch-summary-chip${gap ? ' is-gap' : ''}`;
+      chip.textContent = value;
+      summary.append(chip);
+    }
+  }
+
+  function renderStitchWorkbench() {
+    renderStitchPanel();
+    renderStitchMap();
+  }
+
+  function cleanupStitchWorkbench() {
+    stitchState.active = false;
+    stitchState.parts = [];
+    stitchState.selectedPartId = null;
+    stitchState.dirty = false;
+    stitchLayer.clearLayers();
+    document.getElementById('stitch-panel')?.classList.remove('is-open');
+    document.documentElement.classList.remove('stitch-editing');
+    commandRegistry.notifyChanged();
+  }
+
+  async function requestStitchExit(force = false) {
+    if(!stitchState.active) return true;
+    if(!force && stitchState.dirty) {
+      const confirmed = await studioDialogs.confirm({
+        title:currentLang === 'zh' ? '退出轨迹拼接？' : 'Exit trail composer?',
+        message:currentLang === 'zh' ? '当前片段范围、方向或顺序尚未生成新轨迹。' : 'The current ranges, directions, and order have not been created.',
+        confirmLabel:currentLang === 'zh' ? '放弃并退出' : 'Discard and exit',
+        cancelLabel:currentLang === 'zh' ? '继续编辑' : 'Keep editing',
+        danger:true,
+      });
+      if(!confirmed) return false;
+    }
+    if(interactionManager.current.kind === 'stitch') interactionManager.cancel('stitch-exit');
+    else cleanupStitchWorkbench();
+    return true;
+  }
+
+  function handleStitchInteraction(event, session) {
+    const part = stitchState.parts.find(item => item.id === event.partId);
+    if(!part) return;
+    if(event.type === 'drag-start') {
+      session.setPhase('dragging');
+      return;
+    }
+    if(event.type === 'drag-end') {
+      applyStitchEndpoint(part, event.endpoint, event.hit);
+      session.setPhase('editing');
+      renderStitchWorkbench();
+    }
+  }
+
+  function enterStitchWorkbench(trails) {
+    const ownerTrail = DATA.trails.find(trail => trail.id === state.primaryTrailId) || trails[0];
+    if(interactionManager.current.kind !== 'idle') interactionManager.cancel('switch-stitch');
+    stitchState.parts = trails.map(createStitchDraftPart);
+    stitchState.selectedPartId = stitchState.parts[0]?.id || null;
+    stitchState.dirty = false;
+    const session = beginRuntimeInteraction('stitch', 'editing', ownerTrail, {
+      onEvent:handleStitchInteraction,
+      onCancel:cleanupStitchWorkbench,
+    });
+    if(!session) return false;
+    stitchState.active = true;
+    document.documentElement.classList.add('stitch-editing');
+    const nameInput = document.getElementById('stitch-name');
+    if(nameInput) nameInput.value = currentLang === 'zh' ? '拼接轨迹' : 'Stitched trail';
+    const error = document.getElementById('stitch-error');
+    if(error) error.textContent = '';
+    renderStitchWorkbench();
+    const latLngs = trails.flatMap(trail => trail.track.map(point => [point[0], point[1]]));
+    if(latLngs.length) fitWorkspaceBounds(L.latLngBounds(latLngs), {padding:[50,430]}, {source:'stitch-workbench'});
+    return true;
+  }
+
+  async function commitStitchWorkbench() {
+    const error = document.getElementById('stitch-error');
+    const name = document.getElementById('stitch-name')?.value.trim();
+    if(stitchState.parts.length < 2) {
+      if(error) error.textContent = currentLang === 'zh' ? '至少保留两个轨迹片段。' : 'Keep at least two trail parts.';
+      return false;
+    }
+    if(!name) {
+      if(error) error.textContent = currentLang === 'zh' ? '请输入新轨迹名称。' : 'Enter a name for the new trail.';
+      return false;
+    }
+    if(!setRuntimeInteractionPhase('stitch', 'committing')) return false;
+    const trail = stitchTrails(stitchState.parts.map(part => ({
+      trail:part.trail,
+      startIndex:part.startIndex,
+      endIndex:part.endIndex,
+      reversed:part.reversed,
+    })), {
+      id:generateNextTrailId(),
+      name,
+      seamToleranceM:5,
+    });
+    const gapCount = trail.track_breaks.length;
+    interactionManager.cancel('stitch-committed');
+    const result = fileImportController.addTrail(trail);
+    if(result.status !== 'added') {
+      showToast(currentLang === 'zh' ? '生成结果与已有轨迹重复' : 'The stitched result duplicates an existing trail', 'info');
+      return false;
+    }
+    fileImportController.finalizeImport(1);
+    showToast(currentLang === 'zh'
+      ? `已生成「${trail.name}」· ${trail.stats.distance_km.toFixed(1)} km · ${gapCount} 个断点`
+      : `Created “${trail.name}” · ${trail.stats.distance_km.toFixed(1)} km · ${gapCount} gaps`);
+    return true;
+  }
+
+  async function stitchTrailsCommand() {
+    if(stitchState.active) return true;
+    if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-stitch')) return false;
+    if(DATA.trails.length < 2) {
+      await studioDialogs.info({
+        title:currentLang === 'zh' ? '无法拼接轨迹' : 'Cannot stitch trails',
+        message:currentLang === 'zh' ? '至少需要两条已有轨迹。' : 'At least two existing trails are required.',
+      });
+      return false;
+    }
+    const requested = await studioDialogs.openCustom({
+      title:currentLang === 'zh' ? '选择拼接来源' : 'Choose source trails',
+      message:currentLang === 'zh'
+        ? '从 0 开始选择两条或更多路线，下一步将在地图中调整每段范围、方向和顺序。'
+        : 'Start with no selection, choose two or more trails, then edit ranges, directions, and order on the map.',
+      size:'wide',
+      render(context) {
+        const list = document.createElement('div');
+        list.className = 'stitch-trail-list stitch-source-list';
+        for(const trail of DATA.trails) {
+          const row = document.createElement('label');
+          row.className = 'stitch-trail-row stitch-source-row';
+          row.dataset.trailId = trail.id;
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'stitch-trail-check';
+          checkbox.checked = false;
+          const copy = document.createElement('span');
+          copy.className = 'stitch-trail-copy';
+          const title = document.createElement('strong');
+          title.textContent = trail.name || trail.id;
+          const meta = document.createElement('small');
+          meta.textContent = `${trailGroup(trail)} · ${Number(trail.stats?.distance_km || 0).toFixed(1)} km`;
+          copy.append(title, meta);
+          row.append(checkbox, copy);
+          list.append(row);
+        }
+        const error = document.createElement('p');
+        error.className = 'workbench-dialog__error';
+        error.setAttribute('role', 'alert');
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'workbench-dialog__button workbench-dialog__button--secondary';
+        cancel.textContent = currentLang === 'zh' ? '取消' : 'Cancel';
+        cancel.addEventListener('click', context.cancel);
+        const next = document.createElement('button');
+        next.type = 'submit';
+        next.className = 'workbench-dialog__button workbench-dialog__button--primary';
+        next.textContent = currentLang === 'zh' ? '进入地图编辑' : 'Edit on map';
+        context.form.addEventListener('submit', event => {
+          event.preventDefault();
+          const trailIds = [...list.querySelectorAll('.stitch-trail-check:checked')]
+            .map(input => input.closest('.stitch-trail-row')?.dataset.trailId)
+            .filter(Boolean);
+          if(trailIds.length < 2) {
+            error.textContent = currentLang === 'zh' ? '请至少选择两条轨迹。' : 'Select at least two trails.';
+            return;
+          }
+          context.close({trailIds});
+        });
+        context.body.append(list, error);
+        context.actions.append(cancel, next);
+      },
+    });
+    if(!requested) return false;
+    const trails = requested.trailIds.map(id => DATA.trails.find(trail => trail.id === id)).filter(Boolean);
+    return trails.length >= 2 && enterStitchWorkbench(trails);
+  }
+
+  const stitchPanel = document.getElementById('stitch-panel');
+  if(stitchPanel) {
+    L.DomEvent.disableClickPropagation(stitchPanel);
+    L.DomEvent.disableScrollPropagation(stitchPanel);
+  }
+  document.getElementById('stitch-close')?.addEventListener('click', () => void requestStitchExit());
+  document.getElementById('stitch-cancel')?.addEventListener('click', () => void requestStitchExit());
+  document.getElementById('stitch-commit')?.addEventListener('click', () => void commitStitchWorkbench());
 
   async function reversePrimaryTrailCommand() {
     if(!state.primaryTrailId) {
@@ -5159,6 +5879,10 @@ export function startStudioRuntime(
       void requestSegmentExit('escape-key');
       return true;
     }
+    if(interactionManager.current.kind === 'stitch') {
+      void requestStitchExit();
+      return true;
+    }
     if(interactionManager.current.kind !== 'idle') {
       interactionManager.cancel('escape-key');
       return true;
@@ -5174,6 +5898,7 @@ export function startStudioRuntime(
       register(STUDIO_COMMANDS.FILE_EXPORT, exportOffline, {enabled:hasTrails}),
       register(STUDIO_COMMANDS.PROJECT_CLEAR, clearAllTrails, {enabled:hasTrails}),
       register(STUDIO_COMMANDS.TRAIL_REVERSE, reversePrimaryTrailCommand, {enabled:hasPrimaryTrail}),
+      register(STUDIO_COMMANDS.TRAIL_STITCH, stitchTrailsCommand, {enabled:() => DATA.trails.length >= 2}),
       register(STUDIO_COMMANDS.MEASURE_TOGGLE, toggleMeasureCommand, {
         enabled:hasPrimaryTrail,
         checked:() => interactionManager.current.kind === 'measure',
@@ -5547,6 +6272,11 @@ export function startStudioRuntime(
       "sidebarTabCommands": {enumerable:true, get:() => sidebarTabCommands},
       "smoothElev": {enumerable:true, get:() => smoothElev},
       "state": {enumerable:true, get:() => state},
+      "stitchState": {enumerable:true, get:() => stitchState},
+      "stitchLayer": {enumerable:true, get:() => stitchLayer},
+      "renderStitchWorkbench": {enumerable:true, get:() => renderStitchWorkbench},
+      "commitStitchWorkbench": {enumerable:true, get:() => commitStitchWorkbench},
+      "requestStitchExit": {enumerable:true, get:() => requestStitchExit},
       "storageBtn": {enumerable:true, get:() => storageBtn},
       "storageController": {enumerable:true, get:() => storageController},
       "storageTrailGroup": {enumerable:true, get:() => storageTrailGroup},
@@ -5578,6 +6308,7 @@ export function startStudioRuntime(
       "updateSegmentUI": {enumerable:true, get:() => updateSegmentUI},
       "waypointController": {enumerable:true, get:() => waypointController},
       "waypointIcon": {enumerable:true, get:() => waypointIcon},
+      "waypointIconMarkup": {enumerable:true, get:() => waypointIconMarkup},
       "window": {enumerable:true, get:() => window},
       "workspaceResetEpoch": {enumerable:true, get:() => workspaceResetEpoch},
       "wpLayer": {enumerable:true, get:() => wpLayer},

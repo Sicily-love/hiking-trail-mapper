@@ -66,7 +66,7 @@ export function createDayPreviewController(
     if(context.state.snapshot().primaryTrailId !== trailId) return null;
     const range = getDayIndexRange(trail, dayMeta);
     if(!range) return null;
-    const model = buildDayPreviewRenderModel(trail.track, range, maxPoints);
+    const model = buildDayPreviewRenderModel(trail.track, range, maxPoints, trail.track_breaks);
     const stats = computeDayRangeStats(trail, range);
     if(!model || !stats) return null;
     return {trail, trailId, day, model, stats};

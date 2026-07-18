@@ -9,6 +9,8 @@ import type {
   ElevationLabelStackOptions,
   ElevationPanelHeightOptions,
   ElevationRenderModel,
+  ElevationPathPoint,
+  ElevationFillPoint,
   ElevationLayoutModel,
   ElevationLayoutOptions,
   ElevationAnnotationOptions,
@@ -16,6 +18,7 @@ import type {
 } from './types.ts';
 import { accumulatorAscent, accumulatorDescent, elevRatioColor } from './elevation.ts';
 import { haversine } from './geo.ts';
+import { normalizeTrackBreaks } from './trackSegments.ts';
 
 function rgba(rgb: [number, number, number], alpha: number): string {
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
@@ -34,10 +37,13 @@ export function computeElevationLayout(
 
   const km: number[] = [];
   if(opts.kmFromZero) {
+    const breakSet = new Set(normalizeTrackBreaks(opts.trackBreaks, pts.length));
     let acc = 0;
     km.push(0);
     for(let i = 1; i < pts.length; i++) {
-      acc += haversine(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) / 1000;
+      if(!breakSet.has(i)) {
+        acc += haversine(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) / 1000;
+      }
       km.push(acc);
     }
   } else {
@@ -65,6 +71,7 @@ export function computeElevationLayout(
 export function computeElevationRenderModel(
   pts: TrackTuple[],
   layout: ElevationLayoutModel,
+  trackBreaks: number[] = [],
 ): ElevationRenderModel {
   const yBottom = layout.PT + layout.ph;
   const curve = pts.map((p, i) => {
@@ -84,6 +91,22 @@ export function computeElevationRenderModel(
         { x: curve[curve.length - 1].x, y: yBottom },
       ]
     : [];
+  const segmentStarts = [0, ...normalizeTrackBreaks(trackBreaks, curve.length), curve.length];
+  const curveSegments: ElevationPathPoint[][] = [];
+  const fillPolygons: ElevationFillPoint[][] = [];
+  for(let index = 0; index < segmentStarts.length - 1; index += 1) {
+    const segment = curve.slice(segmentStarts[index], segmentStarts[index + 1]).map(point => ({...point}));
+    if(!segment.length) continue;
+    // A small visual notch makes a zero-distance discontinuity legible without adding fake kilometres.
+    if(index > 0) segment[0].x += 3;
+    if(index < segmentStarts.length - 2) segment[segment.length - 1].x -= 3;
+    curveSegments.push(segment);
+    fillPolygons.push([
+      {x:segment[0].x, y:yBottom},
+      ...segment.map(point => ({x:point.x, y:point.y})),
+      {x:segment[segment.length - 1].x, y:yBottom},
+    ]);
+  }
   const gridLines = [0.25, 0.5, 0.75].map(fraction => {
     const y = layout.PT + layout.ph * (1 - fraction);
     return {
@@ -108,8 +131,15 @@ export function computeElevationRenderModel(
     };
   });
 
-  const ascent = Math.round(accumulatorAscent(layout.alts, 10).slice(-1)[0] || 0);
-  const descent = Math.round(accumulatorDescent(layout.alts, 10).slice(-1)[0] || 0);
+  let ascent = 0;
+  let descent = 0;
+  for(let index = 0; index < segmentStarts.length - 1; index += 1) {
+    const elevations = layout.alts.slice(segmentStarts[index], segmentStarts[index + 1]);
+    ascent += accumulatorAscent(elevations, 10).at(-1) || 0;
+    descent += accumulatorDescent(elevations, 10).at(-1) || 0;
+  }
+  ascent = Math.round(ascent);
+  descent = Math.round(descent);
   const hi = elevRatioColor(1);
   const mid = elevRatioColor(0.55);
   const lo = elevRatioColor(0);
@@ -135,7 +165,9 @@ export function computeElevationRenderModel(
       },
     },
     curve,
+    curveSegments,
     fillPolygon,
+    fillPolygons,
     gridLines,
     baseline: {
       x1: layout.PL,

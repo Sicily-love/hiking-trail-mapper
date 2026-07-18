@@ -115,6 +115,8 @@ export type DayRangeStats = {
 export type DayRangeTrail = {
   track: TrackTuple[];
   day_meta?: Array<Partial<DayMeta>>;
+  track_breaks?: number[];
+  _descCum?: number[];
 };
 
 export type ElevationAnnotationLayout = {
@@ -130,6 +132,7 @@ export type ElevationLayoutOptions = {
   height?: number;
   measureMode?: boolean;
   kmFromZero?: boolean;
+  trackBreaks?: number[];
 };
 
 export type ElevationLayoutModel = ElevationAnnotationLayout & {
@@ -221,7 +224,9 @@ export type ElevationBackgroundModel = {
 export type ElevationRenderModel = {
   background: ElevationBackgroundModel;
   curve: ElevationPathPoint[];
+  curveSegments: ElevationPathPoint[][];
   fillPolygon: ElevationFillPoint[];
+  fillPolygons: ElevationFillPoint[][];
   gridLines: ElevationGridLine[];
   baseline: {
     x1: number;
@@ -371,7 +376,7 @@ export type SegmentBoundaryMoveResult = {
 };
 
 export type DayPreviewRenderModel = TrackIndexRange & {
-  latLngs: Array<[number, number]>;
+  latLngs: Array<[number, number]> | Array<Array<[number, number]>>;
   lineStyle: {
     color: string;
     weight: number;
@@ -426,6 +431,7 @@ export type KmlParseModelInput = {
 export type KmlParsedWaypoint = {
   id: number;
   name: string;
+  tag: string;
   time: string;
   lng: number;
   lat: number;
@@ -438,11 +444,11 @@ export type KmlParseModel = {
   waypoints: KmlParsedWaypoint[];
   trackId: string;
   beginTime: string;
+  trackBreaks: number[];
 };
 
 export type SegmentCampEdit = {
   name?: string;
-  elev?: number | null;
 };
 
 export type SegmentCampEdits = Record<number, SegmentCampEdit>;

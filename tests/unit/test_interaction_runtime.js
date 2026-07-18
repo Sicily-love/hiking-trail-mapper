@@ -28,19 +28,20 @@ test('runtime instantiates the strict Studio manager once', () => {
   assert.strictEqual(runtime.includes('const interactionManager = HTM_APP.createInteractionManager()'), false);
 });
 
-test('all five modes activate owner-bound sessions', () => {
+test('all six modes activate owner-bound sessions', () => {
   for(const [kind, phase] of [
     ['measure', 'select-a'],
     ['segment', 'editing'],
     ['waypoint', 'select'],
     ['escape', 'select-a'],
+    ['stitch', 'editing'],
     ['day-preview', 'preview'],
   ]) {
     assert.ok(runtime.includes(`beginRuntimeInteraction('${kind}', '${phase}'`), `${kind}:${phase}`);
   }
 });
 
-test('all five cleanup paths cancel through the manager', () => {
+test('the original five cleanup paths cancel through the manager', () => {
   for(const [kind, functionName] of [
     ['measure', 'measureExit'],
     ['segment', 'segmentExit'],
@@ -53,6 +54,12 @@ test('all five cleanup paths cancel through the manager', () => {
     const body = runtime.slice(start, start + 500);
     assert.ok(body.includes(`cancelRuntimeInteraction('${kind}'`), `${functionName} -> ${kind}`);
   }
+});
+
+test('stitch cleanup exits through its owner-bound session', () => {
+  assert.ok(runtime.includes("interactionManager.current.kind === 'stitch'"));
+  assert.ok(runtime.includes("interactionManager.cancel('stitch-exit')"));
+  assert.ok(runtime.includes('cleanupStitchWorkbench'));
 });
 
 test('map taps use one active-kind dispatcher', () => {
@@ -74,6 +81,7 @@ test('fast taps and both drag systems dispatch typed events', () => {
 test('scheduled drag work is session-owned', () => {
   assert.ok(runtime.includes("scheduleFrame: callback => scheduleRuntimeInteractionFrame('measure', callback)"));
   assert.ok(runtime.includes("scheduleFrame: callback => scheduleRuntimeInteractionFrame('segment', callback)"));
+  assert.ok(runtime.includes("scheduleFrame:callback => scheduleRuntimeInteractionFrame('stitch', callback)"));
   assert.ok(runtime.includes('session.delay(250'));
   assert.ok(runtime.includes('session.delay(200'));
 });

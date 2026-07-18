@@ -36,12 +36,19 @@ export type SegmentInteractionEvent = InteractionTapEvent | {
 export type WaypointInteractionEvent = InteractionTapEvent;
 export type EscapeInteractionEvent = InteractionTapEvent;
 export type DayPreviewInteractionEvent = { readonly type: 'refresh' };
+export type StitchInteractionEvent = {
+  readonly type: 'drag-start' | 'drag-snap' | 'drag-end';
+  readonly partId: string;
+  readonly endpoint: 'A' | 'B';
+  readonly hit?: unknown;
+};
 
 export interface StudioInteractionEventMap extends InteractionEventMap {
   measure: MeasureInteractionEvent;
   segment: SegmentInteractionEvent;
   waypoint: WaypointInteractionEvent;
   escape: EscapeInteractionEvent;
+  stitch: StitchInteractionEvent;
   'day-preview': DayPreviewInteractionEvent;
 }
 
@@ -50,6 +57,7 @@ export interface StudioInteractionPhaseMap extends InteractionPhaseMap {
   segment: 'editing' | 'dragging' | 'committing';
   waypoint: 'select' | 'committing';
   escape: 'select-a' | 'select-b' | 'preview' | 'committing';
+  stitch: 'editing' | 'dragging' | 'committing';
   'day-preview': 'preview';
 }
 
@@ -58,6 +66,7 @@ export const STUDIO_INTERACTION_PHASES = Object.freeze({
   segment: Object.freeze(['editing', 'dragging', 'committing']),
   waypoint: Object.freeze(['select', 'committing']),
   escape: Object.freeze(['select-a', 'select-b', 'preview', 'committing']),
+  stitch: Object.freeze(['editing', 'dragging', 'committing']),
   'day-preview': Object.freeze(['preview']),
 } as const);
 
@@ -84,6 +93,11 @@ const STUDIO_INTERACTION_TRANSITIONS: Readonly<Record<
     'select-a': new Set(['select-b']),
     'select-b': new Set(['select-a', 'preview']),
     preview: new Set(['select-a', 'select-b', 'committing']),
+    committing: new Set<string>(),
+  }),
+  stitch: Object.freeze({
+    editing: new Set(['dragging', 'committing']),
+    dragging: new Set(['editing']),
     committing: new Set<string>(),
   }),
   'day-preview': Object.freeze({

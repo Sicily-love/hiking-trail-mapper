@@ -1,4 +1,5 @@
 import type { RuntimeContext } from '../../app/runtime/context.ts';
+import { computeSegmentedTrackMetrics, normalizeTrackBreaks } from '../../core/trackSegments.ts';
 
 export type MutableTrailPoint = [
   lat: number,
@@ -31,6 +32,7 @@ export interface MutableTrail {
   days?: number;
   waypoints?: MutableTrailWaypoint[];
   _descCum?: number[];
+  track_breaks?: number[];
 }
 
 export interface TrailControllerDependencies {
@@ -78,20 +80,17 @@ export function createTrailController(
     const trail = project.trails.find(candidate => candidate.id === trailId);
     if(!trail?.track.length) return false;
 
+    const previousBreaks = normalizeTrackBreaks(trail.track_breaks, trail.track.length);
     trail.track.reverse();
-    const elevations = trail.track.map(point => point[2]);
-    const cumulativeAscent = dependencies.accumulatorAscent(elevations, 10);
-    const cumulativeDescent = dependencies.accumulatorDescent(elevations, 10);
-    let cumulativeDistance = 0;
+    trail.track_breaks = previousBreaks
+      .map(index => trail.track.length - index)
+      .sort((left, right) => left - right);
+    const metrics = computeSegmentedTrackMetrics(trail.track, trail.track_breaks, 10);
 
     for(let index = 0; index < trail.track.length; index += 1) {
       const point = trail.track[index];
-      if(index > 0) {
-        const previous = trail.track[index - 1];
-        cumulativeDistance += dependencies.haversine(previous[0], previous[1], point[0], point[1]);
-      }
-      point[3] = +(cumulativeDistance / 1000).toFixed(2);
-      point[4] = Math.round(cumulativeAscent[index]);
+      point[3] = +(metrics.cumulativeDistanceM[index] / 1000).toFixed(2);
+      point[4] = Math.round(metrics.cumulativeAscentM[index]);
     }
 
     const dayCount = trail.days || 1;
@@ -101,9 +100,10 @@ export function createTrailController(
       }
     }
 
-    trail.stats.ascent_m = Math.round(cumulativeAscent.at(-1) || 0);
-    trail.stats.descent_m = Math.round(cumulativeDescent.at(-1) || 0);
-    trail._descCum = cumulativeDescent;
+    trail.stats.distance_km = metrics.stats.distance_km;
+    trail.stats.ascent_m = metrics.stats.ascent_m;
+    trail.stats.descent_m = metrics.stats.descent_m;
+    trail._descCum = metrics.cumulativeDescentM;
 
     if(trail.waypoints?.length) {
       const totalDistanceKm = trail.stats.distance_km;

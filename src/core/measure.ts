@@ -1,5 +1,6 @@
 import { accumulatorAscent, accumulatorDescent } from './elevation.ts';
 import { haversine } from './geo.ts';
+import { normalizeTrackBreaks } from './trackSegments.ts';
 import type {
   MeasureEndpointLabel,
   MeasureEndpointStateResult,
@@ -74,6 +75,30 @@ export function buildTrackLatLngs(
   latLngs[0] = [track[iStart][0], track[iStart][1]];
   latLngs[latLngs.length - 1] = [track[iEnd][0], track[iEnd][1]];
   return latLngs;
+}
+
+export function buildTrackLatLngSegments(
+  track: TrackTuple[],
+  startIdx: number,
+  endIdx: number,
+  trackBreaks: number[] = [],
+  maxPoints = 1200,
+): Array<Array<[number, number]>> {
+  const range = normalizeTrackIndexRange(track, startIdx, endIdx);
+  if(!range) return [];
+  const breaks = normalizeTrackBreaks(trackBreaks, track.length)
+    .filter(index => index > range.iStart && index <= range.iEnd);
+  const starts = [range.iStart, ...breaks, range.iEnd + 1];
+  const total = Math.max(1, range.iEnd - range.iStart + 1);
+  const segments: Array<Array<[number, number]>> = [];
+  for(let index = 0; index < starts.length - 1; index += 1) {
+    const from = starts[index];
+    const to = starts[index + 1] - 1;
+    const budget = Math.max(2, Math.round(maxPoints * ((to - from + 1) / total)));
+    const latLngs = buildTrackLatLngs(track, from, to, budget);
+    if(latLngs.length >= 2) segments.push(latLngs);
+  }
+  return segments;
 }
 
 export function computeSegmentStats(

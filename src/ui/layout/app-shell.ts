@@ -25,6 +25,7 @@ export const APP_SHELL = `
         <button id="add-waypoint-btn" class="tb-btn" data-i18n="action.addWaypoint">标注</button>
         <button id="add-escape-btn" class="tb-btn" data-i18n="action.addEscape">下撤</button>
         <button id="reverse-btn" class="tb-btn" data-i18n="action.reverse">反向</button>
+        <button id="stitch-btn" class="tb-btn">拼接轨迹</button>
         <button id="add-trail-btn" class="tb-btn" data-i18n="action.add">添加轨迹</button>
         <button id="export-btn" class="tb-btn" data-i18n="action.export">导出</button>
         <button id="clear-btn" class="tb-btn" data-i18n="action.clear">清空</button>
@@ -160,8 +161,8 @@ export const APP_SHELL = `
       <input id="addescape-name" class="form-input" type="text" placeholder="自动填写，可修改">
     </div>
     <div class="form-row">
-      <label class="form-label" for="addescape-day-select">对应行程：</label>
-      <select id="addescape-day-select" class="form-input"></select>
+      <span class="form-label">对应行程（可多选）：</span>
+      <div id="addescape-day-select" class="escape-day-options" role="group" aria-label="对应行程"></div>
     </div>
     <div class="escape-actions">
       <button id="addescape-commit" class="panel-btn danger">保存到下撤方案</button>
@@ -169,6 +170,29 @@ export const APP_SHELL = `
       <button id="addescape-exit" class="panel-btn ghost">退出</button>
     </div>
   </div>
+</section>
+
+<section id="stitch-panel" class="floating-panel stitch-workbench" aria-label="轨迹拼接工作台">
+  <header class="tool-panel-header">
+    <div>
+      <small class="stitch-workbench__eyebrow">ROUTE COMPOSER</small>
+      <b class="tool-panel-title">拼接轨迹</b>
+    </div>
+    <button id="stitch-close" class="tool-panel-close" type="button">关闭</button>
+  </header>
+  <label class="stitch-workbench__name">
+    <span>新轨迹名称</span>
+    <input id="stitch-name" class="form-input" type="text" maxlength="80" value="拼接轨迹">
+  </label>
+  <div id="stitch-summary" class="stitch-workbench__summary"></div>
+  <div id="stitch-parts" class="stitch-workbench__parts" aria-label="拼接片段顺序"></div>
+  <p id="stitch-error" class="stitch-workbench__error" role="alert"></p>
+  <footer class="tool-panel-footer">
+    <div class="panel-actions panel-actions-two">
+      <button id="stitch-cancel" class="panel-btn ghost" type="button">取消</button>
+      <button id="stitch-commit" class="panel-btn primary" type="button">生成新轨迹</button>
+    </div>
+  </footer>
 </section>
 
 <div id="lightbox" class="image-lightbox">

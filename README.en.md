@@ -44,6 +44,7 @@ Import routes:
 | Inspect a section | Pick A/B points on the primary trail, calculate along-track distance, ascent, and descent, and inspect section elevation |
 | Manage waypoints | Pick a primary-trail point, choose an icon and type, enter notes, and attach an optional image; filtering and renaming remain available |
 | Plan escapes | Choose a reference trail in the active group, select its A/B section, and save the result under the primary itinerary |
+| Stitch trails | Start with no selected sources, then crop, reverse, and reorder multiple parts on the map without inventing distance or elevation across gaps |
 | Move data | Export the current group as KML ZIP and the primary-trail itinerary as Markdown |
 
 See [Features](docs/FEATURES.en.md) for interactions and [Architecture](docs/ARCHITECTURE.en.md) for implementation boundaries.
@@ -79,7 +80,7 @@ index.html
 - `src/app/bootstrap.ts` mounts the Workbench DOM, loads vendors through the Vite module graph, and explicitly starts the Studio runtime. Business code is no longer executed as an injected script string.
 - `src/core` owns DOM-free calculations, parsing, transformations, and render models.
 - `src/app` and `src/features` own state and interaction orchestration; `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench and dialogs.
-- `InteractionManager` makes measure, segment, waypoint, escape, and Day-preview sessions mutually exclusive.
+- `InteractionManager` makes measure, segment, waypoint, escape, trail-stitch, and Day-preview sessions mutually exclusive.
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
 - `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, and Escape shortcut. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
 
@@ -124,7 +125,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v2.0.6
+Version: v2.0.13
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.

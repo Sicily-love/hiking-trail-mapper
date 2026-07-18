@@ -4,6 +4,7 @@ export const INTERACTION_KINDS = [
   'segment',
   'waypoint',
   'escape',
+  'stitch',
   'day-preview',
 ] as const;
 
@@ -12,6 +13,7 @@ export const ACTIVE_INTERACTION_KINDS = [
   'segment',
   'waypoint',
   'escape',
+  'stitch',
   'day-preview',
 ] as const;
 

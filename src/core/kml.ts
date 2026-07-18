@@ -1,4 +1,6 @@
 import type { KmlCoordTuple, KmlParseModel, KmlParseModelInput, KmlTrackPoint } from './types.ts';
+import { classifyWaypointTag } from './trail.ts';
+import { haversine } from './geo.ts';
 
 export function parseKmlCoordinateText(text: string | null | undefined): KmlCoordTuple[] {
   if(!text) return [];
@@ -60,13 +62,21 @@ export function normalizeKmlTitle(title: string | null | undefined, fallback = '
 
 export function buildKmlParseModel(input: KmlParseModelInput, fallbackTitle = 'KML 轨迹'): KmlParseModel {
   const trackPoints: KmlTrackPoint[] = [];
+  const trackBreaks: number[] = [];
   for(const text of input.lineStringCoordinateTexts || []) {
-    trackPoints.push(...kmlCoordsToTrackPoints(parseKmlCoordinateText(text)));
+    const segment = kmlCoordsToTrackPoints(parseKmlCoordinateText(text));
+    if(trackPoints.length && segment.length) {
+      const previous = trackPoints[trackPoints.length - 1];
+      const next = segment[0];
+      if(haversine(previous.lat, previous.lng, next.lat, next.lng) > 5) trackBreaks.push(trackPoints.length);
+    }
+    trackPoints.push(...segment);
   }
 
   if(trackPoints.length === 0) {
     for(const gxTrack of input.gxTracks || []) {
       const whens = gxTrack.whens || [];
+      const segmentStart = trackPoints.length;
       (gxTrack.coords || []).forEach((coordText, i) => {
         const coord = parseGxCoordText(coordText);
         if(!coord) return;
@@ -78,6 +88,11 @@ export function buildKmlParseModel(input: KmlParseModelInput, fallbackTitle = 'K
           spd: 0,
         });
       });
+      if(segmentStart > 0 && trackPoints.length > segmentStart) {
+        const previous = trackPoints[segmentStart - 1];
+        const next = trackPoints[segmentStart];
+        if(haversine(previous.lat, previous.lng, next.lat, next.lng) > 5) trackBreaks.push(segmentStart);
+      }
     }
   }
 
@@ -93,6 +108,7 @@ export function buildKmlParseModel(input: KmlParseModelInput, fallbackTitle = 'K
     waypoints.push({
       id: wpId,
       name,
+      tag: classifyWaypointTag(name),
       time: '',
       lng,
       lat,
@@ -115,5 +131,6 @@ export function buildKmlParseModel(input: KmlParseModelInput, fallbackTitle = 'K
     waypoints,
     trackId,
     beginTime,
+    trackBreaks,
   };
 }

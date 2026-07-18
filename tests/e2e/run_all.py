@@ -369,14 +369,25 @@ try:
     r = evalj("""
       (async () => {
         try {
-          await _doSave();
-          return {saved: true};
+          const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+          if(!main?.track?.length) return {saved:false, err:'missing primary trail'};
+          if(!segmentState.active) segmentEnter();
+          segmentController.updateCamp(1, {name:'E11 持久化营地'});
+          const saved = await segmentApply();
+          return {
+            saved,
+            dayCount:main.day_meta?.length || 0,
+            camp:main.day_meta?.[0]?.camp || null,
+          };
         } catch(e) {
           return {saved: false, err: e.message};
         }
       })()
     """)
-    check("saveToStorage 无异常", r.get("saved") == True, r.get("err", ""))
+    expected_day_count = r.get("dayCount")
+    check("应用日程后立即完成缓存事务",
+          r.get("saved") == True and expected_day_count and r.get("camp") == "E11 持久化营地",
+          str(r))
     cdp("Page.reload", {"ignoreCache": True})
     time.sleep(1.0)
     r = evalj("""
@@ -386,19 +397,32 @@ try:
         const bounds = map.getBounds();
         const first = main?.track?.[0];
         const last = main?.track?.[main.track.length - 1];
-        return {
-          restored: boot?.restored === true,
-          resetPerformed: boot?.resetPerformed === true,
+          return {
+            restored: boot?.restored === true,
+            resetPerformed: boot?.resetPerformed === true,
           containsEndpoints: !!first && !!last
             && bounds.contains([first[0], first[1]])
             && bounds.contains([last[0], last[1]]),
           primaryId: main?.id || null,
+          activeGroup:state.activeGroup,
+          mode:state.mode,
+          trailsTabActive:document.querySelector('.tab[data-tab="trails"]')?.classList.contains('active') === true,
+          workbenchTrailsActive:document.getElementById('workbench-activity-trails')?.classList.contains('is-active') === true,
+          dayCount:main?.day_meta?.length || 0,
+          firstCamp:main?.day_meta?.[0]?.camp || null,
         };
       })()
     """)
     check("重新打开 HTML 会从 IndexedDB 恢复轨迹", r.get("restored") == True, str(r))
     check("缓存恢复完成后自动执行一次主轨迹复位", r.get("resetPerformed") == True, str(r))
     check("自动复位后的地图范围包含主轨迹起终点", r.get("containsEndpoints") == True, str(r))
+    check("重新打开后默认选择有效轨迹组", bool(r.get("activeGroup")) and bool(r.get("primaryId")), str(r))
+    check("重新打开后默认进入轨迹页和海拔模式",
+          r.get("mode") == "elev" and r.get("trailsTabActive") == True and r.get("workbenchTrailsActive") == True,
+          str(r))
+    check("重新打开 HTML 后恢复最新日程",
+          r.get("dayCount") == expected_day_count and r.get("firstCamp") == "E11 持久化营地",
+          str(r))
 
     # ═══════════════════════════════════════════════════════════════
     # E12 — i18n 中英切换

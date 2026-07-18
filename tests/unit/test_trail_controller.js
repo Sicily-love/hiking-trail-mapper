@@ -87,6 +87,22 @@ function createHarness(trails) {
     assert.strictEqual(effects.render.length, 1);
   });
 
+  await T('reversing a stitched trail preserves gaps and excludes them from metrics', () => {
+    const trail = {
+      id:'gap', name:'Gap',
+      track:[[0,0,100],[0,.001,120],[1,1,4000],[1,1.001,4020]],
+      track_breaks:[2],
+      stats:{distance_km:.22, ascent_m:40, descent_m:0},
+      waypoints:[],
+    };
+    const {controller} = createHarness([trail]);
+    assert.strictEqual(controller.reverseTrail('gap'), true);
+    assert.deepStrictEqual(trail.track_breaks, [2]);
+    assert.strictEqual(trail.track[2][3], trail.track[1][3]);
+    assert.ok(trail.stats.distance_km < 1);
+    assert.ok(trail.stats.descent_m < 100);
+  });
+
   await T('clears project data, state, and storage in one controller operation', async () => {
     const trail = {id:'a', name:'A', track:[[1, 1, 1]], stats:{distance_km:0, ascent_m:0, descent_m:0}};
     const {controller, project, state, effects} = createHarness([trail]);

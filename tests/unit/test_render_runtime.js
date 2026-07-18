@@ -65,6 +65,8 @@ test('track runtime delegates bounded elevation rendering to the typed model and
   assert.strictEqual(source.includes('state.'), false);
   assert.ok(runtime.includes('HTM_APP.createLeafletTrackRenderer'));
   assert.ok(runtime.includes('HTM_APP.createMapRenderController'));
+  assert.ok(runtime.includes('onInspectPoint:(event, model) => inspectTrackPoint(event, model.trail)'));
+  assert.ok(runtime.includes('formatTrackPointCoordinates(pt)'));
 });
 
 test('Canvas elevation rendering downsamples without replacing full hit data', () => {
@@ -74,13 +76,16 @@ test('Canvas elevation rendering downsamples without replacing full hit data', (
   assert.ok(model.includes('downsampleMinMaxIndices'));
   assert.ok(model.includes('sourcePoints:points.length'));
   assert.ok(model.includes('renderedPoints:sampleIndices.length'));
-  assert.ok(model.includes('computeElevationRenderModel([], layout).badges'));
+  assert.ok(model.includes('computeElevationRenderModel(points, layout, sourceBreaks).badges'));
+  assert.ok(model.includes('sampledBreaks'));
   assert.ok(draw.includes('_elevBarData ='));
   assert.ok(draw.includes('HTM_APP.buildElevationCanvasScene'));
   assert.ok(draw.includes('elevationCanvasRenderer.render(scene, dimensions)'));
   assert.strictEqual(draw.includes('elevCtx.'), false);
   assert.ok(adapter.includes('chart.fillPolygon'));
   assert.ok(adapter.includes('chart.curve'));
+  assert.ok(adapter.includes('chart.fillPolygons'));
+  assert.ok(adapter.includes('chart.curveSegments'));
 });
 
 test('waypoint runtime delegates keyed Marker ownership to the Leaflet adapter', () => {
@@ -108,6 +113,9 @@ test('FIT is last-request-wins and reset is epoch guarded', () => {
   assert.ok(execute.includes("typeof map.flyToBounds === 'function'"));
   assert.ok(execute.includes('stepCount'));
   assert.ok(execute.includes('duration'));
+  assert.strictEqual((execute.match(/applyFit\(\)/g) || []).length, 2);
+  assert.ok(reset.includes('if(stateChanged)'));
+  assert.strictEqual(reset.includes('measureCompute()'), false);
   assert.ok(runtime.includes('resetView({restoreActive:true, gesture:true})'));
   assert.strictEqual((runtime.match(/map\.fitBounds\(/g) || []).length, 1);
 });

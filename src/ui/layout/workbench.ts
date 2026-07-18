@@ -19,6 +19,7 @@ interface CommandDefinition extends ControlDefinition {
 export const COMMAND_DEFINITIONS = {
   'add-trail-btn': { icon: 'plus', label: 'Add trail', labelZh: '添加轨迹', commandId: STUDIO_COMMANDS.FILE_IMPORT },
   'reverse-btn': { icon: 'rotate', label: 'Reverse trail', labelZh: '反向轨迹', commandId: STUDIO_COMMANDS.TRAIL_REVERSE },
+  'stitch-btn': { icon: 'combine', label: 'Stitch trails', labelZh: '拼接轨迹', commandId: STUDIO_COMMANDS.TRAIL_STITCH },
   'clear-btn': { icon: 'trash', label: 'Clear all', labelZh: '清空项目', commandId: STUDIO_COMMANDS.PROJECT_CLEAR },
   'measure-btn': { icon: 'ruler', label: 'Measure', labelZh: '测距', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
   'segment-btn': { icon: 'calendar', label: 'Plan segments', labelZh: '行程分段', commandId: STUDIO_COMMANDS.SEGMENT_TOGGLE },
@@ -31,7 +32,7 @@ export const COMMAND_DEFINITIONS = {
 } as const satisfies Record<string, CommandDefinition>;
 
 export const MENU_DEFINITIONS = [
-  { key: 'edit', label: 'Edit', labelZh: '编辑', icon: 'pencil', commandIds: ['reverse-btn', 'clear-btn'] },
+  { key: 'edit', label: 'Edit', labelZh: '编辑', icon: 'pencil', commandIds: ['reverse-btn', 'stitch-btn', 'clear-btn'] },
   { key: 'plan', label: 'Plan', labelZh: '规划', icon: 'calendar', commandIds: ['segment-btn', 'add-escape-btn'] },
 ] as const satisfies ReadonlyArray<{
   key: string;
@@ -199,10 +200,6 @@ function decorateHeading(
   text.textContent = label;
   heading.classList.add('studio-panel-title');
   heading.replaceChildren(createWorkbenchIcon(document, icon, { size: 16 }), text);
-}
-
-function isActivityKey(value: string | null): value is WorkbenchActivityKey {
-  return ACTIVITY_DEFINITIONS.some(activity => activity.key === value);
 }
 
 function buildAnalysisDock(document: Document, language: WorkbenchLanguage): HTMLElement {
@@ -632,10 +629,12 @@ export function upgradeWorkbenchLayout(
   const mapStage = createElement(document, 'main', 'studio-map-stage');
   const addEscapePanel = document.getElementById('addescape-panel');
   const segmentPanel = document.getElementById('segment-panel');
+  const stitchPanel = document.getElementById('stitch-panel');
   mapStage.setAttribute('aria-label', 'Trail map workspace');
   mapStage.append(map, analysisDock);
   if(segmentPanel) mapStage.appendChild(segmentPanel);
   if(addEscapePanel) mapStage.appendChild(addEscapePanel);
+  if(stitchPanel) mapStage.appendChild(stitchPanel);
   workspace.append(activityRail.root, sidebarElement, mapStage);
 
   main.classList.add('studio-workbench');
@@ -846,8 +845,7 @@ export function upgradeWorkbenchLayout(
 
   }
 
-  const initialActivity = readStorage(storage, WORKBENCH_STORAGE_KEYS.activity);
-  syncActivitySelection(isActivityKey(initialActivity) ? initialActivity : 'trails', false);
+  syncActivitySelection('trails', false);
   setLanguage(language);
 
   const controller: WorkbenchLayoutController = {
