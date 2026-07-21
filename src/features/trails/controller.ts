@@ -33,6 +33,8 @@ export interface MutableTrail {
   waypoints?: MutableTrailWaypoint[];
   _descCum?: number[];
   track_breaks?: number[];
+  stitch_sources?: Array<{trailId: string; name: string}>;
+  escape_routes?: Array<{_anchor?: {trailId: string; trailName: string} | null}>;
 }
 
 export interface TrailControllerDependencies {
@@ -48,6 +50,7 @@ export interface TrailControllerDependencies {
 
 export interface TrailController {
   deleteTrail: (trailId: string) => boolean;
+  renameTrail: (trailId: string, requestedName: string) => boolean;
   reverseTrail: (trailId: string) => boolean;
   clearTrails: () => Promise<boolean>;
 }
@@ -73,6 +76,27 @@ export function createTrailController(
     state.dispatch({type:'trail.remove', trailId});
     dependencies.persist();
     dependencies.render();
+    return true;
+  };
+
+  const renameTrail = (trailId: string, requestedName: string): boolean => {
+    const trail = project.trails.find(candidate => candidate.id === trailId);
+    const name = requestedName.trim();
+    if(!trail || !name || name === trail.name) return false;
+    trail.name = name;
+
+    for(const candidate of project.trails) {
+      for(const source of candidate.stitch_sources || []) {
+        if(source.trailId === trailId) source.name = name;
+      }
+      for(const route of candidate.escape_routes || []) {
+        if(route._anchor?.trailId === trailId) route._anchor.trailName = name;
+      }
+    }
+
+    dependencies.persist();
+    dependencies.render({fit:false});
+    dependencies.notify(`「${name}」名称已更新`);
     return true;
   };
 
@@ -146,5 +170,5 @@ export function createTrailController(
     return true;
   };
 
-  return Object.freeze({deleteTrail, reverseTrail, clearTrails});
+  return Object.freeze({deleteTrail, renameTrail, reverseTrail, clearTrails});
 }

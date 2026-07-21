@@ -87,6 +87,26 @@ function createHarness(trails) {
     assert.strictEqual(effects.render.length, 1);
   });
 
+  await T('renames a trail and updates persisted source-name references', () => {
+    const source = {id:'source', name:'Old name', track:[[1, 1, 1]], stats:{distance_km:0, ascent_m:0, descent_m:0}};
+    const derived = {
+      id:'derived', name:'Derived', track:[[2, 2, 2]], stats:{distance_km:0, ascent_m:0, descent_m:0},
+      stitch_sources:[{trailId:'source', name:'Old name'}],
+      escape_routes:[{_anchor:{trailId:'source', trailName:'Old name'}}],
+    };
+    const {controller, effects} = createHarness([source, derived]);
+    assert.strictEqual(controller.renameTrail('source', '  New name  '), true);
+    assert.strictEqual(source.name, 'New name');
+    assert.strictEqual(derived.stitch_sources[0].name, 'New name');
+    assert.strictEqual(derived.escape_routes[0]._anchor.trailName, 'New name');
+    assert.strictEqual(effects.persist, 1);
+    assert.deepStrictEqual(effects.render, [{fit:false}]);
+    assert.strictEqual(effects.messages.length, 1);
+    assert.strictEqual(controller.renameTrail('source', 'New name'), false);
+    assert.strictEqual(controller.renameTrail('source', '   '), false);
+    assert.strictEqual(controller.renameTrail('missing', 'Name'), false);
+  });
+
   await T('reversing a stitched trail preserves gaps and excludes them from metrics', () => {
     const trail = {
       id:'gap', name:'Gap',
@@ -118,6 +138,7 @@ function createHarness(trails) {
     const source = read('src/app/runtime/studio.ts');
     assert.match(source, /createTrailController\(runtimeContext/);
     assert.match(source, /trailController\.deleteTrail/);
+    assert.match(source, /trailController\.renameTrail/);
     assert.match(source, /trailController\.reverseTrail/);
     assert.match(source, /trailController\.clearTrails/);
     assert.doesNotMatch(source, /\.track\.reverse\(/);

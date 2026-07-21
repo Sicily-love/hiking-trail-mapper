@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const iconPath = path.join(root, 'src/ui/icons.ts');
 const workbenchPath = path.join(root, 'src/ui/layout/workbench.ts');
 const cssPath = path.join(root, 'src/styles/studio.css');
+const componentCssPath = path.join(root, 'src/styles/components.css');
 const mainPath = path.join(root, 'src/main.ts');
 const bootstrapPath = path.join(root, 'src/app/bootstrap.ts');
 const shellPath = path.join(root, 'src/ui/layout/app-shell.ts');
@@ -14,6 +15,7 @@ const runtimePath = path.join(root, 'src/app/runtime/studio.ts');
 const iconSource = fs.readFileSync(iconPath, 'utf8');
 const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
 const css = fs.readFileSync(cssPath, 'utf8');
+const componentCss = fs.readFileSync(componentCssPath, 'utf8');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
 const shellSource = fs.readFileSync(shellPath, 'utf8');
@@ -181,6 +183,10 @@ test('measurement actions remain available inside expanded and collapsed elevati
   assert.ok(shellSource.includes('id="measure-exit"'));
   assert.ok(css.includes('#measure-panel.studio-elevation-measure-actions[style*="display: block"]'));
   assert.ok(css.includes('#elev-bar.collapsed ~ #measure-panel.studio-elevation-measure-actions'));
+  assert.ok(runtimeSource.includes("mode: 'measure-dock'"));
+  assert.ok(runtimeSource.includes("el.closest('.studio-bottom-pane')"));
+  assert.ok(css.includes('#measure-panel .measure-panel-grip'));
+  assert.ok(css.includes('cursor:grabbing'));
 });
 
 test('trail stitching selects from zero then edits ordered parts on the map', () => {
@@ -197,8 +203,23 @@ test('trail stitching selects from zero then edits ordered parts on the map', ()
   assert.ok(runtimeSource.includes('checkbox.checked = false'));
   assert.ok(runtimeSource.includes("beginRuntimeInteraction('stitch', 'editing'"));
   assert.ok(runtimeSource.includes('createPrimaryTrackDragSnapper(marker'));
+  assert.ok(runtimeSource.includes('globalSearch:true'));
+  assert.ok(runtimeSource.includes('snapMarker:false'));
+  assert.ok(runtimeSource.includes('applyStitchSelection(part.id)'));
+  assert.ok(runtimeSource.includes("layer._stitchRole === 'selection'"));
+  assert.ok(runtimeSource.includes('buildStitchEndpointOffsets(stitchState.parts)'));
+  assert.ok(runtimeSource.includes("const endpointPaneName = 'stitch-endpoints'"));
+  assert.ok(runtimeSource.includes("endpointPane.style.zIndex = '760'"));
+  assert.ok(runtimeSource.includes('pane:endpointPaneName'));
+  assert.ok(runtimeSource.includes("<= 20"));
+  assert.ok(runtimeSource.includes('paddingBottomRight:[430,50]'));
+  assert.ok(runtimeSource.includes('await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))'));
+  assert.ok(runtimeSource.includes("await fitWorkspaceBounds(L.latLngBounds(latLngs), fitOptions, {source:'stitch-workbench'})"));
   assert.ok(runtimeSource.includes('track_breaks'));
   assert.ok(css.includes('.stitch-part-card'));
+  assert.ok(css.includes('.stitch-endpoint-marker.is-active'));
+  assert.ok(css.includes('.stitch-part-editing'));
+  assert.ok(workbenchSource.includes("'stitch-close': { icon: 'x'"));
 });
 
 test('layout moves existing ID nodes without cloning or HTML string copies', () => {
@@ -212,6 +233,17 @@ test('layout moves existing ID nodes without cloning or HTML string copies', () 
   assert.strictEqual(workbenchSource.includes('cloneNode'), false);
   assert.strictEqual(workbenchSource.includes('innerHTML'), false);
   assert.strictEqual(workbenchSource.includes('insertAdjacentHTML'), false);
+});
+
+test('every trail card exposes one typed rename action', () => {
+  assert.ok(runtimeSource.includes('class="trail-rename-btn"'));
+  assert.ok(runtimeSource.includes("createWorkbenchIcon(document, 'pencil'"));
+  assert.ok(runtimeSource.includes('async function editTrailName(tr)'));
+  assert.ok(runtimeSource.includes('trailController.renameTrail(tr.id, newName)'));
+  assert.ok(componentCss.includes('.trail-rename-btn'));
+  assert.ok(css.includes('grid-template-columns:68px 310px minmax(0,1fr)'));
+  assert.ok(css.includes('#sidebar :is(.pc-name,.trail-name,.trail-toggle)'));
+  assert.ok(css.includes('text-overflow:ellipsis'));
 });
 
 test('activity surfaces dispatch commands without mirrored bottom mode commands', () => {
@@ -287,6 +319,18 @@ test('Studio palette includes required semantic colors', () => {
   assert.ok(css.includes('--studio-orange:'));
   assert.ok(css.includes('--studio-danger:'));
   assert.ok(css.includes('--studio-canvas:'));
+});
+
+test('toast feedback is semantic, high contrast, and avoids the bottom dock', () => {
+  assert.ok(runtimeSource.includes("el.setAttribute('aria-atomic', 'true')"));
+  assert.ok(runtimeSource.includes("el.setAttribute('role', type === 'error' ? 'alert' : 'status')"));
+  assert.ok(runtimeSource.includes("document.querySelector('.studio-bottom-dock')"));
+  assert.ok(runtimeSource.includes("el.style.setProperty('--toast-bottom'"));
+  assert.ok(runtimeSource.includes("el.classList.add('is-visible')"));
+  assert.ok(css.includes("#toast[data-tone='error']"));
+  assert.ok(css.includes('background:#F8FBF9;'));
+  assert.ok(css.includes('color:#17211B;'));
+  assert.strictEqual(runtimeSource.includes('background:rgba(20,24,32,0.96)'), false);
 });
 
 test('Studio CSS owns all four responsive contracts', () => {

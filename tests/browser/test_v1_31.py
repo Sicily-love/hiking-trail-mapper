@@ -699,6 +699,62 @@ try:
     else:
         check("端到端 zip 导入", False, str(e2e)[:200])
 
+    rename_flow = evalj("""
+      (async () => {
+        const trail = DATA.trails[0];
+        if(!trail) return {error:'missing trail'};
+        const originalName = trail.name;
+        const longName = '这是一条用于验证侧栏固定宽度与自动省略效果的超长轨迹名称VeryLongTrailNameWithoutSpaces';
+        buildTrailList();
+        const sidebarWidthBefore = document.getElementById('sidebar')?.getBoundingClientRect().width || 0;
+        const card = [...document.querySelectorAll('#trail-list .trail-card')]
+          .find(item => item.querySelector('.trail-name')?.textContent === originalName);
+        const button = card?.querySelector('.trail-rename-btn');
+        const iconReady = button?.querySelector('svg[data-lucide="pencil"]') != null;
+        button?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const input = dialog?.querySelector('input');
+        if(input) input.value = longName;
+        dialog?.querySelector('.workbench-dialog__button--primary')?.click();
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const renamed = trail.name === longName;
+        const nameNode = [...document.querySelectorAll('#trail-list .trail-name')]
+          .find(item => item.textContent === longName);
+        const primaryName = document.getElementById('pc-name');
+        const sidebarWidthAfter = document.getElementById('sidebar')?.getBoundingClientRect().width || 0;
+        const cardUpdated = !!nameNode;
+        const contextUpdated = document.getElementById('toolbar-context')?.textContent.includes(longName);
+        const cardEllipsized = !!nameNode
+          && getComputedStyle(nameNode).textOverflow === 'ellipsis'
+          && getComputedStyle(nameNode).whiteSpace === 'nowrap'
+          && nameNode.scrollWidth > nameNode.clientWidth;
+        const primaryEllipsized = !!primaryName
+          && getComputedStyle(primaryName).textOverflow === 'ellipsis'
+          && primaryName.scrollWidth > primaryName.clientWidth;
+        const sidebarWidthStable = Math.abs(sidebarWidthAfter - sidebarWidthBefore) < 1
+          && (innerWidth <= 1024 || sidebarWidthAfter <= 310.5);
+        trailController.renameTrail(trail.id, originalName);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        return {
+          iconReady, dialogReady:!!dialog && !!input, renamed, cardUpdated, contextUpdated,
+          cardEllipsized, primaryEllipsized, sidebarWidthStable,
+          sidebarWidthBefore, sidebarWidthAfter,
+        };
+      })()
+    """)
+    check("每条轨迹均可通过卡片铅笔按钮重命名",
+          isinstance(rename_flow, dict)
+          and rename_flow.get('iconReady') is True
+          and rename_flow.get('dialogReady') is True
+          and rename_flow.get('renamed') is True
+          and rename_flow.get('cardUpdated') is True
+          and rename_flow.get('contextUpdated') is True
+          and rename_flow.get('cardEllipsized') is True
+          and rename_flow.get('primaryEllipsized') is True
+          and rename_flow.get('sidebarWidthStable') is True,
+          str(rename_flow))
+
     stitch_flow = evalj("""
       (async () => {
         const source = DATA.trails[0];
@@ -712,6 +768,7 @@ try:
         const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
         registry.notifyChanged('trail.stitch');
         const before = DATA.trails.length;
+        const fitAppliedBefore = renderRuntimeStats.fit.applied;
         const pending = registry.dispatch('trail.stitch');
         await new Promise(resolve => setTimeout(resolve, 0));
         const dialog = document.querySelector('dialog.workbench-dialog[open]');
@@ -724,12 +781,46 @@ try:
         const panelOpen = document.getElementById('stitch-panel')?.classList.contains('is-open');
         const partCards = document.querySelectorAll('.stitch-part-card').length;
         const firstPart = stitchState.parts[0];
+        const endpointLabels = stitchLayer.getLayers()
+          .filter(layer => layer._stitchRole === 'endpoint')
+          .map(layer => layer._icon?.textContent?.trim())
+          .sort();
+        const endpointOffsetsReady = stitchLayer.getLayers()
+          .filter(layer => layer._stitchRole === 'endpoint')
+          .every(layer => {
+            const icon = layer._icon?.querySelector('.stitch-endpoint-marker');
+            return icon?.style.getPropertyValue('--stitch-offset-x') !== ''
+              && icon?.style.getPropertyValue('--stitch-offset-y') !== '';
+          });
+        const activeLine = stitchLayer.getLayers().find(layer =>
+          layer._stitchRole === 'selection' && layer._stitchPartId === firstPart.id);
+        const inactiveLine = stitchLayer.getLayers().find(layer =>
+          layer._stitchRole === 'selection' && layer._stitchPartId !== firstPart.id);
+        const selectedHighlight = activeLine?.options?.weight >= 8
+          && activeLine?.options?.opacity === 1
+          && inactiveLine?.options?.weight <= 3.5
+          && document.querySelector('.stitch-part-card.is-active')?.dataset.partId === firstPart.id;
         const targetIndex = Math.max(1, Math.floor(firstPart.trail.track.length * .25));
-        const marker = stitchLayer.getLayers().find(layer => layer.dragging && layer._icon?.textContent === 'A');
+        const marker = stitchLayer.getLayers().find(layer =>
+          layer._stitchRole === 'endpoint'
+          && layer._stitchPartId === firstPart.id
+          && layer._stitchEndpoint === 'A');
+        let freeDuringDrag = false;
+        let snapGuideVisible = false;
         if(marker) {
           const target = firstPart.trail.track[targetIndex];
+          const loosePoint = [target[0] + .0004, target[1] + .0004];
           marker.fire('dragstart', {target:marker});
-          marker.setLatLng([target[0], target[1]]);
+          marker.setLatLng(loosePoint);
+          marker.fire('drag', {target:marker});
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const during = marker.getLatLng();
+          freeDuringDrag = Math.abs(during.lat - loosePoint[0]) < 1e-8
+            && Math.abs(during.lng - loosePoint[1]) < 1e-8;
+          snapGuideVisible = stitchLayer.getLayers().some(layer =>
+            layer._stitchRole === 'snap-guide'
+            && layer._stitchPartId === firstPart.id
+            && layer.options.opacity > 0);
           marker.fire('dragend', {target:marker});
         }
         await new Promise(resolve => requestAnimationFrame(resolve));
@@ -743,6 +834,12 @@ try:
           initialSelected,
           panelOpen,
           partCards,
+          endpointLabelsDistinct:['1A','1B','2A','2B'].every(label => endpointLabels.includes(label)),
+          endpointOffsetsReady,
+          selectedHighlight,
+          autoFitApplied:renderRuntimeStats.fit.applied > fitAppliedBefore,
+          freeDuringDrag,
+          snapGuideVisible,
           created:!!created,
           sourceCount:created?.stitch_sources?.length || 0,
           partialRange:Boolean(created?.stitch_sources?.[0])
@@ -766,6 +863,12 @@ try:
           and stitch_flow.get('initialSelected') == 0
           and stitch_flow.get('panelOpen') is True
           and stitch_flow.get('partCards') == 2
+          and stitch_flow.get('endpointLabelsDistinct') is True
+          and stitch_flow.get('endpointOffsetsReady') is True
+          and stitch_flow.get('selectedHighlight') is True
+          and stitch_flow.get('autoFitApplied') is True
+          and stitch_flow.get('freeDuringDrag') is True
+          and stitch_flow.get('snapGuideVisible') is True
           and stitch_flow.get('created') is True
           and stitch_flow.get('sourceCount') >= 2
           and stitch_flow.get('partialRange') is True
@@ -789,6 +892,31 @@ try:
         await Promise.resolve();
         const topMenuEnteredMeasure = interactionManager.current.kind === 'measure';
         const measureActionsEmbedded = document.getElementById('measure-panel')?.parentElement?.dataset.analysisPanel === 'elevation';
+        const measurePanel = document.getElementById('measure-panel');
+        const measureGrip = measurePanel?.querySelector('[data-panel-drag]');
+        const measureDock = measurePanel?.closest('.studio-bottom-pane');
+        const dragBefore = measurePanel?.getBoundingClientRect();
+        const dockRect = measureDock?.getBoundingClientRect();
+        let measureActionsDraggable = false;
+        if(measureGrip && dragBefore && dockRect) {
+          const dx = dragBefore.left - dockRect.left > 80 ? -52 : 52;
+          const dy = dragBefore.top - dockRect.top > 60 ? -34 : 34;
+          const eventBase = {bubbles:true, pointerId:73, pointerType:'mouse', isPrimary:true, button:0};
+          measureGrip.dispatchEvent(new PointerEvent('pointerdown', {
+            ...eventBase, clientX:dragBefore.left + 8, clientY:dragBefore.top + dragBefore.height / 2,
+          }));
+          measureGrip.dispatchEvent(new PointerEvent('pointermove', {
+            ...eventBase, clientX:dragBefore.left + 8 + dx, clientY:dragBefore.top + dragBefore.height / 2 + dy,
+          }));
+          measureGrip.dispatchEvent(new PointerEvent('pointerup', {
+            ...eventBase, clientX:dragBefore.left + 8 + dx, clientY:dragBefore.top + dragBefore.height / 2 + dy,
+          }));
+          const dragAfter = measurePanel.getBoundingClientRect();
+          measureActionsDraggable = Math.hypot(dragAfter.left - dragBefore.left, dragAfter.top - dragBefore.top) > 10
+            && dragAfter.left >= dockRect.left && dragAfter.top >= dockRect.top
+            && dragAfter.right <= dockRect.right && dragAfter.bottom <= dockRect.bottom;
+          measurePanel._resetFloatingPosition?.();
+        }
 
         document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
         await Promise.resolve();
@@ -812,6 +940,7 @@ try:
         return {
           topMenuEnteredMeasure,
           measureActionsEmbedded,
+          measureActionsDraggable,
           shortcutCancelled,
           activityOpenedGroups,
           activityOpenedItinerary,
@@ -834,7 +963,9 @@ try:
               and 'workspace.itinerary' in command_flow['events'],
               str(command_flow))
         check("测距操作嵌入海拔分析区且没有重复 Tab",
-              command_flow.get('measureActionsEmbedded') == True and 'panel.log' not in command_flow['events'],
+              command_flow.get('measureActionsEmbedded') == True
+              and command_flow.get('measureActionsDraggable') == True
+              and 'panel.log' not in command_flow['events'],
               str(command_flow))
         check("下撤方案直接合并进行程页",
               command_flow.get('escapeRoutesMerged') == True,
@@ -1291,6 +1422,70 @@ try:
               str(patch_interactions))
     else:
         check("v2.0.6 专项浏览器交互", False, str(patch_interactions))
+
+    print("\n▸ 工作台提示条：高对比度与底部面板避让")
+    toast_feedback = evalj("""
+      (async () => {
+        const waitFrames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const luminance = ([r, g, b]) => {
+          const values = [r, g, b].map(value => {
+            const channel = value / 255;
+            return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+          return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+        };
+        const rgb = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+        const contrast = (foreground, background) => {
+          const first = luminance(rgb(foreground));
+          const second = luminance(rgb(background));
+          return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+        };
+        showToast('轨迹已保存，提示文字清晰可读', 'info', 5000);
+        await waitFrames();
+        const toast = document.getElementById('toast');
+        const style = getComputedStyle(toast);
+        const rect = toast.getBoundingClientRect();
+        const dockRect = document.querySelector('.studio-bottom-dock').getBoundingClientRect();
+        const info = {
+          role:toast.getAttribute('role'),
+          live:toast.getAttribute('aria-live'),
+          visible:toast.classList.contains('is-visible') && style.visibility === 'visible',
+          contrast:contrast(style.color, style.backgroundColor),
+          fontSize:parseFloat(style.fontSize),
+          clearsDock:rect.bottom <= dockRect.top - 8,
+          inViewport:rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0,
+        };
+        showToast('轨迹文件读取失败，请重试', 'error', 5000);
+        await waitFrames();
+        const errorStyle = getComputedStyle(toast);
+        return {
+          ...info,
+          errorRole:toast.getAttribute('role'),
+          errorLive:toast.getAttribute('aria-live'),
+          errorContrast:contrast(errorStyle.color, errorStyle.backgroundColor),
+          errorTone:toast.dataset.tone,
+        };
+      })()
+    """)
+    if isinstance(toast_feedback, dict) and 'error' not in toast_feedback and '__error__' not in toast_feedback:
+        check("普通提示文字达到高对比度并保持可读字号",
+              toast_feedback.get('visible') is True
+              and toast_feedback.get('contrast', 0) >= 7
+              and toast_feedback.get('fontSize', 0) >= 13,
+              str(toast_feedback))
+        check("提示条避开海拔分析面板且保持在视口内",
+              toast_feedback.get('clearsDock') is True and toast_feedback.get('inViewport') is True,
+              str(toast_feedback))
+        check("普通与错误提示提供正确的无障碍语义",
+              toast_feedback.get('role') == 'status'
+              and toast_feedback.get('live') == 'polite'
+              and toast_feedback.get('errorRole') == 'alert'
+              and toast_feedback.get('errorLive') == 'assertive'
+              and toast_feedback.get('errorTone') == 'error'
+              and toast_feedback.get('errorContrast', 0) >= 7,
+              str(toast_feedback))
+    else:
+        check("工作台提示条专项浏览器交互", False, str(toast_feedback))
 
     print("\n▸ Performance 2.0：调度、降采样、Marker diff 与最后复位")
     performance_flow = evalj("""

@@ -862,7 +862,7 @@ export function startStudioRuntime(
       ? `<a href="${main.source}" target="_blank" class="pc-link" title="${main.source}">${t('pc.source')}</a>` : '';
     card.innerHTML = `
       <div class="pc-eyebrow">${t('pc.eyebrow')}</div>
-      <div class="pc-name" id="pc-name" title="点击重命名" style="cursor:pointer">${main.name}</div>
+      <div class="pc-name" id="pc-name" title="${currentLang === 'zh' ? '点击重命名' : 'Click to rename'}" style="cursor:pointer">${escapeUiText(main.name)}</div>
       <div class="pc-stats">
         <div class="pc-stat"><b>${main.stats.distance_km}</b><span>${t('pc.distance')}</span></div>
         <div class="pc-stat"><b>${main.days || '-'}</b><span>${(main.days||1) > 1 ? t('pc.daysUnit') : t('pc.dayUnit')}</span></div>
@@ -879,21 +879,7 @@ export function startStudioRuntime(
     `;
     // 绑定事件
     const renameEl = document.getElementById('pc-name');
-    if(renameEl) renameEl.addEventListener('click', async () => {
-      const newName = await studioDialogs.prompt({
-        title:currentLang === 'zh' ? '重命名主轨迹' : 'Rename primary trail',
-        inputLabel:currentLang === 'zh' ? '轨迹名称' : 'Trail name',
-        value:main.name,
-        required:true,
-        selectOnOpen:true,
-        confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
-        cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-      });
-      if(newName && newName.trim() && newName !== main.name) {
-        main.name = newName.trim();
-        saveToStorage(); rebuildAll({fit: false});
-      }
-    });
+    if(renameEl) renameEl.addEventListener('click', () => void editTrailName(main));
     const dlBtn = document.getElementById('pc-dl-kml');
     if(dlBtn) dlBtn.addEventListener('click', e => {
       e.preventDefault();
@@ -1050,10 +1036,14 @@ export function startStudioRuntime(
     return true;
   }
 
-  function floatingBoundaryRect(mode) {
+  function floatingBoundaryRect(mode, el = null) {
     if(mode === 'map') {
       const mapEl = document.getElementById('map');
       if(mapEl) return mapEl.getBoundingClientRect();
+    }
+    if(mode === 'measure-dock' && el) {
+      const dock = el.closest('.studio-bottom-pane');
+      if(dock) return dock.getBoundingClientRect();
     }
     return { left:0, top:0, width:window.innerWidth, height:window.innerHeight };
   }
@@ -1065,7 +1055,7 @@ export function startStudioRuntime(
 
   function clampFloatingPanelPosition(el, left, top, mode) {
     const rect = el.getBoundingClientRect();
-    const bounds = floatingBoundaryRect(mode);
+    const bounds = floatingBoundaryRect(mode, el);
     const margin = 8;
     const w = rect.width || el.offsetWidth || 300;
     const h = rect.height || el.offsetHeight || 120;
@@ -1078,7 +1068,7 @@ export function startStudioRuntime(
   }
 
   function setFloatingPanelStyle(el, pos, mode) {
-    const bounds = floatingBoundaryRect(mode);
+    const bounds = floatingBoundaryRect(mode, el);
     const origin = floatingStyleOriginRect(el);
     el.style.left = (bounds.left - origin.left + pos.left) + 'px';
     el.style.top = (bounds.top - origin.top + pos.top) + 'px';
@@ -1124,7 +1114,7 @@ export function startStudioRuntime(
     handle.addEventListener('pointerdown', e => {
       if(e.button !== undefined && e.button !== 0) return;
       if(e.target && e.target.closest && e.target.closest('button,a,input,textarea,select')) return;
-      const bounds = floatingBoundaryRect(opts.mode);
+      const bounds = floatingBoundaryRect(opts.mode, el);
       const rect = el.getBoundingClientRect();
       drag = {
         id: e.pointerId,
@@ -1134,7 +1124,7 @@ export function startStudioRuntime(
         top: rect.top - bounds.top,
         moved: false,
       };
-      handle.setPointerCapture && handle.setPointerCapture(e.pointerId);
+      try { handle.setPointerCapture && handle.setPointerCapture(e.pointerId); } catch(err) {}
       e.preventDefault();
       e.stopPropagation();
     });
@@ -1161,7 +1151,7 @@ export function startStudioRuntime(
       e.preventDefault();
       e.stopPropagation();
       if(moved && opts.storageKey) {
-        const bounds = floatingBoundaryRect(opts.mode);
+        const bounds = floatingBoundaryRect(opts.mode, el);
         const rect = el.getBoundingClientRect();
         const p = clampFloatingPanelPosition(el, rect.left - bounds.left, rect.top - bounds.top, opts.mode);
         try { localStorage.setItem(opts.storageKey, JSON.stringify({left:Math.round(p.left), top:Math.round(p.top)})); } catch(err) {}
@@ -1187,9 +1177,9 @@ export function startStudioRuntime(
     });
     bindFloatingPanelDrag(document.getElementById('measure-panel'), {
       storageKey: 'hiking_measure_panel_pos',
-      mode: 'viewport',
+      mode: 'measure-dock',
       handleSelector: '[data-panel-drag]',
-      defaultStyle: { left:'50%', right:'auto', top:'80px', bottom:'auto', transform:'translateX(-50%)' },
+      defaultStyle: { left:'auto', right:'10px', top:'auto', bottom:'8px', transform:'none' },
     });
   }
 
@@ -1434,7 +1424,8 @@ export function startStudioRuntime(
         <div class="trail-checkbox ${isBatchChecked ? 'checked' : ''}" data-action="batch-toggle" title="${isBatchChecked ? '已选（点击取消）' : '选中此轨迹'}">${isBatchChecked ? '☑' : '☐'}</div>
         <div class="trail-expand-arrow ${isExpanded ? 'expanded' : ''}" data-action="toggle-expand" title="${isExpanded ? '收起详情' : '展开详情'}">${isExpanded ? '▾' : '▸'}</div>
         <div class="trail-color-dot" style="background:${tr.color}"></div>
-        <div class="trail-name">${tr.name}</div>
+        <div class="trail-name">${escapeUiText(tr.name)}</div>
+        <button type="button" class="trail-rename-btn" data-tid="${tr.id}" title="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}" aria-label="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}"></button>
         <div class="trail-toggle" style="${isActive ? 'color:var(--accent);font-weight:600' : ''}">${isActive ? '叠加中 ●' : '点击叠加'}</div>
       </div>
     `;
@@ -1444,7 +1435,7 @@ export function startStudioRuntime(
   function trailCardExpandedHtml(tr) {
     const thumbSvg = buildTrailThumbnail(tr);
     const linkArea = tr.source && tr.source.startsWith('http')
-      ? `<a href="${tr.source}" target="_blank" class="trail-link-btn" title="${tr.source}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${tr.name}</a><a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
+      ? `<a href="${tr.source}" target="_blank" class="trail-link-btn" title="${tr.source}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${escapeUiText(tr.name)}</a><a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
       : `<a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`;
     const groupOpts = getGroups().map(g => `<option value="${g}" ${trailGroup(tr)===g?'selected':''}>${g}</option>`).join('');
     // v1.21.0：主轨迹卡不显示"设为主轨迹"按钮，显示 "★ 主轨迹" 标识
@@ -1480,6 +1471,7 @@ export function startStudioRuntime(
   /** 判断 click 是否来自"要走详情按钮独立 handler"的元素 */
   function isDetailButtonTarget(el) {
     return el.closest('.trail-link-btn')
+        || el.closest('.trail-rename-btn')
         || el.classList.contains('trail-edit-link-btn')
         || el.classList.contains('trail-edit-id-btn')
         || el.classList.contains('trail-dl-kml-btn')
@@ -1528,6 +1520,21 @@ export function startStudioRuntime(
     return true;
   }
 
+  async function editTrailName(tr) {
+    const newName = await studioDialogs.prompt({
+      title:currentLang === 'zh' ? '重命名轨迹' : 'Rename trail',
+      inputLabel:currentLang === 'zh' ? '轨迹名称' : 'Trail name',
+      value:tr.name,
+      required:true,
+      maxLength:120,
+      selectOnOpen:true,
+      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
+      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+    });
+    if(!newName || !DATA.trails.includes(tr)) return false;
+    return trailController.renameTrail(tr.id, newName);
+  }
+
   async function editTrailId(tr) {
     const newId = await studioDialogs.prompt({
       title:t('trail.editId'),
@@ -1567,6 +1574,11 @@ export function startStudioRuntime(
   }
 
   function handleTrailDetailClick(tr, e) {
+    if(e.target.closest('.trail-rename-btn')) {
+      e.preventDefault(); e.stopPropagation();
+      void editTrailName(tr);
+      return true;
+    }
     if(e.target.classList.contains('trail-edit-link-btn')) {
       e.preventDefault(); e.stopPropagation();
       void editTrailSource(tr);
@@ -1646,9 +1658,18 @@ export function startStudioRuntime(
 
     const headerHtml = trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary);
 
+    const bindCardEvents = () => {
+      const renameButton = card.querySelector('.trail-rename-btn');
+      if(renameButton) renameButton.replaceChildren(createWorkbenchIcon(document, 'pencil', {size:13}));
+      card.addEventListener('click', e => {
+        if(handleTrailDetailClick(tr, e)) return;
+        handleTrailCardClick(tr, e);
+      });
+    };
+
     if(!isExpanded) {
       card.innerHTML = headerHtml;
-      card.addEventListener('click', e => handleTrailCardClick(tr, e));
+      bindCardEvents();
       return card;
     }
 
@@ -1659,10 +1680,7 @@ export function startStudioRuntime(
     const linkBtn = card.querySelector('.trail-link-btn');
     if(linkBtn) linkBtn.addEventListener('click', e => e.stopPropagation());
 
-    card.addEventListener('click', e => {
-      if(handleTrailDetailClick(tr, e)) return;
-      handleTrailCardClick(tr, e);
-    });
+    bindCardEvents();
 
     const groupSel = card.querySelector('.trail-group-select');
     if(groupSel) {
@@ -2904,7 +2922,10 @@ export function startStudioRuntime(
 
     function resolveLatLng(ll) {
       const centerIdx = typeof opts.getCenterIdx === 'function' ? opts.getCenterIdx() : null;
-      if(opts.trail) return nearestTrackIdxOnTrail(opts.trail, ll.lat, ll.lng, centerIdx, opts.windowSize || 1000);
+      if(opts.trail) {
+        const searchCenter = opts.globalSearch ? null : centerIdx;
+        return nearestTrackIdxOnTrail(opts.trail, ll.lat, ll.lng, searchCenter, opts.windowSize || 1000);
+      }
       return centerIdx != null
         ? nearestTrackIdxNearPrimary(ll.lat, ll.lng, centerIdx, opts.windowSize || 700)
         : nearestTrackIdxOnPrimary(ll.lat, ll.lng);
@@ -2917,9 +2938,11 @@ export function startStudioRuntime(
       const ll = latestLatLng;
       latestLatLng = null;
       const hit = resolveLatLng(ll);
-      if(hit && marker && marker.setLatLng) {
-        marker.setLatLng([hit.point[0], hit.point[1]]);
-        if(typeof opts.onSnap === 'function') opts.onSnap(hit);
+      if(hit) {
+        if(opts.snapMarker !== false && marker && marker.setLatLng) {
+          marker.setLatLng([hit.point[0], hit.point[1]]);
+        }
+        if(typeof opts.onSnap === 'function') opts.onSnap(hit, ll);
       }
     }
 
@@ -4287,19 +4310,40 @@ export function startStudioRuntime(
     return trailController.clearTrails();
   }
   /* ============ Toast ============ */
+  function placeToast(el) {
+    const mapStage = document.querySelector('.studio-map-stage');
+    const bottomDock = document.querySelector('.studio-bottom-dock');
+    const stageRect = mapStage?.getBoundingClientRect();
+    const dockRect = bottomDock?.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const centerX = stageRect?.width
+      ? Math.min(viewportWidth - 12, Math.max(12, stageRect.left + stageRect.width / 2))
+      : viewportWidth / 2;
+    const bottom = dockRect?.height
+      ? Math.max(16, viewportHeight - dockRect.top + 12)
+      : 24;
+    el.style.setProperty('--toast-left', `${centerX}px`);
+    el.style.setProperty('--toast-bottom', `${bottom}px`);
+  }
+
   function showToast(msg, type='info', duration=2400) {
     let el = document.getElementById('toast');
     if(!el) {
       el = document.createElement('div');
       el.id = 'toast';
-      el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(20,24,32,0.96);border:1px solid var(--line);padding:8px 16px;border-radius:5px;color:var(--text);font-size:12px;z-index:5500;box-shadow:0 4px 16px rgba(0,0,0,0.4);transition:opacity 0.3s;max-width:80vw';
+      el.setAttribute('aria-atomic', 'true');
       document.body.appendChild(el);
     }
     el.textContent = msg;
-    el.style.color = type === 'error' ? '#ff8888' : 'var(--text)';
-    el.style.opacity = '1';
+    el.dataset.tone = type === 'error' ? 'error' : 'info';
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+    placeToast(el);
+    el.classList.add('is-visible');
+    requestAnimationFrame(() => placeToast(el));
     clearTimeout(showToast.timer);
-    showToast.timer = setTimeout(() => { el.style.opacity = '0'; }, duration);
+    showToast.timer = setTimeout(() => { el.classList.remove('is-visible'); }, duration);
   }
   showToast.timer = null;
   /* ============ Export Offline ============ */
@@ -5440,28 +5484,92 @@ export function startStudioRuntime(
     return true;
   }
 
-  function stitchEndpointIcon(label, color) {
+  function stitchEndpointKey(part, label) {
+    return `${part.id}:${label}`;
+  }
+
+  function buildStitchEndpointOffsets(parts) {
+    const entries = parts.flatMap((part, index) => ['A','B'].map(label => ({
+      key:stitchEndpointKey(part, label),
+      index,
+      point:stitchPartEndpoint(part, label),
+    }))).filter(entry => entry.point);
+    const offsets = new Map(entries.map(entry => [entry.key, {x:0, y:0}]));
+    const assigned = new Set();
+    for(const entry of entries) {
+      if(assigned.has(entry.key)) continue;
+      const group = entries.filter(candidate => !assigned.has(candidate.key)
+        && haversine(entry.point[0], entry.point[1], candidate.point[0], candidate.point[1]) <= 20);
+      group.forEach(candidate => assigned.add(candidate.key));
+      if(group.length < 2) continue;
+      const radius = group.length === 2 ? 26 : 32;
+      group.sort((left, right) => left.index - right.index || left.key.localeCompare(right.key));
+      group.forEach((candidate, groupIndex) => {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * groupIndex / group.length);
+        offsets.set(candidate.key, {
+          x:Math.round(Math.cos(angle) * radius),
+          y:Math.round(Math.sin(angle) * radius),
+        });
+      });
+    }
+    return offsets;
+  }
+
+  function stitchEndpointIcon(label, color, order, isSelected, offset = {x:0, y:0}) {
     return L.divIcon({
       className:'',
-      html:`<div class="stitch-endpoint-marker" style="--stitch-color:${color}">${label}</div>`,
-      iconSize:[26,26],
-      iconAnchor:[13,13],
+      html:`<div class="stitch-endpoint-marker${isSelected ? ' is-active' : ''}" style="--stitch-color:${color};--stitch-offset-x:${offset.x}px;--stitch-offset-y:${offset.y}px">${order}${label}</div>`,
+      iconSize:[44,44],
+      iconAnchor:[22,22],
+    });
+  }
+
+  function applyStitchSelection(partId) {
+    stitchState.selectedPartId = partId;
+    document.querySelectorAll('.stitch-part-card').forEach(card => {
+      card.classList.toggle('is-active', card.dataset.partId === partId);
+    });
+    stitchLayer.eachLayer(layer => {
+      if(!layer._stitchPartId) return;
+      const active = layer._stitchPartId === partId;
+      if(layer._stitchRole === 'source' && layer.setStyle) {
+        layer.setStyle({weight:active ? 3 : 2, opacity:active ? .42 : .1});
+      } else if(layer._stitchRole === 'halo' && layer.setStyle) {
+        layer.setStyle({weight:active ? 13 : 8, opacity:active ? .72 : 0});
+        if(active && layer.bringToFront) layer.bringToFront();
+      } else if(layer._stitchRole === 'selection' && layer.setStyle) {
+        layer.setStyle({weight:active ? 8 : 3.5, opacity:active ? 1 : .3});
+        if(active && layer.bringToFront) layer.bringToFront();
+      } else if(layer._stitchRole === 'endpoint') {
+        if(layer.setOpacity) layer.setOpacity(active ? 1 : .78);
+        if(layer.setZIndexOffset) layer.setZIndexOffset(active ? 3000 : 700 + (layer._stitchOrder || 0));
+        layer._icon?.querySelector('.stitch-endpoint-marker')?.classList.toggle('is-active', active);
+      }
     });
   }
 
   function renderStitchMap() {
     stitchLayer.clearLayers();
     if(!stitchState.active) return;
+    const endpointPaneName = 'stitch-endpoints';
+    const endpointPane = map.getPane(endpointPaneName) || map.createPane(endpointPaneName);
+    endpointPane.style.zIndex = '760';
     const junctions = stitchDraftJunctions();
-    stitchState.parts.forEach((part, index) => {
+    const endpointOffsets = buildStitchEndpointOffsets(stitchState.parts);
+    const renderParts = stitchState.parts
+      .map((part, index) => ({part, index}))
+      .sort((left, right) => Number(left.part.id === stitchState.selectedPartId) - Number(right.part.id === stitchState.selectedPartId));
+    renderParts.forEach(({part, index}) => {
       const color = stitchPalette[index % stitchPalette.length];
       const isSelected = part.id === stitchState.selectedPartId;
       const sourcePaths = splitTrackByBreaks(part.trail.track, part.trail.track_breaks)
         .map(segment => segment.map(point => [point[0], point[1]]));
-      L.polyline(sourcePaths, {
-        color:'#6B756E', weight:2, opacity:isSelected ? .48 : .22,
+      const sourceLine = L.polyline(sourcePaths, {
+        color, weight:isSelected ? 3 : 2, opacity:isSelected ? .42 : .1,
         dashArray:'4,7', interactive:false,
       }).addTo(stitchLayer);
+      sourceLine._stitchPartId = part.id;
+      sourceLine._stitchRole = 'source';
 
       const selectedPaths = buildTrackLatLngSegments(
         part.trail.track,
@@ -5470,10 +5578,18 @@ export function startStudioRuntime(
         part.trail.track_breaks,
         1400,
       );
+      const haloLine = L.polyline(selectedPaths, {
+        color:'#FFFFFF', weight:isSelected ? 13 : 8, opacity:isSelected ? .72 : 0,
+        lineCap:'round', lineJoin:'round', interactive:false,
+      }).addTo(stitchLayer);
+      haloLine._stitchPartId = part.id;
+      haloLine._stitchRole = 'halo';
       const selectedLine = L.polyline(selectedPaths, {
-        color, weight:isSelected ? 7 : 5, opacity:isSelected ? 1 : .78,
+        color, weight:isSelected ? 8 : 3.5, opacity:isSelected ? 1 : .3,
         lineCap:'round', lineJoin:'round', interactive:true,
       }).addTo(stitchLayer);
+      selectedLine._stitchPartId = part.id;
+      selectedLine._stitchRole = 'selection';
       selectedLine.bindTooltip(`${index + 1}. ${part.trail.name}`, {sticky:true});
       selectedLine.on('click', event => {
         if(event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
@@ -5492,23 +5608,58 @@ export function startStudioRuntime(
       for(const label of ['A','B']) {
         const point = stitchPartEndpoint(part, label);
         if(!point) continue;
-        const marker = L.marker([point[0], point[1]], {
-          draggable:true, autoPan:true, icon:stitchEndpointIcon(label, color), zIndexOffset:1000 + index,
+        const snapGuide = L.polyline([], {
+          color, weight:2, opacity:0, dashArray:'3,6', interactive:false,
         }).addTo(stitchLayer);
+        snapGuide._stitchPartId = part.id;
+        snapGuide._stitchRole = 'snap-guide';
+        const snapTarget = L.circleMarker([point[0], point[1]], {
+          radius:9, color:'#FFFFFF', weight:3, opacity:0,
+          fillColor:color, fillOpacity:0, interactive:false,
+        }).addTo(stitchLayer);
+        snapTarget._stitchPartId = part.id;
+        snapTarget._stitchRole = 'snap-target';
+        const marker = L.marker([point[0], point[1]], {
+          draggable:true, autoPan:true,
+          pane:endpointPaneName,
+          icon:stitchEndpointIcon(label, color, index + 1, isSelected, endpointOffsets.get(stitchEndpointKey(part, label))),
+          zIndexOffset:isSelected ? 3000 : 700 + index,
+        }).addTo(stitchLayer);
+        marker._stitchPartId = part.id;
+        marker._stitchRole = 'endpoint';
+        marker._stitchEndpoint = label;
+        marker._stitchOrder = index;
+        marker.setOpacity(isSelected ? 1 : .78);
+        marker.bindTooltip(`${index + 1}${label} · ${part.trail.name}`, {direction:'top', offset:[0,-16]});
         const snapper = createPrimaryTrackDragSnapper(marker, {
           trail:part.trail,
           getCenterIdx:() => stitchPartEndpointIndex(part, label),
+          globalSearch:true,
+          snapMarker:false,
           scheduleFrame:callback => scheduleRuntimeInteractionFrame('stitch', callback),
+          onSnap:(hit, pointer) => {
+            snapTarget.setLatLng([hit.point[0], hit.point[1]]);
+            snapTarget.setStyle({opacity:1, fillOpacity:.24});
+            snapGuide.setLatLngs([[pointer.lat, pointer.lng], [hit.point[0], hit.point[1]]]);
+            snapGuide.setStyle({opacity:.78});
+          },
         });
         marker.on('dragstart', () => {
-          stitchState.selectedPartId = part.id;
+          applyStitchSelection(part.id);
+          marker._icon?.querySelector('.stitch-endpoint-marker')?.classList.add('is-dragging');
           dispatchRuntimeInteraction('stitch', {type:'drag-start', partId:part.id, endpoint:label});
         });
         marker.on('drag', event => snapper.schedule(event));
         marker.on('dragend', event => {
           const hit = snapper.resolve(event.target.getLatLng());
           snapper.cancel();
+          marker._icon?.querySelector('.stitch-endpoint-marker')?.classList.remove('is-dragging');
           dispatchRuntimeInteraction('stitch', {type:'drag-end', partId:part.id, endpoint:label, hit});
+        });
+        marker.on('click', event => {
+          if(event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
+          stitchState.selectedPartId = part.id;
+          renderStitchWorkbench();
         });
       }
     });
@@ -5575,10 +5726,16 @@ export function startStudioRuntime(
       const copy = document.createElement('div');
       copy.className = 'stitch-part-copy';
       const title = document.createElement('strong');
-      title.textContent = part.trail.name;
+      title.textContent = `${currentLang === 'zh' ? '片段' : 'Part'} ${index + 1} · ${part.trail.name}`;
       const meta = document.createElement('small');
       meta.textContent = `${part.reversed ? 'B → A' : 'A → B'} · ${stitchPartDistanceKm(part).toFixed(2)} km · ${part.startIndex}–${part.endIndex}`;
       copy.append(title, meta);
+      if(part.id === stitchState.selectedPartId) {
+        const editing = document.createElement('span');
+        editing.className = 'stitch-part-editing';
+        editing.textContent = currentLang === 'zh' ? '正在调整' : 'Editing';
+        copy.append(editing);
+      }
       const actions = document.createElement('div');
       actions.className = 'stitch-part-actions';
       actions.append(
@@ -5700,7 +5857,7 @@ export function startStudioRuntime(
     }
   }
 
-  function enterStitchWorkbench(trails) {
+  async function enterStitchWorkbench(trails) {
     const ownerTrail = DATA.trails.find(trail => trail.id === state.primaryTrailId) || trails[0];
     if(interactionManager.current.kind !== 'idle') interactionManager.cancel('switch-stitch');
     stitchState.parts = trails.map(createStitchDraftPart);
@@ -5719,7 +5876,14 @@ export function startStudioRuntime(
     if(error) error.textContent = '';
     renderStitchWorkbench();
     const latLngs = trails.flatMap(trail => trail.track.map(point => [point[0], point[1]]));
-    if(latLngs.length) fitWorkspaceBounds(L.latLngBounds(latLngs), {padding:[50,430]}, {source:'stitch-workbench'});
+    if(latLngs.length) {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      map.invalidateSize({pan:false, animate:false});
+      const fitOptions = window.innerWidth <= 760
+        ? {paddingTopLeft:[36,36], paddingBottomRight:[36,Math.min(360, Math.round(window.innerHeight * .42))]}
+        : {paddingTopLeft:[50,50], paddingBottomRight:[430,50]};
+      await fitWorkspaceBounds(L.latLngBounds(latLngs), fitOptions, {source:'stitch-workbench'});
+    }
     return true;
   }
 

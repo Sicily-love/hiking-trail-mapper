@@ -213,6 +213,50 @@ try:
         screenshot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
         (OUTPUT / f"workbench-{width}x{height}.png").write_bytes(base64.b64decode(screenshot["result"]["data"]))
 
+    cdp("Emulation.setDeviceMetricsOverride", {"width": 1440, "height": 900, "deviceScaleFactor": 1, "mobile": False})
+    time.sleep(0.25)
+    evaluate("""
+      (async () => {
+        const trail = DATA.trails[0];
+        if(!trail) return false;
+        window.__visualOriginalTrailName = trail.name;
+        trailController.renameTrail(
+          trail.id,
+          '这是一条用于验证侧栏固定宽度与自动省略效果的超长轨迹名称VeryLongTrailNameWithoutSpaces',
+        );
+        toggleSidebar(true);
+        window.dispatchEvent(new Event('resize'));
+        map.invalidateSize({pan:false, animate:false});
+        await resetView();
+        return true;
+      })()
+    """)
+    time.sleep(0.3)
+    long_name_state = evaluate("""
+      (() => {
+        const sidebar = document.getElementById('sidebar');
+        const cardName = document.querySelector('#trail-list .trail-name');
+        const primaryName = document.getElementById('pc-name');
+        const ellipsized = node => !!node
+          && getComputedStyle(node).textOverflow === 'ellipsis'
+          && getComputedStyle(node).whiteSpace === 'nowrap'
+          && node.scrollWidth > node.clientWidth;
+        return {
+          valid:Math.abs((sidebar?.getBoundingClientRect().width || 0) - 310) < 1
+            && ellipsized(cardName) && ellipsized(primaryName),
+          sidebarWidth:sidebar?.getBoundingClientRect().width || 0,
+          cardEllipsized:ellipsized(cardName),
+          primaryEllipsized:ellipsized(primaryName),
+        };
+      })()
+    """)
+    time.sleep(0.3)
+    hide_transient_ui()
+    long_name_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-long-trail-name.png").write_bytes(base64.b64decode(long_name_shot["result"]["data"]))
+    evaluate("trailController.renameTrail(DATA.trails[0].id, window.__visualOriginalTrailName)")
+    time.sleep(0.2)
+
     cdp("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False})
     elevation_collapse_state = evaluate("""
       (() => {
@@ -456,15 +500,68 @@ try:
         document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--primary')?.click();
         await window.__visualStitchPromise;
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const endpointLabels = stitchLayer.getLayers()
+          .filter(layer => layer._stitchRole === 'endpoint')
+          .map(layer => layer._icon?.textContent?.trim());
+        const endpointOffsets = new Set(stitchLayer.getLayers()
+          .filter(layer => layer._stitchRole === 'endpoint')
+          .map(layer => {
+            const icon = layer._icon?.querySelector('.stitch-endpoint-marker');
+            return `${icon?.style.getPropertyValue('--stitch-offset-x')}:${icon?.style.getPropertyValue('--stitch-offset-y')}`;
+          }));
+        const selectedId = stitchState.selectedPartId;
+        const activeLine = stitchLayer.getLayers().find(layer =>
+          layer._stitchRole === 'selection' && layer._stitchPartId === selectedId);
         window.__visualStitchWorkbenchValid = document.getElementById('stitch-panel')?.classList.contains('is-open')
           && document.querySelectorAll('.stitch-part-card').length === 2
-          && stitchLayer.getLayers().length >= 6;
+          && ['1A','1B','2A','2B'].every(label => endpointLabels.includes(label))
+          && endpointOffsets.size > 1
+          && activeLine?.options?.weight >= 8
+          && activeLine?.options?.opacity === 1;
+      })()
+    """)
+    time.sleep(0.4)
+    wait_for_map_tiles()
+    stitch_editor_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-stitch-editor.png").write_bytes(base64.b64decode(stitch_editor_shot["result"]["data"]))
+    evaluate("""
+      (async () => {
         await requestStitchExit(true);
         DATA.trails = DATA.trails.filter(trail => trail.id !== 'visual-stitch-fixture');
       })()
     """)
     time.sleep(0.1)
     stitch_dialog_state = bool(stitch_dialog_state and evaluate("!!window.__visualStitchWorkbenchValid"))
+
+    evaluate("""
+      (() => {
+        const existing = document.getElementById('toast');
+        existing?.style.removeProperty('display');
+        showToast('轨迹已保存，提示文字清晰可读', 'info', 5000);
+      })()
+    """)
+    time.sleep(0.3)
+    toast_state = evaluate("""
+      (() => {
+        const toast = document.getElementById('toast');
+        const dock = document.querySelector('.studio-bottom-dock');
+        const rect = toast?.getBoundingClientRect();
+        const dockRect = dock?.getBoundingClientRect();
+        const style = toast ? getComputedStyle(toast) : null;
+        return {
+          visible:!!toast && toast.classList.contains('is-visible') && style.visibility === 'visible',
+          readable:parseFloat(style?.fontSize || '0') >= 13
+            && style?.color === 'rgb(23, 33, 27)'
+            && style?.backgroundColor === 'rgb(248, 251, 249)',
+          clearsDock:!!rect && !!dockRect && rect.bottom <= dockRect.top - 8,
+          inViewport:!!rect && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0,
+          semantic:toast?.getAttribute('role') === 'status' && toast?.getAttribute('aria-live') === 'polite',
+        };
+      })()
+    """)
+    toast_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-toast.png").write_bytes(base64.b64decode(toast_shot["result"]["data"]))
+    hide_transient_ui()
 
     cdp("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
     evaluate("toggleSidebar(true)")
@@ -523,10 +620,23 @@ try:
         measure_state.get("opacity") != "0",
         measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
     ])
-    if not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not stitch_dialog_state or not mobile_dialog_state or not elevation_collapse_valid:
+    toast_state_valid = all(toast_state.values())
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid:
         invalid.append("interaction-states")
     if invalid:
-        print(json.dumps({"measure":measure_state}, ensure_ascii=False))
+        print(json.dumps({
+            "longName":long_name_state,
+            "group":bool(group_state),
+            "day":bool(day_state),
+            "measure":measure_state,
+            "segment":bool(segment_state),
+            "waypointDialog":bool(waypoint_dialog_state),
+            "dialog":bool(dialog_state),
+            "stitchDialog":bool(stitch_dialog_state),
+            "toast":toast_state,
+            "mobileDialog":bool(mobile_dialog_state),
+            "elevationCollapse":elevation_collapse_valid,
+        }, ensure_ascii=False))
         raise RuntimeError(f"Visual layout contract failed: {', '.join(invalid)}")
     ws.close()
     print(OUTPUT)

@@ -100,6 +100,7 @@ const AUXILIARY_CONTROLS = {
   'addescape-commit': { icon: 'save', label: 'Save escape route', labelZh: '保存下撤路线' },
   'addescape-reset': { icon: 'rotate', label: 'Reset escape route', labelZh: '重选下撤路线' },
   'addescape-exit': { icon: 'x', label: 'Exit escape mode', labelZh: '退出下撤' },
+  'stitch-close': { icon: 'x', label: 'Close route composer', labelZh: '关闭轨迹拼接' },
   'sidebar-close': { icon: 'panel-left-close', label: 'Close sidebar', labelZh: '收起侧栏' },
 } as const satisfies Record<string, ControlDefinition>;
 
@@ -553,6 +554,14 @@ export function upgradeWorkbenchLayout(
     'shield',
     'Escape route',
     '下撤路线',
+    language,
+  );
+  decorateHeading(
+    document,
+    document.querySelector<HTMLElement>('#stitch-panel .tool-panel-title'),
+    'route',
+    'Route composer',
+    '拼接轨迹',
     language,
   );
 

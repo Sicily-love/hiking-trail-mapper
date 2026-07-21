@@ -4,6 +4,34 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.0.16 — 2026-07-18
+
+**中文**
+
+- 每张轨迹卡新增统一的重命名按钮；主轨迹摘要也改用 typed TrailController 修改名称，并同步拼接来源和下撤依据轨迹中的持久化名称。
+- 桌面边栏恢复为 310px 固定宽度，主轨迹标题和轨迹卡长名称统一使用单行省略，避免名称撑宽工作区。
+- 提高底部提示条文字与背景的对比度，并根据地图与海拔面板的实际位置动态避让，避免提示被分析区遮挡。
+
+**English**
+
+- Add a consistent rename action to every trail card; primary-trail renaming now uses the typed TrailController and updates persisted stitch-source and escape-reference names.
+- Restore the desktop sidebar to a fixed 310px width and ellipsize long primary and trail-card names on one line so names cannot widen the workspace.
+- Increase bottom-toast text contrast and position feedback from the live map and elevation-panel bounds so the analysis dock cannot obscure it.
+
+## v2.0.15 — 2026-07-18
+
+**中文**
+
+- 轨迹拼接端点支持自由跟手拖动，拖动中显示吸附目标与引导线，松手后再吸附到来源轨迹。
+- 拼接片段使用编号端点、重合端点错位显示和当前路线强高亮，提升多路线编辑辨识度。
+- 测距操作栏可在海拔面板内拖动并记忆位置；选定拼接来源后等待布局稳定，再自动复位到全部来源轨迹。
+
+**English**
+
+- Stitch endpoints now follow the pointer freely, preview the nearest snap target, and commit to the source trail on release.
+- Numbered endpoints, collision offsets, and stronger active-route highlighting make multi-route stitching easier to distinguish.
+- The measurement action bar is draggable within the elevation dock and remembers its position; choosing stitch sources now waits for layout stability before fitting every source trail.
+
 ## v2.0.14 — 2026-07-18
 
 **中文**
