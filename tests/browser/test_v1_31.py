@@ -350,10 +350,7 @@ try:
                'nearestTrackIdxNearPrimary', 'getMeasureStatsCache',
                'computeMeasureStats', 'renderMeasureSegmentLine',
                'queueMeasureLiveUpdate', 'applyMeasureEndpointHit',
-               'bindFloatingPanelDrag', 'initFloatingPanelPositions',
-               'applyFloatingPanelPosition', 'resetFloatingPanelPosition',
-               'clampFloatingPanelPosition', 'floatingStyleOriginRect',
-               'setFloatingPanelStyle', 'setMapMode', 'enterInteractionRenderMode',
+               'initFloatingPanelPositions', 'setMapMode', 'enterInteractionRenderMode',
                'showDaySegmentPreview', 'clearDaySegmentPreview',
                'showMeasureElevReadout', 'hideMeasureElevReadout',
                'resetMeasureElevReadout', 'setMeasureElevHint',
@@ -514,9 +511,11 @@ try:
             !!document.querySelector('#elev-bar [data-panel-drag]')
             && !!document.querySelector('#measure-panel [data-panel-drag]')
             && !!document.querySelector('#measure-panel .measure-panel-grip')
-            && bindFloatingPanelDrag.toString().includes('pointerdown')
-            && bindFloatingPanelDrag.toString().includes('localStorage')
-            && bindFloatingPanelDrag.toString().includes('dblclick')
+            && typeof floatingPanelController?.bind === 'function'
+            && typeof floatingPanelController?.apply === 'function'
+            && typeof floatingPanelController?.reset === 'function'
+            && floatingPanelController.bind.toString().includes('pointerdown')
+            && floatingPanelController.bind.toString().includes('dblclick')
             && initFloatingPanelPositions.toString().includes('hiking_elev_bar_pos')
             && initFloatingPanelPositions.toString().includes('hiking_measure_panel_pos')
           """))

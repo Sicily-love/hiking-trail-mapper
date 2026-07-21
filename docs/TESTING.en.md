@@ -78,6 +78,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_render_runtime.js` | Seven-phase runtime wiring, elevation downsampling, marker diffs, and final-reset protection |
 | `test_command_dialog.js` | Command registration/state/dispatch, four-surface wiring, and native-dialog safety, focus, and Escape |
 | `test_ui_contract.js` / `test_safe_content.js` | Responsive Workbench, accessibility, and safe boundaries for imported text, URLs, images, and colors |
+| `test_floating_panel_controller.js` / `test_toast_controller.js` | Floating-panel boundaries, persisted drag positions, reset behavior, and toast semantics, placement, timing, and disposal |
 | `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, direct runtime, and single-file build |
 | `test_release_pipeline.js` | Reproducible builds, release metadata, version tools, and the GitHub Pages workflow |
 | `verify_alignment.js` | Generated release behavior uses `src/core` without restoring duplicate core fallbacks |

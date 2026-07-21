@@ -9,6 +9,8 @@ import {
   sanitizeHexColor,
   sanitizeImageSource,
 } from '../../ui/safe-content.ts';
+import { createFloatingPanelPositionController } from '../../ui/floating-panel.ts';
+import { createToastController } from '../../ui/toast.ts';
 
 export interface StudioBootResult {
   restored: boolean;
@@ -1039,146 +1041,24 @@ export function startStudioRuntime(
     return true;
   }
 
-  function floatingBoundaryRect(mode, el = null) {
-    if(mode === 'map') {
-      const mapEl = document.getElementById('map');
-      if(mapEl) return mapEl.getBoundingClientRect();
-    }
-    if(mode === 'measure-dock' && el) {
-      const dock = el.closest('.studio-bottom-pane');
-      if(dock) return dock.getBoundingClientRect();
-    }
-    return { left:0, top:0, width:window.innerWidth, height:window.innerHeight };
-  }
-
-  function floatingStyleOriginRect(el) {
-    if(!el || !el.offsetParent) return { left:0, top:0 };
-    return el.offsetParent.getBoundingClientRect();
-  }
-
-  function clampFloatingPanelPosition(el, left, top, mode) {
-    const rect = el.getBoundingClientRect();
-    const bounds = floatingBoundaryRect(mode, el);
-    const margin = 8;
-    const w = rect.width || el.offsetWidth || 300;
-    const h = rect.height || el.offsetHeight || 120;
-    const maxLeft = Math.max(margin, bounds.width - w - margin);
-    const maxTop = Math.max(margin, bounds.height - h - margin);
-    return {
-      left: Math.min(Math.max(margin, left), maxLeft),
-      top: Math.min(Math.max(margin, top), maxTop),
-    };
-  }
-
-  function setFloatingPanelStyle(el, pos, mode) {
-    const bounds = floatingBoundaryRect(mode, el);
-    const origin = floatingStyleOriginRect(el);
-    el.style.left = (bounds.left - origin.left + pos.left) + 'px';
-    el.style.top = (bounds.top - origin.top + pos.top) + 'px';
-    el.style.right = 'auto';
-    el.style.bottom = 'auto';
-    el.style.transform = 'none';
-  }
-
-  function applyFloatingPanelPosition(el, opts) {
-    if(!el || !opts || !opts.storageKey) return;
-    try {
-      const raw = localStorage.getItem(opts.storageKey);
-      if(!raw) return;
-      const pos = JSON.parse(raw);
-      if(!pos || !isFinite(pos.left) || !isFinite(pos.top)) return;
-      const p = clampFloatingPanelPosition(el, pos.left, pos.top, opts.mode);
-      setFloatingPanelStyle(el, p, opts.mode);
-    } catch(e) {}
-  }
-
-  function resetFloatingPanelPosition(el, opts) {
-    if(!el || !opts) return;
-    try { if(opts.storageKey) localStorage.removeItem(opts.storageKey); } catch(e) {}
-    const defaults = opts.defaultStyle || {};
-    ['left','right','top','bottom','transform'].forEach(k => {
-      el.style[k] = defaults[k] != null ? defaults[k] : '';
-    });
-  }
-
-  function bindFloatingPanelDrag(el, opts) {
-    if(!el || el._floatingDragBound) return;
-    el._floatingDragBound = true;
-    const handle = opts.handleSelector ? el.querySelector(opts.handleSelector) : el;
-    if(!handle) return;
-    let drag = null;
-    el._applyFloatingPosition = () => applyFloatingPanelPosition(el, opts);
-    el._resetFloatingPosition = () => resetFloatingPanelPosition(el, opts);
-    if(typeof L !== 'undefined' && L.DomEvent) {
-      L.DomEvent.disableClickPropagation(el);
-      L.DomEvent.disableScrollPropagation(el);
-    }
-
-    handle.addEventListener('pointerdown', e => {
-      if(e.button !== undefined && e.button !== 0) return;
-      if(e.target && e.target.closest && e.target.closest('button,a,input,textarea,select')) return;
-      const bounds = floatingBoundaryRect(opts.mode, el);
-      const rect = el.getBoundingClientRect();
-      drag = {
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-        left: rect.left - bounds.left,
-        top: rect.top - bounds.top,
-        moved: false,
-      };
-      try { handle.setPointerCapture && handle.setPointerCapture(e.pointerId); } catch(err) {}
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    handle.addEventListener('pointermove', e => {
-      if(!drag || e.pointerId !== drag.id) return;
-      const dx = e.clientX - drag.x;
-      const dy = e.clientY - drag.y;
-      if(!drag.moved && Math.hypot(dx, dy) < 4) return;
-      drag.moved = true;
-      el.classList.add('floating-dragging');
-      const p = clampFloatingPanelPosition(el, drag.left + dx, drag.top + dy, opts.mode);
-      setFloatingPanelStyle(el, p, opts.mode);
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    const finish = e => {
-      if(!drag || e.pointerId !== drag.id) return;
-      const moved = drag.moved;
-      drag = null;
-      el.classList.remove('floating-dragging');
-      try { handle.releasePointerCapture && handle.releasePointerCapture(e.pointerId); } catch(err) {}
-      e.preventDefault();
-      e.stopPropagation();
-      if(moved && opts.storageKey) {
-        const bounds = floatingBoundaryRect(opts.mode, el);
-        const rect = el.getBoundingClientRect();
-        const p = clampFloatingPanelPosition(el, rect.left - bounds.left, rect.top - bounds.top, opts.mode);
-        try { localStorage.setItem(opts.storageKey, JSON.stringify({left:Math.round(p.left), top:Math.round(p.top)})); } catch(err) {}
-      }
-    };
-    handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', finish);
-    handle.addEventListener('dblclick', e => {
-      if(e.target && e.target.closest && e.target.closest('button,a,input,textarea,select')) return;
-      e.preventDefault();
-      e.stopPropagation();
-      resetFloatingPanelPosition(el, opts);
-    });
-    applyFloatingPanelPosition(el, opts);
-  }
+  const floatingPanelController = createFloatingPanelPositionController({
+    document,
+    viewport:window,
+    storage:window.localStorage,
+    disablePropagation:element => {
+      L.DomEvent?.disableClickPropagation(element);
+      L.DomEvent?.disableScrollPropagation(element);
+    },
+  });
 
   function initFloatingPanelPositions() {
-    bindFloatingPanelDrag(document.getElementById('elev-bar'), {
+    floatingPanelController.bind(document.getElementById('elev-bar'), {
       storageKey: 'hiking_elev_bar_pos',
       mode: 'map',
       handleSelector: '[data-panel-drag]',
       defaultStyle: { left:'14px', right:'auto', top:'auto', bottom:'28px', transform:'' },
     });
-    bindFloatingPanelDrag(document.getElementById('measure-panel'), {
+    floatingPanelController.bind(document.getElementById('measure-panel'), {
       storageKey: 'hiking_measure_panel_pos',
       mode: 'measure-dock',
       handleSelector: '[data-panel-drag]',
@@ -4324,42 +4204,11 @@ export function startStudioRuntime(
     return trailController.clearTrails();
   }
   /* ============ Toast ============ */
-  function placeToast(el) {
-    const mapStage = document.querySelector('.studio-map-stage');
-    const bottomDock = document.querySelector('.studio-bottom-dock');
-    const stageRect = mapStage?.getBoundingClientRect();
-    const dockRect = bottomDock?.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const centerX = stageRect?.width
-      ? Math.min(viewportWidth - 12, Math.max(12, stageRect.left + stageRect.width / 2))
-      : viewportWidth / 2;
-    const bottom = dockRect?.height
-      ? Math.max(16, viewportHeight - dockRect.top + 12)
-      : 24;
-    el.style.setProperty('--toast-left', `${centerX}px`);
-    el.style.setProperty('--toast-bottom', `${bottom}px`);
-  }
+  const toastController = createToastController({document, viewport:window});
 
   function showToast(msg, type='info', duration=2400) {
-    let el = document.getElementById('toast');
-    if(!el) {
-      el = document.createElement('div');
-      el.id = 'toast';
-      el.setAttribute('aria-atomic', 'true');
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.dataset.tone = type === 'error' ? 'error' : 'info';
-    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
-    el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-    placeToast(el);
-    el.classList.add('is-visible');
-    requestAnimationFrame(() => placeToast(el));
-    clearTimeout(showToast.timer);
-    showToast.timer = setTimeout(() => { el.classList.remove('is-visible'); }, duration);
+    return toastController.show(msg, type === 'error' ? 'error' : 'info', duration);
   }
-  showToast.timer = null;
   /* ============ Export Offline ============ */
   async function exportOffline() {
     if(!DATA.trails.length) { showToast('没有轨迹可导出', 'error'); return; }
@@ -6190,14 +6039,12 @@ export function startStudioRuntime(
       "appStateStore": {enumerable:true, get:() => appStateStore},
       "appTitle": {enumerable:true, get:() => appTitle},
       "applyChange": {enumerable:true, get:() => applyChange},
-      "applyFloatingPanelPosition": {enumerable:true, get:() => applyFloatingPanelPosition},
       "applyI18n": {enumerable:true, get:() => applyI18n},
       "applyMeasureEndpointHit": {enumerable:true, get:() => applyMeasureEndpointHit},
       "applyMeasureEndpointState": {enumerable:true, get:() => applyMeasureEndpointState},
       "applyPrimaryMiniPosition": {enumerable:true, get:() => applyPrimaryMiniPosition},
       "baseLayers": {enumerable:true, get:() => baseLayers},
       "beginRuntimeInteraction": {enumerable:true, get:() => beginRuntimeInteraction},
-      "bindFloatingPanelDrag": {enumerable:true, get:() => bindFloatingPanelDrag},
       "bindKmlImportRowEvents": {enumerable:true, get:() => bindKmlImportRowEvents},
       "bindMeasureEndpointDrag": {enumerable:true, get:() => bindMeasureEndpointDrag},
       "bindPrimaryMiniDrag": {enumerable:true, get:() => bindPrimaryMiniDrag},
@@ -6222,7 +6069,6 @@ export function startStudioRuntime(
       "buildWaypointModeTagGrid": {enumerable:true, get:() => buildWaypointModeTagGrid},
       "cancelActiveCommand": {enumerable:true, get:() => cancelActiveCommand},
       "cancelRuntimeInteraction": {enumerable:true, get:() => cancelRuntimeInteraction},
-      "clampFloatingPanelPosition": {enumerable:true, get:() => clampFloatingPanelPosition},
       "clampPrimaryMiniPosition": {enumerable:true, get:() => clampPrimaryMiniPosition},
       "clampTrackIndex": {enumerable:true, get:() => clampTrackIndex},
       "classifyTag": {enumerable:true, get:() => classifyTag},
@@ -6289,8 +6135,7 @@ export function startStudioRuntime(
       "findWaypointAnchorOnPrimary": {enumerable:true, get:() => findWaypointAnchorOnPrimary},
       "finishWorkspaceFit": {enumerable:true, get:() => finishWorkspaceFit},
       "fitWorkspaceBounds": {enumerable:true, get:() => fitWorkspaceBounds},
-      "floatingBoundaryRect": {enumerable:true, get:() => floatingBoundaryRect},
-      "floatingStyleOriginRect": {enumerable:true, get:() => floatingStyleOriginRect},
+      "floatingPanelController": {enumerable:true, get:() => floatingPanelController},
       "generateNextTrailId": {enumerable:true, get:() => generateNextTrailId},
       "getGroups": {enumerable:true, get:() => getGroups},
       "getMeasureStatsCache": {enumerable:true, get:() => getMeasureStatsCache},
@@ -6406,7 +6251,6 @@ export function startStudioRuntime(
       "renderTracksNow": {enumerable:true, get:() => renderTracksNow},
       "renderTrailCard": {enumerable:true, get:() => renderTrailCard},
       "renderWaypointsNow": {enumerable:true, get:() => renderWaypointsNow},
-      "resetFloatingPanelPosition": {enumerable:true, get:() => resetFloatingPanelPosition},
       "resetMeasureElevReadout": {enumerable:true, get:() => resetMeasureElevReadout},
       "resetView": {enumerable:true, get:() => resetView},
       "restoreStorageSnapshot": {enumerable:true, get:() => restoreStorageSnapshot},
@@ -6442,7 +6286,6 @@ export function startStudioRuntime(
       "segmentUndo": {enumerable:true, get:() => segmentUndo},
       "segmentUndoBtn": {enumerable:true, get:() => segmentUndoBtn},
       "serializeStorageSnapshot": {enumerable:true, get:() => serializeStorageSnapshot},
-      "setFloatingPanelStyle": {enumerable:true, get:() => setFloatingPanelStyle},
       "setLang": {enumerable:true, get:() => setLang},
       "setMapMode": {enumerable:true, get:() => setMapMode},
       "setMeasureElevHint": {enumerable:true, get:() => setMeasureElevHint},

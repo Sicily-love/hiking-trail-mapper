@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.18',
+    date: '2026-07-21',
+    items: {
+      zh: ['将浮动面板拖动、边界约束和位置记忆迁入独立 UI controller，runtime 仅保留面板配置。', '将底部提示条创建、无障碍语义、动态避让和定时隐藏迁入独立 ToastController，并补充纯单元测试。'],
+      en: ['Move floating-panel drag, boundary clamping, and persisted positions into a dedicated UI controller so runtime retains only panel configuration.', 'Move toast creation, accessibility semantics, dynamic dock avoidance, and timed hiding into a dedicated ToastController with deterministic unit coverage.'],
+    },
+  },
+  {
     version: 'v2.0.17',
     date: '2026-07-21',
     items: {
