@@ -166,12 +166,21 @@
 - 标注点列表（含 `[手动]` 标记）
 - 复制粘贴到 Notion / VS Code 都能保持格式
 
+### 完整项目备份
+
+- 文件扩展名：`.ors-project.json`
+- 保存全部轨迹、Day 分段、标注与图片、下撤方案、拼接断点、分组、主轨迹、显示模式和筛选状态
+- 使用固定格式标识与 `schemaVersion: 1`；恢复前检查文件大小、嵌套深度、重复 ID、经纬度和危险对象键
+- 恢复会先展示项目名、轨迹数、来源版本和导出时间，确认后才完整替换当前项目并写入 IndexedDB
+- KML ZIP 用于路线交换；完整项目备份用于 Outdoor Route Studio 跨浏览器、跨设备迁移
+
 ## 持久化
 
 - **存储**：IndexedDB，key = `main`
 - **写入策略**：300ms debounce（避免每次 UI 变化立即写盘）
 - **恢复**：启动时 `_boot` 自动 load
 - **持久化字段**：`trails`（含 tracks + waypoints）· `activeTrails` · `primaryTrailId` · `activeGroup`
+- **长期备份**：使用“导出 → 完整项目备份”；IndexedDB 自动缓存不替代用户持有的备份文件
 - **清空**：浏览器清缓存 或 侧栏底部「🗑 清空数据」按钮
 
 ## 国际化

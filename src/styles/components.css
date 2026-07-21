@@ -57,6 +57,35 @@
   font-size:28px;
 }
 
+.project-restore-row {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  align-items:center;
+  gap:12px;
+  margin-bottom:12px;
+  padding:10px 12px;
+  background:var(--bg-2);
+  border:1px solid var(--line);
+  border-radius:6px;
+}
+
+.project-restore-row b,
+.project-restore-row small {
+  display:block;
+}
+
+.project-restore-row b {
+  color:var(--text);
+  font-size:12px;
+}
+
+.project-restore-row small {
+  margin-top:3px;
+  color:var(--text-muted);
+  font-size:10px;
+  line-height:1.45;
+}
+
 .kml-file-list {
   max-height:120px;
   margin-bottom:8px;

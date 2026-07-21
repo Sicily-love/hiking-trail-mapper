@@ -42,7 +42,7 @@ src/
 
 ### Core
 
-`core/` 只接收普通数据并返回确定性结果。距离、海拔、KML、测距、分段、统计、抽稀、marker diff 和 revision 不依赖 DOM、Leaflet 或存储句柄。
+`core/` 只接收普通数据并返回确定性结果。距离、海拔、KML、测距、分段、统计、抽稀、marker diff、revision 和版本化项目归档不依赖 DOM、Leaflet 或存储句柄。`projectArchive.ts` 持有 `schemaVersion`、输入预算、数据校验和未来迁移入口。
 
 ### App
 
@@ -54,7 +54,7 @@ src/
 
 ### Features 与 Adapters
 
-trail、storage、file import/export、waypoint、measure、segment、itinerary、escape 和 localization 各自持有 typed controller 或数据模块。浏览器能力由 adapter 隔离：
+trail、storage、file import/export、project archive、waypoint、measure、segment、itinerary、escape 和 localization 各自持有 typed controller 或数据模块。项目恢复通过单个 `workspace.restore` command 原子更新持久状态，runtime 只选择文件、请求确认和同步控件。浏览器能力由 adapter 隔离：
 
 - Leaflet adapter 接收 track/marker render model，并差异更新图层；
 - elevation renderer 接收 Canvas context、尺寸和降采样 model；

@@ -13,9 +13,9 @@ index.html -> main.ts -> bootstrap.ts -> Workbench DOM
 
 目录职责：
 
-- `core/`：无 DOM 的距离、海拔、KML、存储、测距、分段和渲染模型；`core/performance/` 负责大轨迹分段、抽稀、diff 与 revision。
+- `core/`：无 DOM 的距离、海拔、KML、存储、版本化项目归档、测距、分段和渲染模型；`core/performance/` 负责大轨迹分段、抽稀、diff 与 revision。
 - `app/`：bootstrap、版本、应用状态、`CommandRegistry`、`InteractionManager`、`RenderScheduler`、typed `RuntimeContext`，以及直接启动的 `runtime/studio.ts` 浏览器编排边界。
-- `features/`：单一功能 controller 与数据模块；轨迹、IndexedDB、文件导入/导出、手动标注点、测距、行程分段、Day 预览、下撤路线和 localization 都由模块持有。
+- `features/`：单一功能 controller 与数据模块；轨迹、IndexedDB、文件导入/导出、完整项目归档、手动标注点、测距、行程分段、Day 预览、下撤路线和 localization 都由模块持有。
 - `adapters/`：Leaflet、IndexedDB、ZIP、Blob、Canvas 导出图与浏览器文件保存副作用。
 - `ui/`：唯一的 Workbench 布局、可读的应用 Shell、图标、`DialogController`、浮动面板位置控制、Toast 反馈和不可信内容清洗；不再保留旧 UI 初始化器。
 - `styles/` / `vendor/`：共享组件样式、Workbench 主题和由 Vite 内联的浏览器依赖。
@@ -43,9 +43,9 @@ index.html -> main.ts -> bootstrap.ts -> Workbench DOM
 
 Directory ownership:
 
-- `core/`: DOM-free distance, elevation, KML, storage, measurement, itinerary, and render models; `core/performance/` owns large-track segmentation, downsampling, diffs, and revisions.
+- `core/`: DOM-free distance, elevation, KML, storage, versioned project archives, measurement, itinerary, and render models; `core/performance/` owns large-track segmentation, downsampling, diffs, and revisions.
 - `app/`: bootstrap, version ownership, app state, `CommandRegistry`, `InteractionManager`, `RenderScheduler`, typed `RuntimeContext`, and the directly started `runtime/studio.ts` browser-orchestration boundary.
-- `features/`: single-feature controllers and data modules for trails, IndexedDB, file import/export, manual waypoints, measurement, itinerary segmentation, Day preview, escape routes, and localization.
+- `features/`: single-feature controllers and data modules for trails, IndexedDB, file import/export, complete project archives, manual waypoints, measurement, itinerary segmentation, Day preview, escape routes, and localization.
 - `adapters/`: Leaflet, IndexedDB, ZIP, Blob, export Canvas, and browser file-save effects.
 - `ui/`: the single Workbench layout owner, readable application shell, icons, `DialogController`, floating-panel positioning, toast feedback, and untrusted-content sanitization; no legacy UI initializer remains.
 - `styles/` / `vendor/`: shared component styles, the Workbench theme, and browser dependencies inlined by Vite.

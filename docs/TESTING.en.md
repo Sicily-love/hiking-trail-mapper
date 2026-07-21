@@ -62,6 +62,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_math.js` / `test_enrich.js` | Distance, elevation, stats, waypoint snapping, and content hashes |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` exports, KML coordinates, `gx:Track`, waypoints, and import models |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshots and commit timing, Set serialization, per-group primary trails, and legacy restore |
+| `test_project_archive.js` | Schema-v1 round trips, input budgets, dangerous keys, complete workspace restore, and typed-controller boundaries |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and direct-runtime boundaries |
 | `test_file_export_controller.js` | KML/Markdown models, ZIP/Blob adapters, export controller, and direct DOM boundary |
 | `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and direct-runtime boundary |
@@ -119,10 +120,11 @@ Key coverage:
 - top menu, desktop/mobile activity rail, analysis bar, and Escape dispatch shared semantic commands;
 - dialog cancel, confirm, Escape, and focus restoration;
 - generated HTML has no runtime errors over `file://`.
+- complete project restore validates and confirms first, preserves Day/waypoint/escape data, and requests one final reset.
 
 ### Phase 6: End-to-End Workflows
 
-`tests/e2e/run_all.py` covers empty startup, KML/ZIP import, deduplication, groups and primary trails, batch moves, reverse, delete, waypoint filters, Day/measure/segment, IndexedDB, i18n, export, and `file://`.
+`tests/e2e/run_all.py` covers empty startup, KML/ZIP import, deduplication, groups and primary trails, batch moves, reverse, delete, waypoint filters, Day/measure/segment, IndexedDB, complete-project archive round trips, i18n, export, and `file://`.
 
 E2E tests assert user outcomes instead of manager private fields. Phase 2 protects manager internals.
 

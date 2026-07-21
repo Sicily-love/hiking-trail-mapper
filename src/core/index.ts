@@ -204,6 +204,25 @@ export {
 } from './storage.ts';
 
 export {
+  PROJECT_ARCHIVE_EXTENSION,
+  PROJECT_ARCHIVE_FORMAT,
+  PROJECT_ARCHIVE_MIME,
+  PROJECT_ARCHIVE_SCHEMA_VERSION,
+  createProjectArchive,
+  parseProjectArchive,
+  serializeProjectArchive,
+  type CreateProjectArchiveInput,
+  type ProjectArchive,
+  type ProjectArchiveErrorCode,
+  type ProjectArchiveMapMode,
+  type ProjectArchiveParseOptions,
+  type ProjectArchiveParseResult,
+  type ProjectArchiveStateInput,
+  type ProjectArchiveTrail,
+  type ProjectArchiveWorkspace,
+} from './projectArchive.ts';
+
+export {
   DEFAULT_ELEVATION_BAND_COUNT,
   buildElevationPolylineSegments,
   createTrackRevision,

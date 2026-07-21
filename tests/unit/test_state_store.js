@@ -51,6 +51,38 @@ T('restores workspace ownership without replacing stable Set views', () => {
   assert.strictEqual(state.activeGroup, 'B');
   assert.strictEqual(state.primaryTrailId, 'b');
 });
+T('restores complete workspace preferences and clears transient selections', () => {
+  const store = createAppStateStore({trails:[{id:'a', group:'A'}]});
+  store.dispatch({type:'batch.replace', trailIds:['a']});
+  store.dispatch({type:'expanded.toggle', trailId:'a'});
+  store.dispatch({type:'escape.set-active', escapeId:'escape-1'});
+  store.dispatch({
+    type:'workspace.restore',
+    activeTrails:[],
+    activeGroup:'B',
+    primaryByGroup:{B:'b'},
+    mode:'waypoint',
+    modeVisibleTags:{day:['camp'], elev:['pass'], waypoint:['water']},
+    waypointModeTags:['water'],
+    display:{showTrack:false, showLabel:false, showHighPoint:true},
+    baseLayer:'sat',
+    autoGenerateEscape:true,
+  });
+  const state = store.snapshot();
+  assert.deepStrictEqual([...state.activeTrails], []);
+  assert.deepStrictEqual([...state.modeVisibleTags.day], ['camp']);
+  assert.deepStrictEqual([...state.modeVisibleTags.elev], ['pass']);
+  assert.deepStrictEqual([...state.modeVisibleTags.waypoint], ['water']);
+  assert.deepStrictEqual([...state.waypointModeTags], ['water']);
+  assert.strictEqual(state.mode, 'waypoint');
+  assert.strictEqual(state.showTrack, false);
+  assert.strictEqual(state.showLabel, false);
+  assert.strictEqual(state.showHighPoint, true);
+  assert.strictEqual(state.autoGenerateEscape, true);
+  assert.strictEqual(state.batchSelected.size, 0);
+  assert.strictEqual(state.expandedTrails.size, 0);
+  assert.strictEqual(state.activeEscape, null);
+});
 T('direct runtime cannot bypass the typed application-state boundary', () => {
   const source = runtimeSource
     .replace(/\/\*[\s\S]*?\*\//g, '')

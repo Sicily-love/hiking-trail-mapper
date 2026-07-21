@@ -42,7 +42,7 @@ src/
 
 ### Core
 
-`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, downsampling, marker diffs, and revisions do not depend on the DOM, Leaflet, or storage handles.
+`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, downsampling, marker diffs, revisions, and versioned project archives do not depend on the DOM, Leaflet, or storage handles. `projectArchive.ts` owns `schemaVersion`, input budgets, validation, and the future migration entrypoint.
 
 ### App
 
@@ -54,7 +54,7 @@ src/
 
 ### Features and Adapters
 
-Trail, storage, file import/export, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. Adapters isolate browser capabilities:
+Trail, storage, file import/export, project archive, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. Project restore atomically updates persistent state through one `workspace.restore` command; runtime only selects the file, requests confirmation, and synchronizes controls. Adapters isolate browser capabilities:
 
 - Leaflet adapters consume track/marker render models and update layers by diff;
 - the elevation renderer consumes a Canvas context, dimensions, and a downsampled model;

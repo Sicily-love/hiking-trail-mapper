@@ -2072,10 +2072,23 @@ export function startStudioRuntime(
           }).join('');
       }
     } else if(state.mode === 'elev') {
+      let legendMinElevation = Infinity;
+      let legendMaxElevation = -Infinity;
+      for(const trail of DATA.trails) {
+        if(!isTrailActive(trail)) continue;
+        for(const point of trail.track || []) {
+          const elevation = Number(point[2]);
+          if(!Number.isFinite(elevation)) continue;
+          if(elevation < legendMinElevation) legendMinElevation = elevation;
+          if(elevation > legendMaxElevation) legendMaxElevation = elevation;
+        }
+      }
+      const minLabel = Number.isFinite(legendMinElevation) ? `${Math.round(legendMinElevation)}m` : '-';
+      const maxLabel = Number.isFinite(legendMaxElevation) ? `${Math.round(legendMaxElevation)}m` : '-';
       lg.innerHTML = `
         <h4>海拔渐变</h4>
         <div class="lg-row"><div class="swatch elev-grad" style="width:140px"></div></div>
-        <div class="lg-row" style="justify-content:space-between"><span>${minE}m</span><span>${maxE}m</span></div>
+        <div class="lg-row" style="justify-content:space-between"><span>${minLabel}</span><span>${maxLabel}</span></div>
       `;
     }
   }
@@ -2240,6 +2253,8 @@ export function startStudioRuntime(
   const kmlDrop = document.getElementById('kml-drop');
   const kmlFile = document.getElementById('kml-file');
   const kmlList = document.getElementById('kml-list');
+  const projectRestoreBtn = document.getElementById('project-restore-btn');
+  const projectFile = document.getElementById('project-file');
 
   function _closeAddModal() {
     addModal.classList.remove('open');
@@ -2248,6 +2263,7 @@ export function startStudioRuntime(
       if(kmlList) kmlList.innerHTML = '';
       if(addStatus) addStatus.textContent = '';
       if(kmlFile) kmlFile.value = '';
+      if(projectFile) projectFile.value = '';
     }, 250);
   }
   addCancel.addEventListener('click', _closeAddModal);
@@ -2263,6 +2279,60 @@ export function startStudioRuntime(
     handleFiles(e.dataTransfer.files);
   });
   kmlFile.addEventListener('change', e => handleFiles(e.target.files));
+  projectRestoreBtn?.addEventListener('click', () => projectFile?.click());
+  projectFile?.addEventListener('change', event => {
+    const file = event.target.files?.[0];
+    if(file) void restoreProjectFile(file);
+  });
+
+  async function restoreProjectFile(file) {
+    addStatus.textContent = currentLang === 'zh' ? '正在检查项目备份…' : 'Checking project backup…';
+    addStatus.style.color = 'var(--text-dim)';
+    try {
+      const result = projectArchiveController.parse(await file.text());
+      if(!result.ok) {
+        addStatus.textContent = '';
+        await studioDialogs.info({
+          title:currentLang === 'zh' ? '无法恢复项目' : 'Cannot restore project',
+          message:result.message,
+          danger:true,
+        });
+        return false;
+      }
+      const archive = result.archive;
+      const exportedAt = new Date(archive.exportedAt).toLocaleString(currentLang === 'zh' ? 'zh-CN' : 'en');
+      const confirmed = await studioDialogs.confirm({
+        title:currentLang === 'zh' ? '替换当前项目？' : 'Replace the current project?',
+        message:currentLang === 'zh'
+          ? `将恢复“${archive.project.title}”（${archive.project.trails.length} 条轨迹，来源 ${archive.appVersion}，导出于 ${exportedAt}）。当前项目会被完整替换。`
+          : `Restore “${archive.project.title}” (${archive.project.trails.length} trails, from ${archive.appVersion}, exported ${exportedAt}). The current project will be replaced.`,
+        confirmLabel:currentLang === 'zh' ? '替换并恢复' : 'Replace and restore',
+        cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+        danger:true,
+      });
+      if(!confirmed) {
+        addStatus.textContent = '';
+        return false;
+      }
+      if(interactionManager.current.kind !== 'idle') interactionManager.cancel('project-restore');
+      projectArchiveController.restore(archive);
+      if(_showTrackEl) _showTrackEl.checked = state.showTrack;
+      if(_showLabelEl) _showLabelEl.checked = state.showLabel;
+      if(_showHighPointEl) _showHighPointEl.checked = state.showHighPoint;
+      _closeAddModal();
+      return true;
+    } catch(error) {
+      addStatus.textContent = '';
+      await studioDialogs.info({
+        title:currentLang === 'zh' ? '恢复项目失败' : 'Project restore failed',
+        message:error instanceof Error ? error.message : String(error),
+        danger:true,
+      });
+      return false;
+    } finally {
+      if(projectFile) projectFile.value = '';
+    }
+  }
 
   const PALETTE_LOCAL = ['#f97316','#3b82f6','#10b981','#a855f7','#eab308','#ec4899','#06b6d4','#f59e0b','#84cc16'];
 
@@ -4171,6 +4241,31 @@ export function startStudioRuntime(
     onEvent:handleFileExportEvent,
   });
 
+  function handleProjectArchiveEvent(event) {
+    if(event.type === 'project-archive.exported') {
+      showToast(currentLang === 'zh'
+        ? `完整项目已备份：${event.filename}`
+        : `Project backup exported: ${event.filename}`);
+    } else if(event.type === 'project-archive.restored') {
+      showToast(currentLang === 'zh'
+        ? `已恢复“${event.title}”（${event.trailCount} 条轨迹）`
+        : `Restored “${event.title}” (${event.trailCount} trails)`);
+    } else if(event.type === 'project-archive.failed' && event.operation === 'export') {
+      showToast(currentLang === 'zh' ? `项目备份失败：${event.message}` : `Project backup failed: ${event.message}`, 'error');
+    }
+  }
+
+  const projectArchiveController = HTM_APP.createProjectArchiveController(runtimeContext, {
+    files:browserFileAdapter,
+    appVersion:APP_VERSION,
+    commit:() => applyChange({fit:false}),
+    resetView:() => {
+      setMapMode(state.mode);
+      return resetView({restoreActive:false});
+    },
+    onEvent:handleProjectArchiveEvent,
+  });
+
   function downloadTrailKML(id) {
     return fileExportController.downloadTrailKml(id);
   }
@@ -4247,18 +4342,28 @@ export function startStudioRuntime(
     const items = [
       {
         icon: '📦',
-        label: '打包 KML ZIP',
+        label: t('export.kmlZip'),
         desc: state.activeGroup
-          ? `当前组「${state.activeGroup}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
-          : `未选中任何分组 · 请先切换到一个分组`,
+          ? (currentLang === 'zh'
+            ? `当前组「${state.activeGroup}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
+            : `${activeCount} active trails in “${state.activeGroup}” · ready for cross-device import`)
+          : (currentLang === 'zh' ? '未选中任何分组 · 请先切换到一个分组' : 'No group selected · select a group first'),
         disabled: activeCount === 0,
         handler: () => { popup.remove(); exportGroupKML(); },
       },
       {
         icon: '📄',
-        label: '行程 Markdown',
-        desc: '按天数/爬升/扎营点/下撤方案生成行程表',
+        label: t('export.itineraryMarkdown'),
+        desc: currentLang === 'zh'
+          ? '按天数、爬升、扎营点和下撤方案生成行程表'
+          : 'Build an itinerary from days, ascent, camps, and escape routes',
         handler: () => { popup.remove(); exportItineraryMD(); },
+      },
+      {
+        icon: '▣',
+        label: t('export.projectArchive'),
+        desc: t('export.projectArchiveDesc'),
+        handler: () => { popup.remove(); void projectArchiveController.exportProject(); },
       },
     ];
 
@@ -4274,13 +4379,19 @@ export function startStudioRuntime(
         gap:8px;
         transition:background 0.12s;
       `;
-      el.innerHTML = `
-        <span style="font-size:16px;line-height:1">${item.icon}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;line-height:1.3">${item.label}</div>
-          <div style="font-size:10.5px;color:var(--text-muted, #888);margin-top:2px;line-height:1.35">${item.desc}</div>
-        </div>
-      `;
+      const icon = document.createElement('span');
+      const copy = document.createElement('div');
+      const label = document.createElement('div');
+      const description = document.createElement('div');
+      icon.style.cssText = 'font-size:16px;line-height:1';
+      copy.style.cssText = 'flex:1;min-width:0';
+      label.style.cssText = 'font-weight:600;line-height:1.3';
+      description.style.cssText = 'font-size:10.5px;color:var(--text-muted, #888);margin-top:2px;line-height:1.35';
+      icon.textContent = item.icon;
+      label.textContent = item.label;
+      description.textContent = item.desc;
+      copy.append(label, description);
+      el.append(icon, copy);
       if(!item.disabled) {
         el.addEventListener('mouseenter', () => el.style.background = 'var(--bg-0, rgba(0,0,0,0.04))');
         el.addEventListener('mouseleave', () => el.style.background = '');
@@ -6229,6 +6340,7 @@ export function startStudioRuntime(
       "postImportFinalize": {enumerable:true, get:() => postImportFinalize},
       "primaryTrailIdForGroup": {enumerable:true, get:() => primaryTrailIdForGroup},
       "processTrack": {enumerable:true, get:() => processTrack},
+      "projectArchiveController": {enumerable:true, get:() => projectArchiveController},
       "queueMeasureLiveUpdate": {enumerable:true, get:() => queueMeasureLiveUpdate},
       "rebuildAll": {enumerable:true, get:() => rebuildAll},
       "recordRenderPhase": {enumerable:true, get:() => recordRenderPhase},
@@ -6253,6 +6365,7 @@ export function startStudioRuntime(
       "renderWaypointsNow": {enumerable:true, get:() => renderWaypointsNow},
       "resetMeasureElevReadout": {enumerable:true, get:() => resetMeasureElevReadout},
       "resetView": {enumerable:true, get:() => resetView},
+      "restoreProjectFile": {enumerable:true, get:() => restoreProjectFile},
       "restoreStorageSnapshot": {enumerable:true, get:() => restoreStorageSnapshot},
       "revalidateRuntimeInteractionOwner": {enumerable:true, get:() => revalidateRuntimeInteractionOwner},
       "reverseMeasureEndpoints": {enumerable:true, get:() => reverseMeasureEndpoints},

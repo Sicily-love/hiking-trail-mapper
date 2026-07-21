@@ -166,12 +166,21 @@ Click `☐ Batch group` at top of sidebar to enter batch mode:
 - Waypoint list (with `[manual]` marker where applicable)
 - Paste-friendly for Notion / VS Code / etc.
 
+### Complete project backup
+
+- File extension: `.ors-project.json`
+- Preserves all trails, Day segments, waypoints and images, escape routes, stitch gaps, groups, primary trails, display modes, and filters
+- Uses a fixed format identifier and `schemaVersion: 1`; restore checks file size, nesting depth, duplicate IDs, coordinates, and dangerous object keys
+- Restore shows the project name, trail count, source version, and export time before it may replace the current project and persist to IndexedDB
+- KML ZIP is for route exchange; a complete project backup is for moving Outdoor Route Studio between browsers and devices
+
 ## Persistence
 
 - **Storage**: IndexedDB, key = `main`
 - **Write strategy**: 300ms debounce (avoids flushing on every UI change)
 - **Restore**: `_boot` loads on startup
 - **Persisted fields**: `trails` (with tracks + waypoints), `activeTrails`, `primaryTrailId`, `activeGroup`
+- **Long-term backup**: use **Export → Complete project backup**; the IndexedDB auto-cache is not a substitute for a user-owned backup file
 - **Clear**: browser clear cache, or sidebar bottom `🗑 Clear data` button
 
 ## i18n

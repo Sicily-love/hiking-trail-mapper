@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.1.0',
+    date: '2026-07-21',
+    items: {
+      zh: ['新增完整项目备份与恢复：通过 .ors-project.json 保存轨迹、行程分段、标注图片、下撤方案和工作区选择。', '建立 schemaVersion 1 项目归档边界，恢复前校验文件大小、嵌套深度、重复 ID、经纬度和危险对象键，并在确认后原子替换项目。', '补齐中英文导入/导出界面、核心单元测试、真实 Chrome 恢复确认和端到端归档往返测试。'],
+      en: ['Add complete project backup and restore through .ors-project.json, preserving trails, itinerary segments, waypoint images, escape routes, and workspace choices.', 'Establish the schemaVersion 1 project-archive boundary with size, depth, duplicate-ID, coordinate, and dangerous-key validation before confirmed atomic replacement.', 'Complete bilingual import/export UI and add core unit, real-Chrome confirmation, and end-to-end archive round-trip coverage.'],
+    },
+  },
+  {
     version: 'v2.0.18',
     date: '2026-07-21',
     items: {

@@ -366,6 +366,10 @@ try:
           evalj("typeof escapeController === 'object' && addEscapeState === escapeController.state && typeof escapeController.commit === 'function'"))
     check("typed FileExportController 已接管 KML/ZIP/Markdown 导出",
           evalj("typeof fileExportController === 'object' && typeof fileExportController.exportGroupKml === 'function' && typeof fileExportController.exportItineraryMarkdown === 'function'"))
+    check("typed ProjectArchiveController 已接管完整项目备份与恢复",
+          evalj("typeof projectArchiveController === 'object' && typeof projectArchiveController.exportProject === 'function' && typeof projectArchiveController.parse === 'function' && typeof projectArchiveController.restore === 'function'"))
+    check("完整项目恢复入口已进入添加轨迹窗口",
+          evalj("!!document.getElementById('project-restore-btn') && document.getElementById('project-file')?.accept.includes('.ors-project.json')"))
 
     check("handleFiles 已瘦身（< 30 行）",
           evalj("handleFiles.toString().split('\\n').length < 30"),
@@ -818,6 +822,88 @@ try:
           and security_flow.get('waypointRenderedAsText') is True
           and security_flow.get('unsafeLinkRemoved') is True,
           str(security_flow))
+
+    project_archive_flow = evalj("""
+      (async () => {
+        const source = DATA.trails[0];
+        if(!source) return {error:'missing trail'};
+        const invalid = projectArchiveController.parse('{"format":"wrong"}');
+        showExportMenu();
+        const exportMenuText = document.getElementById('export-menu-popup')?.textContent || '';
+        document.getElementById('export-menu-popup')?.remove();
+        const archive = HTM_CORE.createProjectArchive({
+          project:{title:'Browser archive restored', trails:[source], calc_method:{threshold:10}},
+          state:{
+            activeTrails:new Set([source.id]),
+            activeGroup:source.group || '默认',
+            primaryByGroup:{[source.group || '默认']:source.id},
+            mode:'waypoint',
+            modeVisibleTags:{day:['camp'], elev:['pass'], waypoint:['water']},
+            waypointModeTags:['camp','water'],
+            showTrack:true,
+            showLabel:false,
+            showHighPoint:true,
+            baseLayer:'sat',
+            autoGenerateEscape:false,
+          },
+          appVersion:APP_VERSION,
+          exportedAt:'2026-07-21T12:00:00.000Z',
+        });
+        const beforeFit = renderRuntimeStats.fit.requested;
+        const pending = restoreProjectFile(new File(
+          [HTM_CORE.serializeProjectArchive(archive)],
+          'browser.ors-project.json',
+          {type:'application/json'},
+        ));
+        await new Promise(resolve => setTimeout(resolve, 30));
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const confirmationReady = !!dialog
+          && dialog.textContent.includes('Browser archive restored')
+          && dialog.textContent.includes(`${archive.project.trails.length} 条轨迹`);
+        dialog?.querySelector('.workbench-dialog__button--danger,.workbench-dialog__button--primary')?.click();
+        const restored = await pending;
+        await new Promise(resolve => setTimeout(resolve, 650));
+        return {
+          invalidRejected:invalid.ok === false && invalid.code === 'invalid-format',
+          exportMenuReady:exportMenuText.includes('完整项目备份'),
+          confirmationReady,
+          restored,
+          title:DATA.title,
+          trailCount:DATA.trails.length,
+          activeGroup:state.activeGroup,
+          primary:state.primaryTrailId,
+          mode:state.mode,
+          labels:state.showLabel,
+          waypointTags:[...state.waypointModeTags].sort(),
+          fitDelta:renderRuntimeStats.fit.requested - beforeFit,
+          dayMetaPreserved:Array.isArray(DATA.trails[0]?.day_meta),
+          waypointsPreserved:Array.isArray(DATA.trails[0]?.waypoints),
+          escapePreserved:Array.isArray(DATA.trails[0]?.escape_routes),
+        };
+      })()
+    """)
+    check("完整项目备份入口、损坏文件拒绝与替换确认可用",
+          isinstance(project_archive_flow, dict)
+          and project_archive_flow.get('invalidRejected') is True
+          and project_archive_flow.get('exportMenuReady') is True
+          and project_archive_flow.get('confirmationReady') is True,
+          str(project_archive_flow))
+    check("项目恢复保留业务数据与全部工作区选择",
+          isinstance(project_archive_flow, dict)
+          and project_archive_flow.get('restored') is True
+          and project_archive_flow.get('title') == 'Browser archive restored'
+          and project_archive_flow.get('trailCount') == 1
+          and project_archive_flow.get('mode') == 'waypoint'
+          and project_archive_flow.get('labels') is False
+          and project_archive_flow.get('waypointTags') == ['camp', 'water']
+          and project_archive_flow.get('primary') is not None
+          and project_archive_flow.get('dayMetaPreserved') is True
+          and project_archive_flow.get('waypointsPreserved') is True
+          and project_archive_flow.get('escapePreserved') is True,
+          str(project_archive_flow))
+    check("项目恢复只请求一次最终视图复位",
+          isinstance(project_archive_flow, dict) and project_archive_flow.get('fitDelta') == 1,
+          str(project_archive_flow))
 
     stitch_flow = evalj("""
       (async () => {

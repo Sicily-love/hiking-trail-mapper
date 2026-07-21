@@ -659,6 +659,59 @@ try:
     check("primaryTrailId getter 返回新值", r.get("primary") == r.get("aMemo"))
 
     # ═══════════════════════════════════════════════════════════════
+    # E17 — 完整项目备份/恢复往返
+    # ═══════════════════════════════════════════════════════════════
+    print("\n▸ E17 · 完整项目备份/恢复往返")
+    archive_roundtrip = evalj("""
+      (async () => {
+        const archive = HTM_CORE.createProjectArchive({
+          project:DATA,
+          state,
+          appVersion:APP_VERSION,
+          exportedAt:'2026-07-21T12:00:00.000Z',
+        });
+        const text = HTM_CORE.serializeProjectArchive(archive);
+        const parsed = projectArchiveController.parse(text);
+        if(!parsed.ok) return {ok:false, error:parsed.message};
+        const expected = {
+          title:parsed.archive.project.title,
+          count:parsed.archive.project.trails.length,
+          activeGroup:parsed.archive.workspace.activeGroup,
+          primary:parsed.archive.workspace.activeGroup
+            ? parsed.archive.workspace.primaryByGroup[parsed.archive.workspace.activeGroup]
+            : null,
+        };
+        DATA.title = 'Temporary';
+        DATA.trails.splice(0, DATA.trails.length);
+        dispatchState({type:'workspace.clear'});
+        const result = projectArchiveController.restore(parsed.archive);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return {
+          ok:true,
+          status:result.status,
+          expected,
+          actual:{
+            title:DATA.title,
+            count:DATA.trails.length,
+            activeGroup:state.activeGroup,
+            primary:state.primaryTrailId,
+          },
+          schema:parsed.archive.schemaVersion,
+          format:parsed.archive.format,
+        };
+      })()
+    """)
+    check("项目归档 schema 与格式标识正确",
+          archive_roundtrip.get("ok") == True
+          and archive_roundtrip.get("schema") == 1
+          and archive_roundtrip.get("format") == "outdoor-route-studio-project",
+          f"{archive_roundtrip}")
+    check("清空内存后可完整恢复项目与组/主轨迹选择",
+          archive_roundtrip.get("status") == "restored"
+          and archive_roundtrip.get("actual") == archive_roundtrip.get("expected"),
+          f"{archive_roundtrip}")
+
+    # ═══════════════════════════════════════════════════════════════
     # 结果汇总
     # ═══════════════════════════════════════════════════════════════
     total = len(results)

@@ -45,7 +45,7 @@ Import routes:
 | Manage waypoints | Pick a primary-trail point, choose an icon and type, enter notes, and attach an optional image; filtering and renaming remain available |
 | Plan escapes | Choose a reference trail in the active group, select its A/B section, and save the result under the primary itinerary |
 | Stitch trails | Start with no selected sources, then crop, reverse, and reorder multiple parts on the map without inventing distance or elevation across gaps |
-| Move data | Export the current group as KML ZIP and the primary-trail itinerary as Markdown |
+| Move data | Export the current group as KML ZIP, export an itinerary as Markdown, or migrate the full project and workspace in a versioned project file |
 
 See [Features](docs/FEATURES.en.md) for interactions and [Architecture](docs/ARCHITECTURE.en.md) for implementation boundaries.
 
@@ -60,7 +60,7 @@ The Workbench adapts one command vocabulary to different screen sizes:
 
 ## Data and Privacy
 
-Trails, waypoints, and group state are stored in the current browser's IndexedDB and are not uploaded to an application server. Clearing browser data or changing browsers or devices does not migrate local data; use **Export → KML ZIP** first.
+Trails, waypoints, and group state are stored in the current browser's IndexedDB and are not uploaded to an application server. Before clearing browser data or changing browsers or devices, use **Export → Complete project backup** to create an `.ors-project.json` file. Restore validates its format and `schemaVersion`, then asks before replacing the current project. KML ZIP is better for route exchange with other map software and does not carry the full workspace state.
 
 ## Architecture
 
@@ -78,7 +78,7 @@ index.html
 
 - `index.html` contains only metadata, `#app`, and `/src/main.ts`; it contains no business implementation.
 - `src/app/bootstrap.ts` mounts the Workbench DOM, loads vendors through the Vite module graph, and explicitly starts the Studio runtime. Business code is no longer executed as an injected script string.
-- `src/core` owns DOM-free calculations, parsing, transformations, and render models.
+- `src/core` owns DOM-free calculations, parsing, versioned project archives, transformations, and render models.
 - `src/app` and `src/features` own state and interaction orchestration; `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench and dialogs.
 - `InteractionManager` makes measure, segment, waypoint, escape, trail-stitch, and Day-preview sessions mutually exclusive.
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
@@ -125,7 +125,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v2.0.18
+Version: v2.1.0
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.

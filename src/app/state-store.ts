@@ -25,6 +25,12 @@ export type AppStateCommand =
       activeTrails: Iterable<string>;
       activeGroup: string | null;
       primaryByGroup: Record<string, string>;
+      mode?: MapMode;
+      modeVisibleTags?: Partial<Record<MapMode, Iterable<string>>>;
+      waypointModeTags?: Iterable<string>;
+      display?: Partial<Record<DisplayOption, boolean>>;
+      baseLayer?: string;
+      autoGenerateEscape?: boolean;
     }
   | { type: 'workspace.clear' };
 
@@ -127,6 +133,24 @@ export class AppStateStore {
         replaceSet(state.activeTrails, command.activeTrails);
         state.activeGroup = command.activeGroup;
         state.primaryByGroup = { ...command.primaryByGroup };
+        state.batchSelected.clear();
+        state.expandedTrails.clear();
+        state.activeEscape = null;
+        if(command.mode) state.mode = command.mode;
+        if(command.modeVisibleTags) {
+          for(const mode of ['day', 'elev', 'waypoint'] as const) {
+            const tags = command.modeVisibleTags[mode];
+            if(tags) replaceSet(state.modeVisibleTags[mode], tags);
+          }
+        }
+        if(command.waypointModeTags) replaceSet(state.waypointModeTags, command.waypointModeTags);
+        if(command.display) {
+          for(const option of ['showTrack', 'showLabel', 'showHighPoint'] as const) {
+            if(typeof command.display[option] === 'boolean') state[option] = command.display[option];
+          }
+        }
+        if(command.baseLayer) state.baseLayer = command.baseLayer;
+        if(typeof command.autoGenerateEscape === 'boolean') state.autoGenerateEscape = command.autoGenerateEscape;
         break;
       case 'workspace.clear':
         state.activeTrails.clear();

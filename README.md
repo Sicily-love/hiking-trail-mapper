@@ -45,7 +45,7 @@ npm run dev
 | 标注管理 | 在主轨迹选点，选择图标与类型、填写描述并添加可选图片，也可筛选和改名 |
 | 下撤方案 | 切换同组依据轨迹并选择 A/B 路段，方案归档到主轨迹行程中 |
 | 轨迹拼接 | 从零多选来源轨迹，在地图中裁剪、反向和排序多个片段；断点不产生虚构里程或高差 |
-| 数据迁移 | 将当前分组导出为 KML ZIP，将主轨迹行程导出为 Markdown |
+| 数据迁移 | 将当前分组导出为 KML ZIP、将行程导出为 Markdown，或用版本化项目文件完整迁移轨迹与工作区 |
 
 完整交互说明见 [功能说明](docs/FEATURES.md)，实现边界见 [架构说明](docs/ARCHITECTURE.md)。
 
@@ -60,7 +60,7 @@ Workbench 使用同一组命令语义适配不同屏幕：
 
 ## 数据与隐私
 
-轨迹、标注和分组状态保存在当前浏览器的 IndexedDB 中，不会上传到应用服务器。清除浏览器数据、更换浏览器或设备后，本地数据不会自动迁移；请先使用“导出 → KML ZIP”备份。
+轨迹、标注和分组状态保存在当前浏览器的 IndexedDB 中，不会上传到应用服务器。清除浏览器数据、更换浏览器或设备前，请使用“导出 → 完整项目备份”生成 `.ors-project.json`；恢复时应用会先验证格式与 `schemaVersion`，再经确认完整替换当前项目。KML ZIP 更适合与其他地图软件交换路线，不包含全部工作区状态。
 
 ## 工程结构
 
@@ -78,7 +78,7 @@ index.html
 
 - `index.html` 只保留元信息、`#app` 和 `/src/main.ts`，不承载业务实现。
 - `src/app/bootstrap.ts` 挂载 Workbench DOM，通过 Vite 模块图加载 vendor，并显式启动 Studio runtime；业务代码不再通过字符串脚本执行。
-- `src/core` 负责无 DOM 的计算、解析、数据转换和渲染模型。
+- `src/core` 负责无 DOM 的计算、解析、版本化项目归档、数据转换和渲染模型。
 - `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench 与对话框。
 - `InteractionManager` 保证测距、分段、标注、下撤、轨迹拼接和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
@@ -127,7 +127,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v2.0.18
+版本：v2.1.0
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。

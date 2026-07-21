@@ -62,6 +62,7 @@ npm run check:generated
 | `test_math.js` / `test_enrich.js` | 距离、海拔、统计、标注吸附与内容 hash |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` 出口、KML 坐标、`gx:Track`、waypoint 和 import model |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshot、事务提交、Set 序列化、每组主轨迹和 legacy 恢复 |
+| `test_project_archive.js` | schema v1 往返、输入预算、危险键、完整工作区恢复和 typed controller 边界 |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | typed 存储、导入、标注点 controller 与 direct runtime 边界 |
 | `test_file_export_controller.js` | KML/Markdown 模型、ZIP/Blob adapter、导出 controller 与 direct DOM 边界 |
 | `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 direct runtime 边界 |
@@ -119,10 +120,11 @@ npm run check:generated
 - 顶部菜单、桌面/移动活动栏、分析栏和 Escape 派发统一语义命令；
 - dialog 的取消、确认、Escape 和焦点恢复；
 - 生成 HTML 在 `file://` 下无运行时错误。
+- 完整项目恢复先校验并确认，保留 Day/标注/下撤数据，且只请求一次最终复位。
 
 ### Phase 6：端到端流程
 
-`tests/e2e/run_all.py` 覆盖空工作区、KML/ZIP 导入、去重、分组与主轨迹、批量移动、反向、删除、waypoint 筛选、Day/测距/分段、IndexedDB、i18n、导出和 `file://`。
+`tests/e2e/run_all.py` 覆盖空工作区、KML/ZIP 导入、去重、分组与主轨迹、批量移动、反向、删除、waypoint 筛选、Day/测距/分段、IndexedDB、完整项目归档往返、i18n、导出和 `file://`。
 
 E2E 以用户结果为准，不直接依赖 manager 私有字段。manager 内部细节由 Phase 2 测试保护。
 

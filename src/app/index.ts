@@ -134,6 +134,12 @@ export {
   type FileExportResult,
 } from '../features/files/export-controller.ts';
 export {
+  createProjectArchiveController,
+  type ProjectArchiveController,
+  type ProjectArchiveControllerDependencies,
+  type ProjectArchiveEvent,
+} from '../features/project/archive-controller.ts';
+export {
   createWaypointController,
   type ManualWaypointAnchor,
   type WaypointController,
