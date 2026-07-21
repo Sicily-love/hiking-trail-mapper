@@ -77,7 +77,7 @@ npm run check:generated
 | `test_render_scheduler.js` | dirty mask 合并、固定 flush 顺序、下一帧重入和 fit epoch |
 | `test_render_runtime.js` | 七阶段调度接线、海拔降采样、marker diff 和最后一次复位保护 |
 | `test_command_dialog.js` | 命令注册/状态/dispatch、四类入口接线，以及原生 dialog 安全、焦点、Escape |
-| `test_ui_contract.js` | Workbench 响应式布局、四项活动入口、侧栏、海拔坞和无障碍 |
+| `test_ui_contract.js` / `test_safe_content.js` | Workbench 响应式布局、无障碍，以及导入文本、URL、图片和颜色安全边界 |
 | `test_vite_entry.js` | 小壳、`main.ts`、`bootstrap.ts`、direct runtime 与单文件构建 |
 | `test_release_pipeline.js` | 构建重现、release metadata、版本工具和 GitHub Pages workflow |
 | `verify_alignment.js` | 生成发布物使用 `src/core` 行为且没有恢复重复 core fallback |
@@ -125,7 +125,11 @@ npm run check:generated
 
 E2E 以用户结果为准，不直接依赖 manager 私有字段。manager 内部细节由 Phase 2 测试保护。
 
-六个阶段结束后，脚本还会做只读发布一致性检查：
+### Phase 7：真实 Chrome 视觉回归
+
+`tests/visual/capture_workbench.py` 使用同一份临时发布物和真实示例轨迹，检查 1440、1024、390 与 320 像素布局，并覆盖轨迹组、长名称、Day、测距、分段、拼接、标注对话框、海拔收放和提示条。几何断言或截图状态缺失都会使完整检查失败。
+
+七个阶段结束后，脚本还会做只读发布一致性检查：
 
 - `.vite-build/index.html`、兼容别名和受跟踪发布物字节一致；
 - `release.json` 的 hash 与字节数匹配临时发布物；

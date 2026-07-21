@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.0.17',
+    date: '2026-07-21',
+    items: {
+      zh: ['统一导入与缓存内容的安全边界：轨迹、分组、标注、下撤和文件名按纯文本渲染，外部链接、图片来源与颜色经过白名单校验。', '默认完整测试新增真实 Chrome 视觉回归阶段，覆盖桌面、移动端、核心工具状态和提示条截图。'],
+      en: ['Unify safe boundaries for imported and restored content: render trail, group, waypoint, escape, and filename data as text, and validate external links, image sources, and colors against allowlists.', 'Add real-Chrome visual regression to the default full test pipeline, covering desktop, mobile, core tool states, and toast screenshots.'],
+    },
+  },
+  {
     version: 'v2.0.16',
     date: '2026-07-18',
     items: {

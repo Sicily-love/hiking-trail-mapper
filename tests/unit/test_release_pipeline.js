@@ -135,11 +135,15 @@ T('full check builds before exporting the release path to browser suites', () =>
   const exportPosition = script.indexOf('export HTM_RELEASE_HTML=');
   const browserPosition = script.indexOf('run_python_with_websocket "$LATEST_FUNC"');
   const e2ePosition = script.indexOf('run_python_with_websocket tests/e2e/run_all.py');
-  [buildPosition, exportPosition, browserPosition, e2ePosition]
+  const visualPosition = script.indexOf('tests/visual/capture_workbench.py');
+  [buildPosition, exportPosition, browserPosition, e2ePosition, visualPosition]
     .forEach(position => assert.ok(position >= 0));
   assert.ok(buildPosition < exportPosition);
   assert.ok(exportPosition < browserPosition);
   assert.ok(exportPosition < e2ePosition);
+  assert.ok(e2ePosition < visualPosition);
+  assert.ok(script.includes('Phase 7 · 真实 Chrome 视觉回归'));
+  assert.ok(script.includes('workbench-toast.png'));
   assert.ok(script.includes('command -v uv'));
   assert.ok(script.includes('python3 -m pip install --quiet websocket-client'));
   assert.ok(!script.includes('scripts/release/sync_release.sh'));

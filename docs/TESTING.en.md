@@ -77,7 +77,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_render_scheduler.js` | Dirty-mask coalescing, fixed flush order, next-frame re-entry, and fit epochs |
 | `test_render_runtime.js` | Seven-phase runtime wiring, elevation downsampling, marker diffs, and final-reset protection |
 | `test_command_dialog.js` | Command registration/state/dispatch, four-surface wiring, and native-dialog safety, focus, and Escape |
-| `test_ui_contract.js` | Responsive Workbench, four focused activities, sidebar, elevation dock, and accessibility |
+| `test_ui_contract.js` / `test_safe_content.js` | Responsive Workbench, accessibility, and safe boundaries for imported text, URLs, images, and colors |
 | `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, direct runtime, and single-file build |
 | `test_release_pipeline.js` | Reproducible builds, release metadata, version tools, and the GitHub Pages workflow |
 | `verify_alignment.js` | Generated release behavior uses `src/core` without restoring duplicate core fallbacks |
@@ -125,7 +125,11 @@ Key coverage:
 
 E2E tests assert user outcomes instead of manager private fields. Phase 2 protects manager internals.
 
-After all six phases, the script performs a read-only release-consistency check:
+### Phase 7: Real-Chrome Visual Regression
+
+`tests/visual/capture_workbench.py` uses the same temporary release and real sample trail to validate 1440, 1024, 390, and 320 pixel layouts. It covers trail groups, long names, Day, measure, segment, stitch, waypoint dialogs, elevation collapse, and toast feedback. Missing screenshot states or failed geometry assertions fail the full check.
+
+After all seven phases, the script performs a read-only release-consistency check:
 
 - `.vite-build/index.html`, its compatibility alias, and the tracked release are byte-identical;
 - the `release.json` hash and byte count match the temporary artifact;

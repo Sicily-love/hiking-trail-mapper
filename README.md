@@ -96,6 +96,8 @@ npm run build
 npm run test:visual:capture
 ```
 
+完整测试默认包含真实 Chrome 功能、端到端和视觉布局回归；`test:visual:capture` 可单独生成截图，便于人工检查具体界面状态。
+
 `npm run build` 以小壳 `index.html` 为 Vite 入口，将 JavaScript 和 CSS 内联到 `dist/index.html`，并生成兼容别名 `dist/hiking-trail-mapper.html` 与 `dist/release.json`。两个 HTML 名称指向同一份自包含发布内容，不是两套源码。
 
 `npm run release:prepare` 用于正式发布：同步生成物、运行完整验证、构建单文件并检查发布元数据。详细命令与分层见 [测试指南](docs/TESTING.md) 和 [贡献指南](docs/CONTRIBUTING.md)。
@@ -125,7 +127,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v2.0.16
+版本：v2.0.17
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。

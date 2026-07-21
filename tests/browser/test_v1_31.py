@@ -755,6 +755,71 @@ try:
           and rename_flow.get('sidebarWidthStable') is True,
           str(rename_flow))
 
+    security_flow = evalj("""
+      (async () => {
+        const trail = DATA.trails[0];
+        if(!trail) return {error:'missing trail'};
+        const payload = '<img data-security-probe src=x onerror="window.__securityBoundaryExecuted=true">';
+        const groupPayload = '<option data-security-probe>Injected group</option>';
+        const itineraryTags = new Set(['pass','water','supply','bridge','river','village','shelter','warn','fork','start','end','highpoint']);
+        const waypoint = (trail.waypoints || []).find(item => itineraryTags.has(item.tag));
+        const original = {
+          name:trail.name,
+          source:trail.source,
+          waypointLabel:waypoint?.label,
+          expanded:state.expandedTrails.has(trail.id),
+        };
+        const fixture = JSON.parse(JSON.stringify(trail));
+        fixture.id = 'browser-security-fixture';
+        fixture.name = 'Security group fixture';
+        fixture.group = groupPayload;
+        fixture.waypoints = [];
+        window.__securityBoundaryExecuted = false;
+        DATA.trails.push(fixture);
+        trail.name = payload;
+        trail.source = 'javascript:window.__securityBoundaryExecuted=true';
+        if(waypoint) waypoint.label = payload;
+        if(!original.expanded) toggleTrailExpanded(trail.id);
+        buildTrailList();
+        buildDaysTab();
+        buildLegend();
+        renderPrimaryCard();
+        await new Promise(resolve => setTimeout(resolve, 60));
+        const card = [...document.querySelectorAll('#trail-list .trail-card')]
+          .find(item => item.querySelector('.trail-name')?.textContent === payload);
+        const result = {
+          scriptStayedInert:window.__securityBoundaryExecuted === false,
+          noInjectedNode:!document.querySelector('[data-security-probe]'),
+          nameRenderedAsText:!!card && card.textContent.includes(payload),
+          groupRenderedAsText:[...document.querySelectorAll('.trail-group-select option')]
+            .some(option => option.textContent === groupPayload),
+          waypointRenderedAsText:!waypoint || document.getElementById('tab-days')?.textContent.includes(payload),
+          unsafeLinkRemoved:![...document.querySelectorAll('.pc-link,.trail-link-btn')]
+            .some(link => link.getAttribute('href')?.trim().toLowerCase().startsWith('javascript:')),
+        };
+        trail.name = original.name;
+        trail.source = original.source;
+        if(waypoint) waypoint.label = original.waypointLabel;
+        DATA.trails.splice(DATA.trails.indexOf(fixture), 1);
+        if(!original.expanded && state.expandedTrails.has(trail.id)) toggleTrailExpanded(trail.id);
+        buildTrailList();
+        buildDaysTab();
+        buildLegend();
+        renderPrimaryCard();
+        delete window.__securityBoundaryExecuted;
+        return result;
+      })()
+    """)
+    check("导入名称、分组、标注与非法链接只作为安全内容渲染",
+          isinstance(security_flow, dict)
+          and security_flow.get('scriptStayedInert') is True
+          and security_flow.get('noInjectedNode') is True
+          and security_flow.get('nameRenderedAsText') is True
+          and security_flow.get('groupRenderedAsText') is True
+          and security_flow.get('waypointRenderedAsText') is True
+          and security_flow.get('unsafeLinkRemoved') is True,
+          str(security_flow))
+
     stitch_flow = evalj("""
       (async () => {
         const source = DATA.trails[0];

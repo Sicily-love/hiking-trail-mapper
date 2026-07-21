@@ -3,6 +3,12 @@ import * as HTM_CORE from '../../core/index.ts';
 import * as HTM_APP from '../index.ts';
 import { STUDIO_VERSION } from '../version.ts';
 import { createWorkbenchIcon } from '../../ui/icons.ts';
+import {
+  escapeHtmlText,
+  sanitizeExternalHttpUrl,
+  sanitizeHexColor,
+  sanitizeImageSource,
+} from '../../ui/safe-content.ts';
 
 export interface StudioBootResult {
   restored: boolean;
@@ -690,17 +696,13 @@ export function startStudioRuntime(
 
   /* ============ Waypoint Photo Hover ============ */
   const wpPhotoEl = document.getElementById('wp-photo-tip');
-  function escapeUiText(value) {
-    return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({
-      '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;',
-    })[character]);
-  }
+  const escapeUiText = escapeHtmlText;
   function pinWpCard(e, wp, trail) {
     // 点击标注点 → 固定显示卡片，卡片中图片可点击放大
-    const photoSrc = wp.photo || '';
+    const photoSrc = sanitizeImageSource(wp.photo) || '';
     const iconMarkup = waypointIconMarkup(wp);
     const photoHtml = photoSrc ? `<img id="pin-card-img" src="${photoSrc}" loading="lazy" style="display:block;max-width:260px;max-height:200px;border-radius:4px;cursor:zoom-in" onerror="this.style.display='none'">` : '';
-    const trailLine = trail ? `<div style="color:${trail.color || '#aaa'};font-size:10px;font-weight:600;margin-bottom:3px">${t('popup.trailLabel')}: ${escapeUiText(trail.name)}</div>` : '';
+    const trailLine = trail ? `<div style="color:${sanitizeHexColor(trail.color, '#aaaaaa')};font-size:10px;font-weight:600;margin-bottom:3px">${t('popup.trailLabel')}: ${escapeUiText(trail.name)}</div>` : '';
     const description = wp.description || (wp.name && wp.name !== wp.label ? wp.name : '');
     const descLine = description ? `<div style="color:#cfd6e0;font-size:10px;margin-top:3px;line-height:1.4;max-width:260px">${escapeUiText(description)}</div>` : '';
     wpPhotoEl.innerHTML = `
@@ -760,7 +762,7 @@ export function startStudioRuntime(
       <div class="row"><span class="lab">天数</span><span class="val">D${a[5]}</span></div>
       <div class="row"><span class="lab">纬度</span><span class="val coordinate">${formatCoordinate(a[0])}</span></div>
       <div class="row"><span class="lab">经度</span><span class="val coordinate">${formatCoordinate(a[1])}</span></div>
-      <div class="row"><span class="lab">轨迹</span><span style="color:${trail.color}">${trail.name}</span></div>
+      <div class="row"><span class="lab">轨迹</span><span style="color:${sanitizeHexColor(trail.color)}">${escapeUiText(trail.name)}</span></div>
     `;
     if(heat !== undefined) {
       html += `<div class="row"><span class="lab">重合度</span><span class="val">${heat}x</span></div>`;
@@ -858,8 +860,9 @@ export function startStudioRuntime(
       return;
     }
     if(toolbarContext) toolbarContext.textContent = `${main.stats.distance_km} KM · ${main.name}`;
-    const sourceLink = main.source && main.source.startsWith('http')
-      ? `<a href="${main.source}" target="_blank" class="pc-link" title="${main.source}">${t('pc.source')}</a>` : '';
+    const primarySourceUrl = sanitizeExternalHttpUrl(main.source);
+    const sourceLink = primarySourceUrl
+      ? `<a href="${escapeUiText(primarySourceUrl)}" target="_blank" rel="noopener noreferrer" class="pc-link" title="${escapeUiText(primarySourceUrl)}">${t('pc.source')}</a>` : '';
     card.innerHTML = `
       <div class="pc-eyebrow">${t('pc.eyebrow')}</div>
       <div class="pc-name" id="pc-name" title="${currentLang === 'zh' ? '点击重命名' : 'Click to rename'}" style="cursor:pointer">${escapeUiText(main.name)}</div>
@@ -1024,7 +1027,7 @@ export function startStudioRuntime(
     mini.title = t('mini.openSidebar') + ' / 拖动可移动';
     mini.innerHTML = `
       <div style="font-size:9px;color:#7A6E54;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:4px">${t('mini.primary')}</div>
-      <div style="font-size:13px;font-weight:600;color:#1F2A1C;line-height:1.3;margin-bottom:6px;font-family:var(--serif)">${main.name}</div>
+      <div style="font-size:13px;font-weight:600;color:#1F2A1C;line-height:1.3;margin-bottom:6px;font-family:var(--serif)">${escapeUiText(main.name)}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 8px;font-size:10px;color:#3F5238">
         <div><b style="font-size:13px;color:#1F2A1C;font-family:var(--serif)">${main.stats.distance_km}</b> ${t('mini.km')}</div>
         <div><b style="font-size:13px;color:#1F2A1C;font-family:var(--serif)">${main.stats.ascent_m}</b> ${t('mini.ascent')}</div>
@@ -1356,9 +1359,15 @@ export function startStudioRuntime(
     }));
 
     const moveSel = document.createElement('select');
-    moveSel.innerHTML = '<option value="">移到…</option>'
-      + getGroups().filter(g => g !== state.activeGroup).map(g => `<option value="${g}">${g}</option>`).join('')
-      + '<option value="__new__">＋ 新建组…</option>';
+    const appendMoveOption = (value, label) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      moveSel.appendChild(option);
+    };
+    appendMoveOption('', '移到…');
+    getGroups().filter(g => g !== state.activeGroup).forEach(g => appendMoveOption(g, g));
+    appendMoveOption('__new__', '＋ 新建组…');
     moveSel.addEventListener('change', async e => {
       let target = e.target.value;
       if(!target) return;
@@ -1419,13 +1428,14 @@ export function startStudioRuntime(
    * @param {boolean} [isPrimary]    是否是当前分组的主轨迹（v1.21.0）
    */
   function trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary) {
+    const trailId = escapeUiText(tr.id);
     return `
       <div class="trail-card-hdr">
         <div class="trail-checkbox ${isBatchChecked ? 'checked' : ''}" data-action="batch-toggle" title="${isBatchChecked ? '已选（点击取消）' : '选中此轨迹'}">${isBatchChecked ? '☑' : '☐'}</div>
         <div class="trail-expand-arrow ${isExpanded ? 'expanded' : ''}" data-action="toggle-expand" title="${isExpanded ? '收起详情' : '展开详情'}">${isExpanded ? '▾' : '▸'}</div>
-        <div class="trail-color-dot" style="background:${tr.color}"></div>
+        <div class="trail-color-dot" style="background:${sanitizeHexColor(tr.color)}"></div>
         <div class="trail-name">${escapeUiText(tr.name)}</div>
-        <button type="button" class="trail-rename-btn" data-tid="${tr.id}" title="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}" aria-label="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}"></button>
+        <button type="button" class="trail-rename-btn" data-tid="${trailId}" title="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}" aria-label="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}"></button>
         <div class="trail-toggle" style="${isActive ? 'color:var(--accent);font-weight:600' : ''}">${isActive ? '叠加中 ●' : '点击叠加'}</div>
       </div>
     `;
@@ -1434,15 +1444,17 @@ export function startStudioRuntime(
   /** 单张轨迹卡片的详情区 HTML（仅展开态） */
   function trailCardExpandedHtml(tr) {
     const thumbSvg = buildTrailThumbnail(tr);
-    const linkArea = tr.source && tr.source.startsWith('http')
-      ? `<a href="${tr.source}" target="_blank" class="trail-link-btn" title="${tr.source}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${escapeUiText(tr.name)}</a><a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
-      : `<a href="#" class="trail-edit-link-btn" data-tid="${tr.id}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`;
-    const groupOpts = getGroups().map(g => `<option value="${g}" ${trailGroup(tr)===g?'selected':''}>${g}</option>`).join('');
+    const trailId = escapeUiText(tr.id);
+    const sourceUrl = sanitizeExternalHttpUrl(tr.source);
+    const linkArea = sourceUrl
+      ? `<a href="${escapeUiText(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="trail-link-btn" title="${escapeUiText(sourceUrl)}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${escapeUiText(tr.name)}</a><a href="#" class="trail-edit-link-btn" data-tid="${escapeUiText(tr.id)}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
+      : `<a href="#" class="trail-edit-link-btn" data-tid="${escapeUiText(tr.id)}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`;
+    const groupOpts = getGroups().map(g => `<option value="${escapeUiText(g)}" ${trailGroup(tr)===g?'selected':''}>${escapeUiText(g)}</option>`).join('');
     // v1.21.0：主轨迹卡不显示"设为主轨迹"按钮，显示 "★ 主轨迹" 标识
     const isPrimary = (tr.id === state.primaryTrailId);
     const primaryLabel = isPrimary
       ? `<span style="color:#C6912D;font-size:10px;font-weight:600;letter-spacing:0.02em">★ ${t('trail.isPrimary') || '主轨迹'}</span>`
-      : `<a href="#" class="set-primary-btn" data-tid="${tr.id}" style="color:var(--accent);font-size:10px;text-decoration:none;font-weight:600;letter-spacing:0.02em">${t('trail.setPrimary')}</a>`;
+      : `<a href="#" class="set-primary-btn" data-tid="${trailId}" style="color:var(--accent);font-size:10px;text-decoration:none;font-weight:600;letter-spacing:0.02em">${t('trail.setPrimary')}</a>`;
     return `
       <div class="trail-thumb">${thumbSvg}</div>
       <div class="trail-info" style="align-items:center;gap:8px;flex-wrap:wrap">
@@ -1450,17 +1462,17 @@ export function startStudioRuntime(
         <span>↑<b>${tr.stats.ascent_m}</b>m</span>
         <span>↓<b>${tr.stats.descent_m || 0}</b>m</span>
         <span><b>${tr.days}</b>${t('trail.days')}</span>
-        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-family:monospace;font-size:10px;color:var(--text-muted);user-select:all">${t('trail.id')}: <span class="trail-id-text" data-tid="${tr.id}">${tr.id}</span><a href="#" class="trail-edit-id-btn" data-tid="${tr.id}" title="${t('trail.editId')}" style="color:var(--accent);font-size:10px;text-decoration:none">✎</a></span>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-family:monospace;font-size:10px;color:var(--text-muted);user-select:all">${t('trail.id')}: <span class="trail-id-text" data-tid="${trailId}">${trailId}</span><a href="#" class="trail-edit-id-btn" data-tid="${trailId}" title="${t('trail.editId')}" style="color:var(--accent);font-size:10px;text-decoration:none">✎</a></span>
       </div>
       <div class="trail-info" style="margin-top:4px;align-items:center;gap:10px">
         ${primaryLabel}
         ${linkArea}
-        <a href="#" class="trail-dl-kml-btn" data-tid="${tr.id}" title="下载 KML" style="color:var(--accent);font-size:10px;text-decoration:none">⬇ KML</a>
-        <a href="#" class="trail-delete-btn" data-tid="${tr.id}" title="${t('trail.delete')}" style="margin-left:auto;color:var(--accent-2);font-size:10px;text-decoration:none">${t('trail.delete')}</a>
+        <a href="#" class="trail-dl-kml-btn" data-tid="${trailId}" title="下载 KML" style="color:var(--accent);font-size:10px;text-decoration:none">⬇ KML</a>
+        <a href="#" class="trail-delete-btn" data-tid="${trailId}" title="${t('trail.delete')}" style="margin-left:auto;color:var(--accent-2);font-size:10px;text-decoration:none">${t('trail.delete')}</a>
       </div>
       <div class="trail-info" style="margin-top:4px;align-items:center;gap:6px">
         <span style="font-size:10px;color:var(--text-muted)">分组：</span>
-        <select class="trail-group-select" data-tid="${tr.id}" style="font-size:10px;padding:2px 6px;border:1px solid var(--line);border-radius:3px;background:var(--bg-0);color:var(--text);cursor:pointer;max-width:120px">
+        <select class="trail-group-select" data-tid="${trailId}" style="font-size:10px;padding:2px 6px;border:1px solid var(--line);border-radius:3px;background:var(--bg-0);color:var(--text);cursor:pointer;max-width:120px">
           ${groupOpts}
           <option value="__new__">＋ 新建组…</option>
         </select>
@@ -1829,7 +1841,7 @@ export function startStudioRuntime(
     trailHdr.className = 'days-summary';
     const totalDays = trail.day_meta && trail.day_meta.length ? trail.day_meta.length : (trail.days || 0);
     trailHdr.innerHTML = `
-      <h3 style="color:${trail.color}">★ ${trail.name}（主轨迹）</h3>
+      <h3 style="color:${sanitizeHexColor(trail.color)}">★ ${escapeUiText(trail.name)}（主轨迹）</h3>
       <div class="days-summary-meta">
         <span>${totalDays || '-'} 天</span>
         <span>${trail.stats && trail.stats.distance_km != null ? trail.stats.distance_km : '-'} km</span>
@@ -1888,14 +1900,14 @@ export function startStudioRuntime(
           <div class="day-hdr" data-toggle>
             <span class="day-tag">D${dm.d}</span>
             <span class="day-head-main">
-              <span class="day-route">${routeText}</span>
+              <span class="day-route">${escapeUiText(routeText)}</span>
               <span class="day-title">${dayKm.toFixed(1)} km · ↑${Math.round(dayAsc)} m · ↓${Math.round(dayDesc)} m</span>
             </span>
             <span class="day-meta">▾</span>
           </div>
           <div class="day-body open">
             <div class="day-seg day-preview-target" data-day-preview="${dm.d}" title="点击高亮当天轨迹">
-              <span class="ic">📍</span><span>${routeText}</span>
+              <span class="ic">📍</span><span>${escapeUiText(routeText)}</span>
             </div>
             <div class="day-stats day-preview-target" data-day-preview="${dm.d}" title="点击高亮当天轨迹">
               <span class="lab">距离</span><span class="val">${dayKm.toFixed(1)} km</span>
@@ -1904,7 +1916,7 @@ export function startStudioRuntime(
               <span class="lab">最高海拔</span><span class="val">${Math.round(dayMax)} m</span>
               <span class="lab">最低海拔</span><span class="val">${Math.round(dayMin)} m</span>
             </div>
-            <div class="day-camp"><span>🏕</span><span>扎营点</span><b>${campName}</b><em>${campElevText}</em></div>
+            <div class="day-camp"><span>🏕</span><span>扎营点</span><b>${escapeUiText(campName)}</b><em>${campElevText}</em></div>
             <div class="wp-list"></div>
             <div class="nearby-waypoint-slot"></div>
             <div class="day-escape-slot"></div>
@@ -1927,7 +1939,7 @@ export function startStudioRuntime(
           item.innerHTML = `
             <div class="wp-icon" style="color:${tagColors[wp.tag] || '#64748b'}">${waypointIconMarkup(wp)}</div>
             <div style="flex:1">
-              <div class="wp-name" style="color:${tagColors[wp.tag]}">${wp.label}</div>
+              <div class="wp-name" style="color:${sanitizeHexColor(tagColors[wp.tag])}">${escapeUiText(wp.label)}</div>
               <div class="wp-meta">km ${wp.km} · ${wp.elev}m · ${t('tag.'+wp.tag) || wp.tag}</div>
             </div>
           `;
@@ -2127,11 +2139,11 @@ export function startStudioRuntime(
           : '';
         const directionTag = `<span class="escape-direction-tag ${direction}">${direction === 'reverse' ? (currentLang === 'zh' ? '反向' : 'Reverse') : (currentLang === 'zh' ? '正向' : 'Forward')}</span>`;
         const delBtn = r._manual
-          ? `<button class="escape-del-btn" data-id="${r.id}" style="float:right;background:transparent;border:none;color:#6b7280;font-size:13px;cursor:pointer;padding:0 2px;line-height:1" title="删除">🗑</button>`
+          ? `<button class="escape-del-btn" data-id="${escapeUiText(r.id)}" style="float:right;background:transparent;border:none;color:#6b7280;font-size:13px;cursor:pointer;padding:0 2px;line-height:1" title="删除">🗑</button>`
           : '';
         item.innerHTML = `
-          <h4>${delBtn}⚡ ${r.name}${dayTag}${directionTag}${crossTag}${manualTag}</h4>
-          <p>${r.desc}</p>
+          <h4>${delBtn}⚡ ${escapeUiText(r.name)}${dayTag}${directionTag}${crossTag}${manualTag}</h4>
+          <p>${escapeUiText(r.desc)}</p>
           <div class="meta">
             <span>📏 沿迹 ${r.distance_km} km</span>
             ${r.straight_km != null ? `<span>↗直线 ${r.straight_km} km</span>` : ''}
@@ -2176,7 +2188,7 @@ export function startStudioRuntime(
         lg.innerHTML = `<h4><span data-i18n="legend.title">多轨迹（主轨迹高亮）</span></h4>` + DATA.trails.filter(t=>isTrailActive(t))
           .map(t=>{
             const isP = t.id === state.primaryTrailId;
-            return `<div class="lg-row" style="opacity:${isP?1:0.6}"><div class="swatch" style="background:${t.color};height:${isP?5:3}px"></div>${isP?'★ ':''}${t.name}</div>`;
+            return `<div class="lg-row" style="opacity:${isP?1:0.6}"><div class="swatch" style="background:${sanitizeHexColor(t.color)};height:${isP?5:3}px"></div>${isP?'★ ':''}${escapeUiText(t.name)}</div>`;
           }).join('');
       }
     } else if(state.mode === 'elev') {
@@ -2442,15 +2454,17 @@ export function startStudioRuntime(
   function renderKmlImportRow(displayLabel, trail) {
     const row = document.createElement('div');
     row.style.cssText = 'border:1px solid var(--line);border-radius:5px;padding:8px;margin-top:6px;background:var(--bg-0)';
+    const trailId = escapeUiText(trail.id);
+    const trailSource = escapeUiText(trail.source || '');
     row.innerHTML = `
-      <div style="color:#5cb85c;font-size:11px;margin-bottom:6px">✓ ${displayLabel} → <b>${trail.name}</b> (${trail.stats.distance_km}km, ↑${trail.stats.ascent_m}m, ${trail.waypoints.length} ${t('add.waypoints') || '标注点'})</div>
+      <div style="color:#5cb85c;font-size:11px;margin-bottom:6px">✓ ${escapeUiText(displayLabel)} → <b>${escapeUiText(trail.name)}</b> (${trail.stats.distance_km}km, ↑${trail.stats.ascent_m}m, ${trail.waypoints.length} ${t('add.waypoints') || '标注点'})</div>
       <div style="display:flex;gap:6px;align-items:center;font-size:11px">
         <span style="color:var(--text-muted);min-width:30px">${t('trail.id')}:</span>
-        <input type="text" class="kml-row-id" data-tid="${trail.id}" value="${trail.id}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px;font-family:monospace">
+        <input type="text" class="kml-row-id" data-tid="${trailId}" value="${trailId}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px;font-family:monospace">
       </div>
       <div style="display:flex;gap:6px;align-items:center;font-size:11px;margin-top:4px">
         <span style="color:var(--text-muted);min-width:30px">🔗:</span>
-        <input type="text" class="kml-row-source" data-tid="${trail.id}" value="${trail.source || ''}" placeholder="${t('add.urlPlaceholder') || 'None'}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px">
+        <input type="text" class="kml-row-source" data-tid="${trailId}" value="${trailSource}" placeholder="${t('add.urlPlaceholder') || 'None'}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px">
       </div>
     `;
     kmlList.appendChild(row);
@@ -2495,7 +2509,7 @@ export function startStudioRuntime(
    */
   async function importSingleKml(f) {
     if(!f.name.toLowerCase().endsWith('.kml')) {
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${f.name}：不是 KML/ZIP 文件</div>`;
+      kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(f.name)}：不是 KML/ZIP 文件</div>`);
       return 'failed';
     }
     const displayLabel = f._fromZip ? `${f._fromZip} → ${f.name}` : f.name;
@@ -2506,13 +2520,13 @@ export function startStudioRuntime(
       const text = await f.text();
       const trail = parseAndProcessKml(text, f.name);
       if(!trail) {
-        kmlList.innerHTML += `<div style="color:#ff8888">❌ ${displayLabel}：未找到轨迹点</div>`;
+        kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(displayLabel)}：未找到轨迹点</div>`);
         return 'failed';
       }
 
       const result = fileImportController.addTrail(trail);
       if(result.status === 'duplicate') {
-        kmlList.innerHTML += `<div style="color:#f59e0b">⚠ ${displayLabel}：与「${result.duplicate.name}」重复，已跳过</div>`;
+        kmlList.insertAdjacentHTML('beforeend', `<div style="color:#f59e0b">⚠ ${escapeUiText(displayLabel)}：与「${escapeUiText(result.duplicate.name)}」重复，已跳过</div>`);
         return 'skipped';
       }
 
@@ -2521,7 +2535,7 @@ export function startStudioRuntime(
       return 'added';
     } catch(err) {
       console.error('[importSingleKml] 处理失败:', displayLabel, err);
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${displayLabel}：${err.message}</div>`;
+      kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(displayLabel)}：${escapeUiText(err.message)}</div>`);
       return 'failed';
     }
   }
@@ -5147,8 +5161,9 @@ export function startStudioRuntime(
   function readWaypointPhoto(file) {
     return new Promise((resolve, reject) => {
       if(!file) { resolve(''); return; }
-      if(!file.type.startsWith('image/')) {
-        reject(new Error(currentLang === 'zh' ? '请选择图片文件' : 'Choose an image file'));
+      const allowedTypes = new Set(['image/png','image/jpeg','image/gif','image/webp','image/avif']);
+      if(!allowedTypes.has(file.type.toLowerCase())) {
+        reject(new Error(currentLang === 'zh' ? '请选择 PNG、JPEG、GIF、WebP 或 AVIF 图片' : 'Choose a PNG, JPEG, GIF, WebP, or AVIF image'));
         return;
       }
       if(file.size > 5 * 1024 * 1024) {
@@ -5590,7 +5605,7 @@ export function startStudioRuntime(
       }).addTo(stitchLayer);
       selectedLine._stitchPartId = part.id;
       selectedLine._stitchRole = 'selection';
-      selectedLine.bindTooltip(`${index + 1}. ${part.trail.name}`, {sticky:true});
+      selectedLine.bindTooltip(`${index + 1}. ${escapeUiText(part.trail.name)}`, {sticky:true});
       selectedLine.on('click', event => {
         if(event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
         stitchState.selectedPartId = part.id;
@@ -5630,7 +5645,7 @@ export function startStudioRuntime(
         marker._stitchEndpoint = label;
         marker._stitchOrder = index;
         marker.setOpacity(isSelected ? 1 : .78);
-        marker.bindTooltip(`${index + 1}${label} · ${part.trail.name}`, {direction:'top', offset:[0,-16]});
+        marker.bindTooltip(`${index + 1}${label} · ${escapeUiText(part.trail.name)}`, {direction:'top', offset:[0,-16]});
         const snapper = createPrimaryTrackDragSnapper(marker, {
           trail:part.trail,
           getCenterIdx:() => stitchPartEndpointIndex(part, label),

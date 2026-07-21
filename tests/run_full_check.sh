@@ -13,14 +13,15 @@ fail(){ echo -e "\033[31m✗\033[0m $*"; exit 1; }
 
 run_python_with_websocket() {
   local script="$1"
+  shift
   if command -v uv >/dev/null 2>&1; then
-    uv run --with websocket-client python3 "$script"
+    uv run --with websocket-client python3 "$script" "$@"
     return
   fi
   python3 -c "import websocket" >/dev/null 2>&1 || {
     python3 -m pip install --quiet websocket-client || fail "无法安装 websocket-client"
   }
-  python3 "$script"
+  python3 "$script" "$@"
 }
 
 echo "═══════════════════════════════════════════════════════════════"
@@ -103,6 +104,19 @@ E2E_LINE=$(grep -E "^结果: [0-9]+/[0-9]+ passed" "$TMP_CHECK_DIR/e2e.log" | ta
 }
 ok "  $E2E_LINE"
 
+# Phase 7: visual layout contracts and screenshot fixtures against the same artifact.
+skip "Phase 7 · 真实 Chrome 视觉回归"
+run_python_with_websocket "$ROOT/tests/visual/capture_workbench.py" "$TMP_CHECK_DIR/visual" > "$TMP_CHECK_DIR/visual.log" 2>&1 || {
+  cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归失败"
+}
+[ -f "$TMP_CHECK_DIR/visual/report.json" ] || {
+  cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归缺少布局报告"
+}
+[ -f "$TMP_CHECK_DIR/visual/workbench-toast.png" ] || {
+  cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归缺少提示条截图"
+}
+ok "  桌面、移动端与核心交互截图通过"
+
 # Final manifest validation stays read-only and verifies the browser-tested bytes.
 node - "$ROOT" <<'NODE'
 const crypto = require('crypto');
@@ -124,5 +138,5 @@ ok "  临时发布、受跟踪发布物与 release.json 完全一致"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo -e "  \033[32m✓ 全部 6 个阶段测试通过\033[0m"
+echo -e "  \033[32m✓ 全部 7 个阶段测试通过\033[0m"
 echo "═══════════════════════════════════════════════════════════════"
