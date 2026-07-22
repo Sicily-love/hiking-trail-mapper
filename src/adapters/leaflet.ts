@@ -28,6 +28,10 @@ export function upsertLeafletPolyline(
 
 import { planKeyedWaypointDiff } from '../core/performance/waypointDiff.ts';
 import type { TrackPolylineRenderModel, TrackRenderModel } from '../features/map/render-model.ts';
+import type {
+  TrackPointInspectionRenderModel,
+  TrackPointInspectionRenderer,
+} from '../features/map/inspection-controller.ts';
 import type { LeafletMarkerRenderModel } from '../features/waypoint/render-model.ts';
 
 interface LeafletEventedLayer {
@@ -41,6 +45,41 @@ interface LeafletRenderApi {
   polyline(latLngs: unknown, style: Record<string, unknown>): LeafletEventedLayer;
   divIcon(options: Record<string, unknown>): unknown;
   marker(position: [number, number], options: Record<string, unknown>): LeafletEventedLayer;
+}
+
+interface LeafletInspectionApi {
+  circleMarker(position: [number, number], options: Record<string, unknown>): {
+    addTo(map: unknown): {
+      bindTooltip(content: string, options: Record<string, unknown>): {
+        openTooltip(): {remove(): void};
+      };
+    };
+  };
+}
+
+export function createLeafletTrackPointInspectionRenderer(options: {
+  leaflet: LeafletInspectionApi;
+  map: unknown;
+}): TrackPointInspectionRenderer {
+  return Object.freeze({
+    show(model: TrackPointInspectionRenderModel) {
+      const marker = options.leaflet.circleMarker(model.position, {
+        radius:7,
+        color:'#fff',
+        weight:2,
+        fillColor:model.fillColor,
+        fillOpacity:1,
+        pane:'tooltipPane',
+      }).addTo(options.map);
+      const visible = marker.bindTooltip(model.tooltipHtml, {
+        permanent:true,
+        direction:'top',
+        offset:[0,-8],
+        className:'measure-tip track-point-inspect-tip',
+      }).openTooltip();
+      return {remove:() => visible.remove()};
+    },
+  });
 }
 
 interface LeafletLayerGroup {

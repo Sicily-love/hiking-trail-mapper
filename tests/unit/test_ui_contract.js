@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '../..');
 const css = fs.readFileSync(path.join(root, 'src/styles/components.css'), 'utf8');
 const studioCss = fs.readFileSync(path.join(root, 'src/styles/studio.css'), 'utf8');
 const ui = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
+const primaryMini = fs.readFileSync(path.join(root, 'src/ui/primary-mini.ts'), 'utf8');
 const { runtimeSource: runtime } = require('./runtime_source');
 const visual = fs.readFileSync(path.join(root, 'tests/visual/capture_workbench.py'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'hiking-trail-mapper.html'), 'utf8');
@@ -80,7 +81,8 @@ T('keyboard focus and reduced-motion states are explicit', () => {
 });
 T('empty primary mini card still cannot cover commands', () => {
   assert.ok(runtime.includes("mini.style.display = hasPrimary ? 'block' : 'none'"));
-  assert.ok(runtime.includes("mini.style.display = 'none';\n      return false;"));
+  assert.ok(primaryMini.includes("element.style.display = 'none';"));
+  assert.ok(primaryMini.includes('element.replaceChildren();'));
 });
 T('visual fixtures cover real Day, measurement, and segmentation states', () => {
   assert.ok(visual.includes('workbench-trail-groups.png'));

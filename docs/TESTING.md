@@ -80,6 +80,7 @@ npm run check:generated
 | `test_command_dialog.js` | 命令注册/状态/dispatch、四类入口接线，以及原生 dialog 安全、焦点、Escape |
 | `test_ui_contract.js` / `test_safe_content.js` | Workbench 响应式布局、无障碍，以及导入文本、URL、图片和颜色安全边界 |
 | `test_floating_panel_controller.js` / `test_toast_controller.js` | 浮动面板边界、拖动位置记忆、重置，以及 Toast 语义、避让、计时和销毁 |
+| `test_lightbox_controller.js` / `test_primary_mini_controller.js` / `test_map_inspection.js` | 图片缩放与监听器清理、主轨迹浮卡边界/持久化、轨迹点 Marker 生命周期 |
 | `test_vite_entry.js` | 小壳、`main.ts`、`bootstrap.ts`、direct runtime 与单文件构建 |
 | `test_release_pipeline.js` | 构建重现、release metadata、版本工具和 GitHub Pages workflow |
 | `verify_alignment.js` | 生成发布物使用 `src/core` 行为且没有恢复重复 core fallback |

@@ -62,12 +62,25 @@ export {
 export { createElevationDockState, toggleElevationDock } from '../features/elevation/controller.ts';
 export {
   createLeafletMarkerRenderer,
+  createLeafletTrackPointInspectionRenderer,
   createLeafletTrackRenderer,
   upsertLeafletPolyline,
   type LeafletMarkerDiffStats,
   type LeafletMarkerRenderer,
   type LeafletTrackRenderer,
 } from '../adapters/leaflet.ts';
+export {
+  createTrackPointInspectionController,
+  formatCoordinate,
+  formatTrackPointCoordinates,
+  type InspectionTrackPoint,
+  type TrackPointInspectionController,
+  type TrackPointInspectionControllerDependencies,
+  type TrackPointInspectionEvent,
+  type TrackPointInspectionRenderModel,
+  type TrackPointInspectionRenderer,
+  type TrackPointInspectionTrail,
+} from '../features/map/inspection-controller.ts';
 export {
   createMapRenderController,
   buildTrackRenderModel,
@@ -184,6 +197,19 @@ export {
   type ContentDialogSize,
   type ContentTone,
 } from '../ui/dialog/index.ts';
+export {
+  createImageLightboxController,
+  type ImageLightboxController,
+  type ImageLightboxDependencies,
+  type ImageLightboxViewport,
+} from '../ui/lightbox.ts';
+export {
+  createPrimaryMiniController,
+  type PrimaryMiniController,
+  type PrimaryMiniControllerDependencies,
+  type PrimaryMiniStorage,
+  type PrimaryMiniTrail,
+} from '../ui/primary-mini.ts';
 export {
   TRANSLATIONS,
   resolveLocalizationLanguage,

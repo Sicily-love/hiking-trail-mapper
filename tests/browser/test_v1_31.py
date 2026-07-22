@@ -464,9 +464,10 @@ try:
     check("缓存恢复跳过全轨迹预定位并暴露可等待启动状态",
           source_has('rebuildAll({fit: !restored})') and evalj("window.__HTM_BOOT_READY__ instanceof Promise"))
     check("主轨迹浮动小卡支持拖动并记忆位置",
-          evalj("bindPrimaryMiniDrag.toString().includes('pointerdown') && bindPrimaryMiniDrag.toString().includes('localStorage') || (bindPrimaryMiniDrag.toString().includes('pointerdown') && savePrimaryMiniPosition.toString().includes('localStorage'))"))
+          evalj("typeof primaryMiniController === 'object' && typeof primaryMiniController.savePosition === 'function' && primaryMiniController.storageKey === 'hiking_primary_mini_pos'"))
     check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
-          source_has('function schedulePrimaryMiniPositionApply', 'setTimeout', 'function toggleSidebar', 'schedulePrimaryMiniPositionApply'))
+          evalj("typeof primaryMiniController.schedulePositionApply === 'function'")
+          and source_has('function toggleSidebar', 'schedulePrimaryMiniPositionApply'))
     check("地图标注点显示分段 D 天数",
           evalj("""
             (() => {

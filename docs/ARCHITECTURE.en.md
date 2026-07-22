@@ -61,6 +61,8 @@ Trail, storage, file import/export, project archive/history runtime, waypoint, m
 - the IndexedDB adapter owns transactions and snapshots;
 - file/browser adapters own ZIP, Blob, ObjectURL, save-picker, and export-Canvas effects.
 
+`ui/` controllers own the Lightbox zoom/drag/touch lifecycle and the collapsed-sidebar primary card. `features/map/inspection-controller.ts` produces transient track-point inspection models, while the Leaflet adapter creates and removes their markers. `studio.ts` no longer retains these listeners, timers, or position state.
+
 ### Direct Runtime
 
 `src/app/runtime/studio.ts` centralizes mature orchestration that still shares DOM and Leaflet instances. It currently uses `@ts-nocheck`, but starts directly through explicit parameters and calls typed core, controller, adapter, and UI APIs. New domain logic must not enter this boundary, and deleted feature runtime owners must not return.

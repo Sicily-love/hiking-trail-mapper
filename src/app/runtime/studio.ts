@@ -698,6 +698,12 @@ export function startStudioRuntime(
 
   /* ============ Tooltip ============ */
   const tooltipEl = document.getElementById('tooltip');
+  const formatCoordinate = HTM_APP.formatCoordinate;
+  const formatTrackPointCoordinates = HTM_APP.formatTrackPointCoordinates;
+  const trackPointInspector = HTM_APP.createTrackPointInspectionController({
+    renderer:HTM_APP.createLeafletTrackPointInspectionRenderer({leaflet:L, map}),
+    nearestIndex:(track, lat, lng) => nearestTrackIdx(track, lat, lng),
+  });
 
   /* ============ Waypoint Photo Hover ============ */
   const wpPhotoEl = document.getElementById('wp-photo-tip');
@@ -779,41 +785,8 @@ export function startStudioRuntime(
   }
   function hideTooltip() { tooltipEl.style.display = 'none'; }
 
-  let trackPointInspectMarker = null;
-  function formatCoordinate(value) {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric.toFixed(6) : '-';
-  }
-  function formatTrackPointCoordinates(point) {
-    return `${formatCoordinate(point && point[0])}, ${formatCoordinate(point && point[1])}`;
-  }
   function inspectTrackPoint(event, trail) {
-    if(!trail || !trail.track || !trail.track.length || !event || !event.latlng) return;
-    const index = nearestTrackIdx(trail.track, event.latlng.lat, event.latlng.lng);
-    const point = trail.track[index];
-    if(!point) return;
-    if(trackPointInspectMarker) {
-      clearTimeout(trackPointInspectMarker._autoRemove);
-      trackPointInspectMarker.remove();
-    }
-    const content = `
-      <b>${point[3] != null ? point[3] + ' km · ' : ''}${Math.round(point[2] || 0)} m</b><br>
-      <span class="track-point-coordinate">${formatTrackPointCoordinates(point)}</span>
-    `;
-    trackPointInspectMarker = L.circleMarker([point[0], point[1]], {
-      radius:7, color:'#fff', weight:2, fillColor:trail.color || '#F59E0B', fillOpacity:1,
-      pane:'tooltipPane',
-    }).addTo(map);
-    trackPointInspectMarker
-      .bindTooltip(content, {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip track-point-inspect-tip'})
-      .openTooltip();
-    clearTimeout(trackPointInspectMarker._autoRemove);
-    trackPointInspectMarker._autoRemove = setTimeout(() => {
-      if(trackPointInspectMarker) {
-        trackPointInspectMarker.remove();
-        trackPointInspectMarker = null;
-      }
-    }, 8000);
+    return trackPointInspector.inspect(event, trail);
   }
   /* ============ Escape ============ */
   const escapeController = HTM_APP.createEscapeController(runtimeContext, {
@@ -914,135 +887,23 @@ export function startStudioRuntime(
     buildPrimaryMini();
   }
 
-  const PRIMARY_MINI_POS_KEY = 'hiking_primary_mini_pos';
-
-  function clampPrimaryMiniPosition(mini, left, top) {
-    const mapEl = document.getElementById('map');
-    if(!mapEl) return { left, top };
-    const mapRect = mapEl.getBoundingClientRect();
-    const miniRect = mini.getBoundingClientRect();
-    const w = miniRect.width || 240;
-    const h = miniRect.height || 92;
-    const margin = 8;
-    const maxLeft = Math.max(margin, mapRect.width - w - margin);
-    const maxTop = Math.max(margin, mapRect.height - h - margin);
-    return {
-      left: Math.min(Math.max(margin, left), maxLeft),
-      top: Math.min(Math.max(margin, top), maxTop),
-    };
-  }
-
-  function applyPrimaryMiniPosition(mini) {
-    if(!mini) return;
-    try {
-      const raw = localStorage.getItem(PRIMARY_MINI_POS_KEY);
-      if(!raw) return;
-      const pos = JSON.parse(raw);
-      if(!pos || !isFinite(pos.left) || !isFinite(pos.top)) return;
-      const p = clampPrimaryMiniPosition(mini, pos.left, pos.top);
-      mini.style.left = p.left + 'px';
-      mini.style.top = p.top + 'px';
-      mini.style.right = 'auto';
-    } catch(e) {}
-  }
-
-  function schedulePrimaryMiniPositionApply(mini) {
-    if(!mini) return;
-    requestAnimationFrame(() => applyPrimaryMiniPosition(mini));
-    setTimeout(() => applyPrimaryMiniPosition(mini), 280);
-    setTimeout(() => applyPrimaryMiniPosition(mini), 360);
-  }
-
-  function savePrimaryMiniPosition(mini) {
-    const mapEl = document.getElementById('map');
-    if(!mini || !mapEl) return;
-    const mapRect = mapEl.getBoundingClientRect();
-    const miniRect = mini.getBoundingClientRect();
-    try {
-      localStorage.setItem(PRIMARY_MINI_POS_KEY, JSON.stringify({
-        left: Math.round(miniRect.left - mapRect.left),
-        top: Math.round(miniRect.top - mapRect.top),
-      }));
-    } catch(e) {}
-  }
-
-  function bindPrimaryMiniDrag(mini) {
-    if(!mini || mini._dragBound) return;
-    mini._dragBound = true;
-    let drag = null;
-
-    mini.addEventListener('pointerdown', e => {
-      if(e.button !== undefined && e.button !== 0) return;
-      const mapEl = document.getElementById('map');
-      if(!mapEl) return;
-      const mapRect = mapEl.getBoundingClientRect();
-      const miniRect = mini.getBoundingClientRect();
-      drag = {
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-        left: miniRect.left - mapRect.left,
-        top: miniRect.top - mapRect.top,
-        moved: false,
-      };
-      mini.setPointerCapture && mini.setPointerCapture(e.pointerId);
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    mini.addEventListener('pointermove', e => {
-      if(!drag || e.pointerId !== drag.id) return;
-      const dx = e.clientX - drag.x;
-      const dy = e.clientY - drag.y;
-      if(!drag.moved && Math.hypot(dx, dy) < 4) return;
-      drag.moved = true;
-      mini.classList.add('dragging');
-      const p = clampPrimaryMiniPosition(mini, drag.left + dx, drag.top + dy);
-      mini.style.left = p.left + 'px';
-      mini.style.top = p.top + 'px';
-      mini.style.right = 'auto';
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    const finish = (e, cancelled = false) => {
-      if(!drag || e.pointerId !== drag.id) return;
-      const moved = drag.moved;
-      drag = null;
-      mini.classList.remove('dragging');
-      try { mini.releasePointerCapture && mini.releasePointerCapture(e.pointerId); } catch(err) {}
-      e.preventDefault();
-      e.stopPropagation();
-      if(moved) savePrimaryMiniPosition(mini);
-      else if(!cancelled && typeof toggleSidebar === 'function') toggleSidebar(true);
-    };
-    mini.addEventListener('pointerup', e => finish(e, false));
-    mini.addEventListener('pointercancel', e => finish(e, true));
-  }
-
-  function buildPrimaryMini() {
-    const mini = document.getElementById('primary-mini');
-    if(!mini) return false;
-    const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
-    if(!main) {
-      mini.innerHTML = '';
-      mini.style.display = 'none';
-      return false;
-    }
-    mini.title = t('mini.openSidebar') + ' / 拖动可移动';
-    mini.innerHTML = `
-      <div style="font-size:9px;color:#7A6E54;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:4px">${t('mini.primary')}</div>
-      <div style="font-size:13px;font-weight:600;color:#1F2A1C;line-height:1.3;margin-bottom:6px;font-family:var(--serif)">${escapeUiText(main.name)}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 8px;font-size:10px;color:#3F5238">
-        <div><b style="font-size:13px;color:#1F2A1C;font-family:var(--serif)">${main.stats.distance_km}</b> ${t('mini.km')}</div>
-        <div><b style="font-size:13px;color:#1F2A1C;font-family:var(--serif)">${main.stats.ascent_m}</b> ${t('mini.ascent')}</div>
-        <div><b style="font-size:13px;color:#1F2A1C;font-family:var(--serif)">${main.stats.max_elev}</b> ${t('mini.peak')}</div>
-      </div>
-    `;
-    applyPrimaryMiniPosition(mini);
-    bindPrimaryMiniDrag(mini);
-    return true;
-  }
+  const primaryMiniController = HTM_APP.createPrimaryMiniController({
+    element:document.getElementById('primary-mini'),
+    mapElement:document.getElementById('map'),
+    storage:window.localStorage,
+    getTrail:() => state.activeGroup == null ? null : DATA.trails.find(trail => trail.id === state.primaryTrailId) || null,
+    translate:t,
+    escapeText:escapeUiText,
+    dragHint:() => currentLang === 'zh' ? '拖动可移动' : 'Drag to move',
+    openSidebar:() => toggleSidebar(true),
+  });
+  const PRIMARY_MINI_POS_KEY = primaryMiniController.storageKey;
+  function clampPrimaryMiniPosition(_mini, left, top) { return primaryMiniController.clamp(left, top); }
+  function applyPrimaryMiniPosition() { primaryMiniController.applyPosition(); }
+  function schedulePrimaryMiniPositionApply() { primaryMiniController.schedulePositionApply(); }
+  function savePrimaryMiniPosition() { primaryMiniController.savePosition(); }
+  function bindPrimaryMiniDrag() { return primaryMiniController; }
+  function buildPrimaryMini() { return primaryMiniController.render(); }
 
   const floatingPanelController = createFloatingPanelPositionController({
     document,
@@ -2482,134 +2343,11 @@ export function startStudioRuntime(
   const lightboxEl = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightbox-img');
   const lightboxCap = document.getElementById('lightbox-caption');
-
-  // ── Lightbox 内置缩放/拖动状态 ──
-  const lbState = { scale: 1, tx: 0, ty: 0, startDist: 0, startScale: 1, startTx: 0, startTy: 0, startCx: 0, startCy: 0, dragging: false, pinching: false };
-
-  function lbApply() {
-    lightboxImg.style.transform = `translate(${lbState.tx}px,${lbState.ty}px) scale(${lbState.scale})`;
-  }
-  function lbReset() {
-    lbState.scale = 1; lbState.tx = 0; lbState.ty = 0;
-    lightboxImg.style.transition = 'transform 0.2s ease-out';
-    lbApply();
-    setTimeout(() => { lightboxImg.style.transition = 'transform 0.15s ease-out'; }, 220);
-  }
-
-  function openLightbox(src, caption) {
-    lightboxImg.src = decodeURIComponent(src);
-    lightboxCap.textContent = decodeURIComponent(caption || '');
-    lightboxEl.style.display = 'flex';
-    lbReset();
-  }
-  function closeLightbox() {
-    lightboxEl.style.display = 'none';
-    lbReset();
-    // 兜底：如果 visual viewport 被意外缩放（旧版浏览器），强制滚回顶部
-    try {
-      if(window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.01) {
-        window.scrollTo({top: 0, left: 0, behavior: 'instant'});
-        // iOS Safari: 通过给 body 加 zoom hack 强制重置
-        document.body.style.zoom = 1;
-      }
-    } catch(e) {}
-  }
-
-  // 点击背景关闭，但不要在拖拽/缩放后误关
-  lightboxEl.addEventListener('click', e => {
-    if(e.target === lightboxImg) return;     // 点图本身不关
-    if(lbState.dragging || lbState.pinching) return;
-    closeLightbox();
+  const lightboxController = HTM_APP.createImageLightboxController({
+    document, viewport:window, container:lightboxEl, image:lightboxImg, caption:lightboxCap,
   });
-  // 双击图片 → 切换 1x / 2.5x
-  // 禁止 lightbox 内容被选中（双击放大时浏览器会选中元素）
-  lightboxEl.addEventListener('selectstart', e => e.preventDefault());
-  lightboxEl.addEventListener('mousedown', e => { if(e.detail >= 2) e.preventDefault(); }); // 双击时阻止选中
-
-  lightboxImg.addEventListener('dblclick', e => {
-    e.preventDefault(); e.stopPropagation();
-    if(lbState.scale > 1.05) lbReset();
-    else { lbState.scale = 2.5; lbApply(); }
-  });
-
-  // 滚轮缩放（桌面）
-  lightboxEl.addEventListener('wheel', e => {
-    e.preventDefault();
-    const delta = -e.deltaY * 0.002;
-    const newScale = Math.max(1, Math.min(6, lbState.scale * (1 + delta)));
-    lbState.scale = newScale;
-    if(newScale === 1) { lbState.tx = 0; lbState.ty = 0; }
-    lbApply();
-  }, {passive: false});
-
-  // 鼠标拖动（缩放后才能拖）
-  let lbMouseDown = false;
-  lightboxImg.addEventListener('mousedown', e => {
-    if(lbState.scale <= 1.05) return;
-    e.preventDefault();
-    lbMouseDown = true;
-    lbState.startCx = e.clientX; lbState.startCy = e.clientY;
-    lbState.startTx = lbState.tx; lbState.startTy = lbState.ty;
-    lightboxImg.style.transition = 'none';
-  });
-  window.addEventListener('mousemove', e => {
-    if(!lbMouseDown) return;
-    lbState.tx = lbState.startTx + (e.clientX - lbState.startCx);
-    lbState.ty = lbState.startTy + (e.clientY - lbState.startCy);
-    lbApply();
-  });
-  window.addEventListener('mouseup', () => {
-    if(lbMouseDown) { lbMouseDown = false; lightboxImg.style.transition = 'transform 0.15s ease-out'; }
-  });
-
-  // ── 触摸：pinch zoom + pan，阻止页面级缩放 ──
-  function lbTouchDist(t1, t2) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
-  function lbTouchCenter(t1, t2) { return { x: (t1.clientX + t2.clientX)/2, y: (t1.clientY + t2.clientY)/2 }; }
-
-  lightboxEl.addEventListener('touchstart', e => {
-    e.preventDefault(); // 阻断页面级 pinch
-    if(e.touches.length === 2) {
-      lbState.pinching = true;
-      lbState.startDist = lbTouchDist(e.touches[0], e.touches[1]);
-      lbState.startScale = lbState.scale;
-      const c = lbTouchCenter(e.touches[0], e.touches[1]);
-      lbState.startCx = c.x; lbState.startCy = c.y;
-      lbState.startTx = lbState.tx; lbState.startTy = lbState.ty;
-      lightboxImg.style.transition = 'none';
-    } else if(e.touches.length === 1 && lbState.scale > 1.05) {
-      lbState.dragging = true;
-      lbState.startCx = e.touches[0].clientX; lbState.startCy = e.touches[0].clientY;
-      lbState.startTx = lbState.tx; lbState.startTy = lbState.ty;
-      lightboxImg.style.transition = 'none';
-    }
-  }, {passive: false});
-
-  lightboxEl.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if(e.touches.length === 2 && lbState.pinching) {
-      const dist = lbTouchDist(e.touches[0], e.touches[1]);
-      const newScale = Math.max(1, Math.min(6, lbState.startScale * (dist / lbState.startDist)));
-      lbState.scale = newScale;
-      lbApply();
-    } else if(e.touches.length === 1 && lbState.dragging) {
-      lbState.tx = lbState.startTx + (e.touches[0].clientX - lbState.startCx);
-      lbState.ty = lbState.startTy + (e.touches[0].clientY - lbState.startCy);
-      lbApply();
-    }
-  }, {passive: false});
-
-  lightboxEl.addEventListener('touchend', e => {
-    if(e.touches.length === 0) {
-      setTimeout(() => { lbState.pinching = false; lbState.dragging = false; }, 50);
-      lightboxImg.style.transition = 'transform 0.15s ease-out';
-      if(lbState.scale < 1.02) { lbState.scale = 1; lbState.tx = 0; lbState.ty = 0; lbApply(); }
-    }
-  }, {passive: false});
-
-  // 阻止 iOS Safari 的 gesturestart 触发页面级缩放
-  lightboxEl.addEventListener('gesturestart', e => e.preventDefault());
-  lightboxEl.addEventListener('gesturechange', e => e.preventDefault());
-  lightboxEl.addEventListener('gestureend', e => e.preventDefault());
+  const openLightbox = (src, caption) => lightboxController.open(src, caption);
+  const closeLightbox = () => lightboxController.close();
   /* ============ 测距功能（主轨迹上选两点 → 爬升/下降/里程） ============ */
   const measureController = HTM_APP.createMeasureController();
   const measureState = measureController.state;
@@ -6337,6 +6075,7 @@ export function startStudioRuntime(
       "pointFromTrackIndex": {enumerable:true, get:() => pointFromTrackIndex},
       "postImportFinalize": {enumerable:true, get:() => postImportFinalize},
       "primaryTrailIdForGroup": {enumerable:true, get:() => primaryTrailIdForGroup},
+      "primaryMiniController": {enumerable:true, get:() => primaryMiniController},
       "processTrack": {enumerable:true, get:() => processTrack},
       "projectArchiveController": {enumerable:true, get:() => projectArchiveController},
       "projectHistoryController": {enumerable:true, get:() => projectHistoryController},

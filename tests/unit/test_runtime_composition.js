@@ -61,7 +61,7 @@ test('runtime has no fragment slots or dynamic script execution', () => {
 test('all browser capabilities remain present exactly once', () => {
   for(const functionName of [
     'handleFiles', 'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow',
-    'drawElevBar', 'setLang', 'openLightbox', 'beginRuntimeInteraction',
+    'drawElevBar', 'setLang', 'beginRuntimeInteraction',
     'buildTrailList', 'showDaySegmentPreview', 'measureEnter', 'addEscapeEnter',
     'segmentEnter', 'resetView', 'addManualWaypointAt',
   ]) {
@@ -71,6 +71,11 @@ test('all browser capabilities remain present exactly once', () => {
       functionName,
     );
   }
+  const lightbox = read('src/ui/lightbox.ts');
+  assert.match(runtimeSource, /createImageLightboxController\(/);
+  assert.match(runtimeSource, /const openLightbox = .*lightboxController\.open/);
+  assert.match(lightbox, /container\.addEventListener\('touchstart'/);
+  assert.doesNotMatch(runtimeSource, /lightboxEl\.addEventListener/);
 });
 
 console.log(`\nResult: ${passed}/${passed + failed} passed`);

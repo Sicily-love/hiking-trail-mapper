@@ -61,6 +61,8 @@ trail、storage、file import/export、project archive/history runtime、waypoin
 - IndexedDB adapter 负责事务与 snapshot；
 - file/browser adapter 负责 ZIP、Blob、ObjectURL、保存选择器和导出画布。
 
+Lightbox 的缩放/拖动/触摸生命周期与侧栏收起后的主轨迹浮卡由 `ui/` controller 持有；轨迹点临时检查由 `features/map/inspection-controller.ts` 产生 render model，再交给 Leaflet adapter 创建和销毁 Marker。`studio.ts` 不再持有这些 listener、timer 或位置状态。
+
 ### Direct Runtime
 
 `src/app/runtime/studio.ts` 集中仍需共享 DOM 与 Leaflet 实例的成熟编排。它目前使用 `@ts-nocheck`，但通过显式参数直接启动，并调用 typed core、controller、adapter 和 UI API。新增领域逻辑不得写入该边界，也不得恢复已删除的功能 runtime owner。
