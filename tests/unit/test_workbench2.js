@@ -100,7 +100,10 @@ test('icon helper renders against a supplied pure DOM document', () => {
 test('top toolbar keeps only multi-command menus and flattens direct commands', () => {
   const expectedLabels = ['Edit', 'Plan'];
   const expectedZhLabels = ['编辑', '规划'];
-  const expectedMenuCommands = ['reverse-btn', 'stitch-btn', 'clear-btn', 'segment-btn', 'add-escape-btn'];
+  const expectedMenuCommands = [
+    'undo-btn', 'redo-btn', 'reverse-btn', 'stitch-btn', 'clear-btn',
+    'segment-btn', 'add-escape-btn',
+  ];
   const expectedDirect = [
     'add-trail-btn', 'measure-btn', 'add-waypoint-btn', 'export-btn',
     'reset-btn', 'help-btn', 'lang-btn',

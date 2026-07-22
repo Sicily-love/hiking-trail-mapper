@@ -62,7 +62,7 @@ npm run check:generated
 | `test_math.js` / `test_enrich.js` | 距离、海拔、统计、标注吸附与内容 hash |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` 出口、KML 坐标、`gx:Track`、waypoint 和 import model |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshot、事务提交、Set 序列化、每组主轨迹和 legacy 恢复 |
-| `test_project_archive.js` | schema v1 往返、输入预算、危险键、完整工作区恢复和 typed controller 边界 |
+| `test_project_archive.js` / `test_project_history.js` | schema 迁移、输入预算、恢复回滚，以及历史分支、边界和撤销/重做 |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | typed 存储、导入、标注点 controller 与 direct runtime 边界 |
 | `test_file_export_controller.js` | KML/Markdown 模型、ZIP/Blob adapter、导出 controller 与 direct DOM 边界 |
 | `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 direct runtime 边界 |
@@ -70,7 +70,7 @@ npm run check:generated
 | `test_day_preview_controller.js` | typed Day 预览计划、选择生命周期和 core/runtime 边界 |
 | `test_escape_controller.js` | 下撤 A/B 吸附、正反向统计、抽稀、提交/删除和 direct runtime 边界 |
 | `test_measure_itinerary.js` | A/B 测距、分段、Day 范围、海拔布局和 render model |
-| `test_performance_core.js` | 海拔分段、Canvas min/max 抽稀、waypoint diff 与 track revision |
+| `test_performance_core.js` | 海拔分段、Canvas min/max 抽稀、waypoint diff、track revision、触摸命中与复位计划 |
 | `test_app_architecture.js` | app state、feature controller、adapter 与 Workbench fit 计划 |
 | `test_runtime_composition.js` | direct runtime 启动契约，以及 raw/composer/旧 owner 缺失断言 |
 | `test_interaction_manager.js` | 会话互斥、owner/session guard、AbortController、timer/RAF 清理 |
@@ -121,6 +121,8 @@ npm run check:generated
 - dialog 的取消、确认、Escape 和焦点恢复；
 - 生成 HTML 在 `file://` 下无运行时错误。
 - 完整项目恢复先校验并确认，保留 Day/标注/下撤数据，且只请求一次最终复位。
+- schema 1 备份迁移到 schema 2；撤销/重做按钮、快捷键、分支清空和失败回滚行为一致。
+- 触摸点击抖动阈值、44px 拖点命中区和自适应复位动画在真实浏览器中保持可用。
 
 ### Phase 6：端到端流程
 

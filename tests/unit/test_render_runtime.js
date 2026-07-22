@@ -111,9 +111,10 @@ test('FIT is last-request-wins and reset is epoch guarded', () => {
   assert.ok(fit.includes('pendingWorkspaceFit.resolve(false)'));
   assert.ok(reset.includes('gesture:Boolean(opts.gesture)'));
   assert.strictEqual(execute.includes('map.flyToBounds'), false);
-  assert.ok(execute.includes('duration:0.28'));
+  assert.ok(execute.includes('HTM_CORE.planResetTransition'));
+  assert.ok(execute.includes('reducedMotion:prefersReducedMotion'));
   assert.ok(execute.includes('request.closeOverlay'));
-  assert.ok(execute.includes('animate:false'));
+  assert.ok(execute.includes('targetZoom'));
   assert.strictEqual((execute.match(/applyFit\(\)/g) || []).length, 2);
   assert.ok(reset.includes('if(stateChanged)'));
   assert.ok(reset.includes('cachedTrailBounds(main)'));

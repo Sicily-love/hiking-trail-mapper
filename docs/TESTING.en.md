@@ -62,7 +62,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_math.js` / `test_enrich.js` | Distance, elevation, stats, waypoint snapping, and content hashes |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` exports, KML coordinates, `gx:Track`, waypoints, and import models |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshots and commit timing, Set serialization, per-group primary trails, and legacy restore |
-| `test_project_archive.js` | Schema-v1 round trips, input budgets, dangerous keys, complete workspace restore, and typed-controller boundaries |
+| `test_project_archive.js` / `test_project_history.js` | Schema migration, input budgets, restore rollback, history branching/bounds, and Undo/Redo |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | Typed storage, import, waypoint controllers, and direct-runtime boundaries |
 | `test_file_export_controller.js` | KML/Markdown models, ZIP/Blob adapters, export controller, and direct DOM boundary |
 | `test_measure_controller.js` | Typed measurement session, drag suppression, compute invalidation, and direct-runtime boundary |
@@ -70,7 +70,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_day_preview_controller.js` | Typed Day-preview planning, selection lifecycle, and core/runtime boundary |
 | `test_escape_controller.js` | Escape A/B snapping, direction-aware stats, thinning, commit/delete, and direct-runtime boundary |
 | `test_measure_itinerary.js` | A/B measurement, segmentation, Day ranges, elevation layout, and render models |
-| `test_performance_core.js` | Elevation segmentation, Canvas min/max downsampling, waypoint diffs, and track revisions |
+| `test_performance_core.js` | Elevation segmentation, Canvas min/max downsampling, waypoint diffs, track revisions, touch targets, and reset planning |
 | `test_app_architecture.js` | App state, feature controllers, adapters, and Workbench fit planning |
 | `test_runtime_composition.js` | Direct-runtime startup contract and rejection of raw/composer/deleted-owner paths |
 | `test_interaction_manager.js` | Session exclusivity, owner/session guards, AbortController, and timer/RAF cleanup |
@@ -121,6 +121,8 @@ Key coverage:
 - dialog cancel, confirm, Escape, and focus restoration;
 - generated HTML has no runtime errors over `file://`.
 - complete project restore validates and confirms first, preserves Day/waypoint/escape data, and requests one final reset.
+- schema 1 backups migrate to schema 2; Undo/Redo buttons, shortcuts, branching, and failed-edit rollback agree.
+- touch-jitter policy, 44px drag targets, and adaptive reset transitions remain usable in a real browser.
 
 ### Phase 6: End-to-End Workflows
 

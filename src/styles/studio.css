@@ -1256,6 +1256,13 @@ html[data-workbench='2'] #stitch-panel .tool-panel-footer {
   transition:transform .14s ease,box-shadow .14s ease,filter .14s ease;
 }
 
+.measure-marker-icon,
+.segment-marker {
+  display:grid !important;
+  place-items:center;
+  touch-action:none;
+}
+
 .stitch-endpoint-marker.is-active {
   --stitch-marker-scale:1.12;
   box-shadow:0 0 0 3px rgba(255,255,255,.82),0 5px 16px rgba(18,35,25,.58);

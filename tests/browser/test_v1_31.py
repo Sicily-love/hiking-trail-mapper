@@ -368,6 +368,8 @@ try:
           evalj("typeof fileExportController === 'object' && typeof fileExportController.exportGroupKml === 'function' && typeof fileExportController.exportItineraryMarkdown === 'function'"))
     check("typed ProjectArchiveController 已接管完整项目备份与恢复",
           evalj("typeof projectArchiveController === 'object' && typeof projectArchiveController.exportProject === 'function' && typeof projectArchiveController.parse === 'function' && typeof projectArchiveController.restore === 'function'"))
+    check("typed ProjectHistoryController 已接管撤销与重做",
+          evalj("typeof projectHistoryController === 'object' && typeof projectHistoryController.undo === 'function' && typeof projectHistoryController.redo === 'function'"))
     check("完整项目恢复入口已进入添加轨迹窗口",
           evalj("!!document.getElementById('project-restore-btn') && document.getElementById('project-file')?.accept.includes('.ors-project.json')"))
 
@@ -849,9 +851,10 @@ try:
           appVersion:APP_VERSION,
           exportedAt:'2026-07-21T12:00:00.000Z',
         });
+        const legacyArchive = {...archive, schemaVersion:1};
         const beforeFit = renderRuntimeStats.fit.requested;
         const pending = restoreProjectFile(new File(
-          [HTM_CORE.serializeProjectArchive(archive)],
+          [JSON.stringify(legacyArchive)],
           'browser.ors-project.json',
           {type:'application/json'},
         ));
@@ -859,7 +862,8 @@ try:
         const dialog = document.querySelector('dialog.workbench-dialog[open]');
         const confirmationReady = !!dialog
           && dialog.textContent.includes('Browser archive restored')
-          && dialog.textContent.includes(`${archive.project.trails.length} 条轨迹`);
+          && dialog.textContent.includes(`${archive.project.trails.length} 条轨迹`)
+          && dialog.textContent.includes('schema 1');
         dialog?.querySelector('.workbench-dialog__button--danger,.workbench-dialog__button--primary')?.click();
         const restored = await pending;
         await new Promise(resolve => setTimeout(resolve, 650));
@@ -904,6 +908,34 @@ try:
     check("项目恢复只请求一次最终视图复位",
           isinstance(project_archive_flow, dict) and project_archive_flow.get('fitDelta') == 1,
           str(project_archive_flow))
+
+    project_history_flow = evalj("""
+      (() => {
+        const trail = DATA.trails[0];
+        if(!trail) return {error:'missing trail'};
+        const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
+        const original = trail.name;
+        projectHistoryController.clear();
+        projectHistoryController.execute('Browser rename', () => { trail.name = 'History renamed'; });
+        const changed = DATA.trails[0].name === 'History renamed';
+        const undoEnabled = registry.isEnabled('edit.undo');
+        registry.dispatch('edit.undo');
+        const undone = DATA.trails[0].name === original;
+        const redoEnabled = registry.isEnabled('edit.redo');
+        registry.dispatch('edit.redo');
+        const redone = DATA.trails[0].name === 'History renamed';
+        registry.dispatch('edit.undo');
+        projectHistoryController.clear();
+        return {changed, undoEnabled, undone, redoEnabled, redone};
+      })()
+    """)
+    check("真实命令链可撤销、重做并恢复原项目",
+          isinstance(project_history_flow, dict)
+          and all(project_history_flow.get(key) is True for key in
+                  ('changed', 'undoEnabled', 'undone', 'redoEnabled', 'redone')),
+          str(project_history_flow))
+    check("触摸命中与低成本复位策略进入真实浏览器构建",
+          evalj("HTM_CORE.interactionHitTargetSize('touch') === 44 && HTM_CORE.interactionHitTargetSize('mouse') === 24 && HTM_CORE.planResetTransition({reason:'gesture', zoomDelta:8, reduceMotion:false}).animate === false"))
 
     stitch_flow = evalj("""
       (async () => {

@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.2.0',
+    date: '2026-07-21',
+    items: {
+      zh: ['项目归档升级至 schema 2，旧 schema 1 备份可自动迁移，恢复失败时自动回滚。', '新增项目级撤销与重做，覆盖轨迹、行程分段、标注、下撤与拼接等持久化编辑。', '继续拆分项目归档、恢复 UI 与历史编排，runtime 仅保留浏览器接线。', '优化触摸拖点命中、点击判定和复位动画，降低移动端误触与大跨度复位卡顿。'],
+      en: ['Upgraded project archives to schema 2 with automatic schema 1 migration and rollback after failed restores.', 'Added project-level undo and redo for durable trail, itinerary, waypoint, escape-route, and stitching edits.', 'Moved archive, restore UI, and history orchestration out of runtime into typed project features.', 'Improved touch hit targets, tap detection, and reset transitions to reduce mobile misfires and expensive reset animation.'],
+    },
+  },
+  {
     version: 'v2.1.0',
     date: '2026-07-21',
     items: {

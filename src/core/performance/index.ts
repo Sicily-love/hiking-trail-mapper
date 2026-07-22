@@ -47,3 +47,17 @@ export type {
   TrackRevision,
   TrackRevisionResult,
 } from './trackRevision.ts';
+
+export {
+  interactionHitTargetSize,
+  isPointerTap,
+  planResetTransition,
+  pointerTapThreshold,
+} from './interaction.ts';
+
+export type {
+  PointerTapSample,
+  ResetTransitionInput,
+  ResetTransitionPlan,
+  StudioPointerType,
+} from './interaction.ts';

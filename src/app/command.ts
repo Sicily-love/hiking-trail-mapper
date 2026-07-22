@@ -27,6 +27,8 @@ export const STUDIO_COMMANDS = Object.freeze({
   FILE_IMPORT: 'file.import',
   FILE_EXPORT: 'file.export',
   PROJECT_CLEAR: 'project.clear',
+  EDIT_UNDO: 'edit.undo',
+  EDIT_REDO: 'edit.redo',
   TRAIL_REVERSE: 'trail.reverse',
   TRAIL_STITCH: 'trail.stitch',
   MEASURE_TOGGLE: 'measure.toggle',

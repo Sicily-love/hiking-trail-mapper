@@ -42,11 +42,11 @@ src/
 
 ### Core
 
-`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, downsampling, marker diffs, revisions, and versioned project archives do not depend on the DOM, Leaflet, or storage handles. `projectArchive.ts` owns `schemaVersion`, input budgets, validation, and the future migration entrypoint.
+`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, pointer policy, reset-transition planning, downsampling, marker diffs, revisions, and versioned project archives do not depend on the DOM, Leaflet, or storage handles. `projectArchive.ts` owns the schema migration chain, input budgets, and validation.
 
 ### App
 
-`AppStateStore` owns persistent application-state writes. Mutations use discriminated commands and emit revisioned events. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands.
+`AppStateStore` owns persistent application-state writes. Mutations use discriminated commands and emit revisioned events. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands. `ProjectHistoryController` implements bounded Undo/Redo with versioned project snapshots and rolls back failed edits.
 
 `InteractionManager` unifies the `select -> preview -> dragging -> commit` lifecycle for measure, segment, waypoint, escape, and Day preview. It cancels stale sessions, timers, RAF callbacks, and asynchronous work.
 
@@ -54,7 +54,7 @@ src/
 
 ### Features and Adapters
 
-Trail, storage, file import/export, project archive, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. Project restore atomically updates persistent state through one `workspace.restore` command; runtime only selects the file, requests confirmation, and synchronizes controls. Adapters isolate browser capabilities:
+Trail, storage, file import/export, project archive/history runtime, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. `features/project/runtime.ts` orchestrates restore UI, schema migration notices, restore rollback, and history feedback, leaving only browser effects in the direct runtime. Adapters isolate browser capabilities:
 
 - Leaflet adapters consume track/marker render models and update layers by diff;
 - the elevation renderer consumes a Canvas context, dimensions, and a downsampled model;

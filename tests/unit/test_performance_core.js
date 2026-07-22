@@ -55,8 +55,44 @@ T('exports the performance core contract', () => {
     'createTrackSignature',
     'createTrackRevision',
     'nextTrackRevision',
+    'pointerTapThreshold',
+    'isPointerTap',
+    'interactionHitTargetSize',
+    'planResetTransition',
   ].forEach(name => assert.strictEqual(typeof performanceCore[name], 'function', name));
   assert.strictEqual(performanceCore.DEFAULT_ELEVATION_BAND_COUNT, 40);
+});
+
+T('pointer policy tolerates finger jitter without turning a pan into a tap', () => {
+  assert.deepStrictEqual(performanceCore.pointerTapThreshold('touch'), {
+    maxMovementPx:18, maxDurationMs:900,
+  });
+  assert.strictEqual(performanceCore.isPointerTap({
+    startX:10, startY:10, endX:26, endY:10, elapsedMs:500, pointerType:'touch',
+  }), true);
+  assert.strictEqual(performanceCore.isPointerTap({
+    startX:10, startY:10, endX:30, endY:10, elapsedMs:500, pointerType:'touch',
+  }), false);
+  assert.strictEqual(performanceCore.isPointerTap({
+    startX:10, startY:10, endX:10, endY:10, elapsedMs:950, pointerType:'touch',
+  }), false);
+  assert.strictEqual(performanceCore.interactionHitTargetSize('touch'), 44);
+  assert.strictEqual(performanceCore.interactionHitTargetSize('mouse'), 24);
+});
+
+T('reset animation is short for nearby zooms and skipped for expensive jumps', () => {
+  const nearby = performanceCore.planResetTransition({gesture:true, currentZoom:10, targetZoom:11.5});
+  assert.strictEqual(nearby.animate, true);
+  assert.ok(nearby.duration >= 0.16 && nearby.duration <= 0.3);
+  assert.strictEqual(performanceCore.planResetTransition({
+    gesture:true, currentZoom:5, targetZoom:12,
+  }).animate, false);
+  assert.strictEqual(performanceCore.planResetTransition({
+    gesture:true, currentZoom:10, targetZoom:11, reducedMotion:true,
+  }).animate, false);
+  assert.strictEqual(performanceCore.planResetTransition({
+    gesture:false, currentZoom:10, targetZoom:11,
+  }).animate, false);
 });
 
 T('elevation quantization clamps into 40 bands and exposes palette endpoints', () => {

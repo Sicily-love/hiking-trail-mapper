@@ -444,6 +444,9 @@ export function startStudioRuntime(
     // v1.25.0：关闭双击缩放，消除 Leaflet 内部 200ms click 延迟
     doubleClickZoom: false,
   });
+  const primaryPointerType = window.matchMedia?.('(pointer: coarse)').matches ? 'touch' : 'mouse';
+  const interactionMarkerHitSize = HTM_CORE.interactionHitTargetSize(primaryPointerType);
+  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
   // 把版本号塞进 Leaflet attribution prefix，与 Leaflet/Esri 同一行同一基线
   // 版本号独立浮层（独立背景框 + 与 Leaflet attribution 完全同款样式）
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank">Leaflet</a>');
@@ -1407,9 +1410,11 @@ export function startStudioRuntime(
       cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
     });
     if(newUrl === null || !DATA.trails.includes(tr)) return false;
-    tr.source = newUrl.trim();
-    applyChange();
-    return true;
+    return recordProjectEdit('编辑轨迹来源', 'Edit trail source', () => {
+      tr.source = newUrl.trim();
+      applyChange();
+      return true;
+    });
   }
 
   async function editTrailName(tr) {
@@ -1424,7 +1429,7 @@ export function startStudioRuntime(
       cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
     });
     if(!newName || !DATA.trails.includes(tr)) return false;
-    return trailController.renameTrail(tr.id, newName);
+    return recordProjectEdit('重命名轨迹', 'Rename trail', () => trailController.renameTrail(tr.id, newName));
   }
 
   async function editTrailId(tr) {
@@ -1444,12 +1449,14 @@ export function startStudioRuntime(
       },
     });
     if(!newId || !newId.trim() || newId === tr.id || !DATA.trails.includes(tr)) return false;
-    const trimmed = newId.trim();
-    const oldId = tr.id;
-    tr.id = trimmed;
-    dispatchState({type:'trail-id.rename', oldId, newId:trimmed});
-    applyChange();
-    return true;
+    return recordProjectEdit('编辑轨迹 ID', 'Edit trail ID', () => {
+      const trimmed = newId.trim();
+      const oldId = tr.id;
+      tr.id = trimmed;
+      dispatchState({type:'trail-id.rename', oldId, newId:trimmed});
+      applyChange();
+      return true;
+    });
   }
 
   async function confirmDeleteTrail(tr) {
@@ -1519,15 +1526,17 @@ export function startStudioRuntime(
       if(!name || !name.trim()) { selectEl.value = trailGroup(tr); return; }
       newGroup = name.trim();
     }
-    const oldGroup = trailGroup(tr);
-    tr.group = newGroup;
-    // v1.21.0：如果被移出的 trail 是原组的主轨迹，清掉原组的记忆
-    if(oldGroup !== newGroup && state.primaryByGroup[oldGroup] === tr.id) {
-      const remaining = DATA.trails.filter(t => trailGroup(t) === oldGroup && t.id !== tr.id);
-      dispatchState({type:'group.set-primary', group:oldGroup, trailId:remaining[0] ? remaining[0].id : null});
-    }
-    applyChange();
-    showToast(`已移至「${newGroup}」组`);
+    recordProjectEdit('移动轨迹组', 'Move trail to group', () => {
+      const oldGroup = trailGroup(tr);
+      tr.group = newGroup;
+      // v1.21.0：如果被移出的 trail 是原组的主轨迹，清掉原组的记忆
+      if(oldGroup !== newGroup && state.primaryByGroup[oldGroup] === tr.id) {
+        const remaining = DATA.trails.filter(t => trailGroup(t) === oldGroup && t.id !== tr.id);
+        dispatchState({type:'group.set-primary', group:oldGroup, trailId:remaining[0] ? remaining[0].id : null});
+      }
+      applyChange();
+      showToast(`已移至「${newGroup}」组`);
+    });
   }
 
   /** 渲染单张 trail 卡片并绑定所有 handler */
@@ -1887,11 +1896,13 @@ export function startStudioRuntime(
         const refs = selectedNearbyWaypointRefs(trail, dm.d);
         if(checkbox.checked) refs.add(candidate.ref);
         else refs.delete(candidate.ref);
-        trail.itinerary_waypoint_refs = {...(trail.itinerary_waypoint_refs || {}), [String(dm.d)]:[...refs]};
-        item.classList.toggle('selected', checkbox.checked);
-        markTrailRevision(trail);
-        saveToStorage();
-        updateSummary();
+        recordProjectEdit('编辑行程标注', 'Edit itinerary waypoints', () => {
+          trail.itinerary_waypoint_refs = {...(trail.itinerary_waypoint_refs || {}), [String(dm.d)]:[...refs]};
+          item.classList.toggle('selected', checkbox.checked);
+          markTrailRevision(trail);
+          saveToStorage();
+          updateSummary();
+        });
       });
       item.classList.toggle('selected', checkbox.checked);
       options.append(item);
@@ -2034,7 +2045,7 @@ export function startStudioRuntime(
           if(e.target.classList.contains('escape-del-btn')) {
             const delId = e.target.dataset.id;
             const wasActive = state.activeEscape === delId;
-            if(escapeController.deleteRoute(trail.id, delId)) {
+            if(recordProjectEdit('删除下撤路线', 'Delete escape route', () => escapeController.deleteRoute(trail.id, delId))) {
               if(wasActive) clearEscape();
               saveToStorage();
               buildDaysTab();
@@ -2279,60 +2290,6 @@ export function startStudioRuntime(
     handleFiles(e.dataTransfer.files);
   });
   kmlFile.addEventListener('change', e => handleFiles(e.target.files));
-  projectRestoreBtn?.addEventListener('click', () => projectFile?.click());
-  projectFile?.addEventListener('change', event => {
-    const file = event.target.files?.[0];
-    if(file) void restoreProjectFile(file);
-  });
-
-  async function restoreProjectFile(file) {
-    addStatus.textContent = currentLang === 'zh' ? '正在检查项目备份…' : 'Checking project backup…';
-    addStatus.style.color = 'var(--text-dim)';
-    try {
-      const result = projectArchiveController.parse(await file.text());
-      if(!result.ok) {
-        addStatus.textContent = '';
-        await studioDialogs.info({
-          title:currentLang === 'zh' ? '无法恢复项目' : 'Cannot restore project',
-          message:result.message,
-          danger:true,
-        });
-        return false;
-      }
-      const archive = result.archive;
-      const exportedAt = new Date(archive.exportedAt).toLocaleString(currentLang === 'zh' ? 'zh-CN' : 'en');
-      const confirmed = await studioDialogs.confirm({
-        title:currentLang === 'zh' ? '替换当前项目？' : 'Replace the current project?',
-        message:currentLang === 'zh'
-          ? `将恢复“${archive.project.title}”（${archive.project.trails.length} 条轨迹，来源 ${archive.appVersion}，导出于 ${exportedAt}）。当前项目会被完整替换。`
-          : `Restore “${archive.project.title}” (${archive.project.trails.length} trails, from ${archive.appVersion}, exported ${exportedAt}). The current project will be replaced.`,
-        confirmLabel:currentLang === 'zh' ? '替换并恢复' : 'Replace and restore',
-        cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-        danger:true,
-      });
-      if(!confirmed) {
-        addStatus.textContent = '';
-        return false;
-      }
-      if(interactionManager.current.kind !== 'idle') interactionManager.cancel('project-restore');
-      projectArchiveController.restore(archive);
-      if(_showTrackEl) _showTrackEl.checked = state.showTrack;
-      if(_showLabelEl) _showLabelEl.checked = state.showLabel;
-      if(_showHighPointEl) _showHighPointEl.checked = state.showHighPoint;
-      _closeAddModal();
-      return true;
-    } catch(error) {
-      addStatus.textContent = '';
-      await studioDialogs.info({
-        title:currentLang === 'zh' ? '恢复项目失败' : 'Project restore failed',
-        message:error instanceof Error ? error.message : String(error),
-        danger:true,
-      });
-      return false;
-    } finally {
-      if(projectFile) projectFile.value = '';
-    }
-  }
 
   const PALETTE_LOCAL = ['#f97316','#3b82f6','#10b981','#a855f7','#eab308','#ec4899','#06b6d4','#f59e0b','#84cc16'];
 
@@ -3084,8 +3041,8 @@ export function startStudioRuntime(
     const icon = L.divIcon({
       className: 'measure-marker-icon',
       html: '<div style="width:20px;height:20px;background:'+color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;font-family:sans-serif;'+(draggable?'cursor:move;':'')+'">'+label+'</div>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
+      iconSize: [interactionMarkerHitSize, interactionMarkerHitSize],
+      iconAnchor: [interactionMarkerHitSize / 2, interactionMarkerHitSize / 2],
     });
     return L.marker([lat, lng], { icon, interactive: draggable, keyboard: false, draggable, autoPan: draggable });
   }
@@ -3411,7 +3368,7 @@ export function startStudioRuntime(
     if(!addEscapeState._pending) return;
     if(!setRuntimeInteractionPhase('escape', 'committing')) return;
     const nameInput = document.getElementById('addescape-name').value.trim();
-    const route = escapeController.commit(nameInput);
+    const route = recordProjectEdit('添加下撤路线', 'Add escape route', () => escapeController.commit(nameInput));
     if(!route) {
       setRuntimeInteractionPhase('escape', 'preview');
       showToast('下撤状态已失效，请重新选择', 'error');
@@ -3754,8 +3711,8 @@ export function startStudioRuntime(
       const icon = L.divIcon({
         className: 'segment-marker',
         html: '<div style="width:22px;height:22px;background:'+m.color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a1a1a;font-size:10px;font-family:sans-serif;cursor:'+m.cursor+'">'+m.label+'</div>',
-        iconSize: m.iconSize,
-        iconAnchor: m.iconAnchor,
+        iconSize: [Math.max(m.iconSize[0], interactionMarkerHitSize), Math.max(m.iconSize[1], interactionMarkerHitSize)],
+        iconAnchor: [Math.max(m.iconSize[0], interactionMarkerHitSize) / 2, Math.max(m.iconSize[1], interactionMarkerHitSize) / 2],
       });
       const marker = L.marker([m.lat, m.lng], Object.assign({ icon }, m.markerOptions)).addTo(segmentState.layer);
       marker._segIdx = m.pointIndex;
@@ -3784,6 +3741,7 @@ export function startStudioRuntime(
       return false;
     }
     if(!setRuntimeInteractionPhase('segment', 'committing')) return;
+    const before = projectHistoryController.capture();
     const result = segmentController.apply();
     if(!result) {
       setRuntimeInteractionPhase('segment', 'editing');
@@ -3798,6 +3756,7 @@ export function startStudioRuntime(
     // 完整重绘（fit:false 保持当前视野，但同步地图标注、行程、主轨迹小卡等所有 UI）
     rebuildAll({fit:false});
     if(typeof refreshElevBar === 'function') refreshElevBar();
+    projectHistoryController.commit(historyLabel('应用行程分段', 'Apply itinerary segments'), before);
     segmentExit({reason:'committed'});
     return saved;
   }
@@ -3824,14 +3783,17 @@ export function startStudioRuntime(
   // 判断"不是拖拽" = down 到 up 位置差 < 6px 且时间 < 400ms
   (function() {
     const container = map.getContainer();
-    let pd = null; // {x, y, t}
-    function isFastTap(x, y, t) {
+    let pd = null; // {x, y, t, pointerType, pointerId}
+    function isFastTap(x, y, t, pointerType, pointerId) {
       if(!pd) return false;
-      const dx = x - pd.x, dy = y - pd.y;
-      // v1.27.0：放宽阈值（10px 位移 + 800ms 时间），覆盖 trackpad 慢速点击
-      return (dx*dx + dy*dy) < 100 && (t - pd.t) < 800;
+      if(pointerId != null && pd.pointerId != null && pointerId !== pd.pointerId) return false;
+      return HTM_CORE.isPointerTap({
+        startX:pd.x, startY:pd.y, endX:x, endY:y,
+        elapsedMs:t - pd.t,
+        pointerType:pointerType || pd.pointerType || 'mouse',
+      });
     }
-    function onDown(x, y, target) {
+    function onDown(x, y, target, pointerType = 'mouse', pointerId = null) {
       // 只有测距/分段模式激活时才捕获
       if(!['measure', 'segment'].includes(interactionManager.current.kind)) { pd = null; return; }
       // 别拦截控件/UI 上的点击
@@ -3840,12 +3802,12 @@ export function startStudioRuntime(
                      target.closest('#map-toolbar') || target.closest('#sidebar'))) {
         pd = null; return;
       }
-      pd = { x, y, t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
+      pd = { x, y, pointerType, pointerId, t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
     }
-    function onUp(x, y, target) {
+    function onUp(x, y, target, pointerType = 'mouse', pointerId = null) {
       if(!pd) return;
       const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      if(!isFastTap(x, y, t)) { pd = null; return; }
+      if(!isFastTap(x, y, t, pointerType, pointerId)) { pd = null; return; }
       // 别拦截控件/marker 上的点击
       if(target && (target.closest('.leaflet-marker-icon') || target.closest('.leaflet-control'))) {
         pd = null; return;
@@ -3869,20 +3831,20 @@ export function startStudioRuntime(
     if(window.PointerEvent) {
       container.addEventListener('pointerdown', e => {
         if(e.pointerType !== 'mouse' && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-        onDown(e.clientX, e.clientY, e.target);
+        onDown(e.clientX, e.clientY, e.target, e.pointerType, e.pointerId);
       }, {capture: true, passive: true});
       container.addEventListener('pointerup', e => {
-        onUp(e.clientX, e.clientY, e.target);
+        onUp(e.clientX, e.clientY, e.target, e.pointerType, e.pointerId);
       }, {capture: true, passive: true});
       container.addEventListener('pointercancel', () => { pd = null; }, {capture: true, passive: true});
     } else {
-      container.addEventListener('mousedown', e => onDown(e.clientX, e.clientY, e.target), {capture: true});
-      container.addEventListener('mouseup', e => onUp(e.clientX, e.clientY, e.target), {capture: true});
+      container.addEventListener('mousedown', e => onDown(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
+      container.addEventListener('mouseup', e => onUp(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
       container.addEventListener('touchstart', e => {
-        if(e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY, e.target);
+        if(e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY, e.target, 'touch', e.touches[0].identifier);
       }, {capture: true, passive: true});
       container.addEventListener('touchend', e => {
-        if(e.changedTouches.length === 1) onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY, e.target);
+        if(e.changedTouches.length === 1) onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY, e.target, 'touch', e.changedTouches[0].identifier);
       }, {capture: true, passive: true});
     }
   })();
@@ -4241,30 +4203,51 @@ export function startStudioRuntime(
     onEvent:handleFileExportEvent,
   });
 
-  function handleProjectArchiveEvent(event) {
-    if(event.type === 'project-archive.exported') {
-      showToast(currentLang === 'zh'
-        ? `完整项目已备份：${event.filename}`
-        : `Project backup exported: ${event.filename}`);
-    } else if(event.type === 'project-archive.restored') {
-      showToast(currentLang === 'zh'
-        ? `已恢复“${event.title}”（${event.trailCount} 条轨迹）`
-        : `Restored “${event.title}” (${event.trailCount} trails)`);
-    } else if(event.type === 'project-archive.failed' && event.operation === 'export') {
-      showToast(currentLang === 'zh' ? `项目备份失败：${event.message}` : `Project backup failed: ${event.message}`, 'error');
-    }
-  }
-
-  const projectArchiveController = HTM_APP.createProjectArchiveController(runtimeContext, {
+  const projectRuntimeController = HTM_APP.createProjectRuntimeController(runtimeContext, {
     files:browserFileAdapter,
     appVersion:APP_VERSION,
-    commit:() => applyChange({fit:false}),
-    resetView:() => {
+    getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
+    commitArchive:() => applyChange({fit:false}),
+    resetArchiveView:() => {
       setMapMode(state.mode);
       return resetView({restoreActive:false});
     },
-    onEvent:handleProjectArchiveEvent,
+    persistHistory:saveToStorage,
+    renderHistory:() => rebuildAll({fit:false}),
+    beforeHistoryApply:() => {
+      if(interactionManager.current.kind !== 'idle') interactionManager.cancel('history-apply');
+      clearEscape();
+    },
+    notifyCommands:() => {
+      commandRegistry.notifyChanged(STUDIO_COMMANDS.EDIT_UNDO);
+      commandRegistry.notifyChanged(STUDIO_COMMANDS.EDIT_REDO);
+    },
+    notify:(message, type = 'info') => showToast(message, type),
   });
+  const projectArchiveController = projectRuntimeController.archive;
+  const projectHistoryController = projectRuntimeController.history;
+  const historyLabel = projectRuntimeController.label;
+  const recordProjectEdit = projectRuntimeController.recordEdit;
+  const projectRestoreUi = projectRestoreBtn && projectFile && addStatus
+    ? HTM_APP.bindProjectRestoreUi({
+      button:projectRestoreBtn,
+      input:projectFile,
+      status:addStatus,
+      dialogs:studioDialogs,
+      archive:projectArchiveController,
+      getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
+      beforeRestore:() => {
+        if(interactionManager.current.kind !== 'idle') interactionManager.cancel('project-restore');
+      },
+      afterRestore:() => {
+        if(_showTrackEl) _showTrackEl.checked = state.showTrack;
+        if(_showLabelEl) _showLabelEl.checked = state.showLabel;
+        if(_showHighPointEl) _showHighPointEl.checked = state.showHighPoint;
+      },
+      close:_closeAddModal,
+    })
+    : null;
+  const restoreProjectFile = file => projectRestoreUi?.restoreFile(file) ?? Promise.resolve(false);
 
   function downloadTrailKML(id) {
     return fileExportController.downloadTrailKml(id);
@@ -4280,23 +4263,27 @@ export function startStudioRuntime(
     notify:message => showToast(message),
   });
 
-  function deleteTrail(id) { return trailController.deleteTrail(id); }
+  function deleteTrail(id) {
+    return recordProjectEdit('删除轨迹', 'Delete trail', () => trailController.deleteTrail(id));
+  }
 
-  function reverseTrail(id) { return trailController.reverseTrail(id); }
+  function reverseTrail(id) {
+    return recordProjectEdit('反向轨迹', 'Reverse trail', () => trailController.reverseTrail(id));
+  }
 
   async function clearAllTrails() {
     if(!DATA.trails.length) return;
     const confirmed = await studioDialogs.confirm({
       title:currentLang === 'zh' ? '清空项目' : 'Clear project',
       message:currentLang === 'zh'
-        ? `确定清除全部 ${DATA.trails.length} 条轨迹？此操作不可撤销。`
-        : `Clear all ${DATA.trails.length} trails? This cannot be undone.`,
+        ? `确定清除全部 ${DATA.trails.length} 条轨迹？可通过“编辑 → 撤销”恢复。`
+        : `Clear all ${DATA.trails.length} trails? You can restore them with Edit → Undo.`,
       danger:true,
       confirmLabel:currentLang === 'zh' ? '全部清除' : 'Clear all',
       cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
     });
     if(!confirmed) return false;
-    return trailController.clearTrails();
+    return recordProjectEdit('清空项目', 'Clear project', () => trailController.clearTrails());
   }
   /* ============ Toast ============ */
   const toastController = createToastController({document, viewport:window});
@@ -5008,9 +4995,14 @@ export function startStudioRuntime(
     }
     const applyFit = () => {
       if(request.closeOverlay) map.invalidateSize({pan:false, animate:false});
-      const fitOptions = request.gesture
-        ? {...request.options, animate:true, duration:0.28, easeLinearity:0.35}
-        : {...request.options, animate:false};
+      const targetZoom = map.getBoundsZoom(request.bounds, false, L.point(80, 80));
+      const transition = HTM_CORE.planResetTransition({
+        gesture:request.gesture,
+        currentZoom:map.getZoom(),
+        targetZoom,
+        reducedMotion:prefersReducedMotion,
+      });
+      const fitOptions = {...request.options, ...transition};
       map.fitBounds(request.bounds, fitOptions);
     };
     if(!request.closeOverlay) {
@@ -5025,7 +5017,7 @@ export function startStudioRuntime(
       }
       applyFit();
       finishWorkspaceFit(context.epoch, true);
-    }, 220);
+    }, 120);
   }
 
   function fitWorkspaceBounds(bounds, options = {}, meta = {}) {
@@ -5273,11 +5265,11 @@ export function startStudioRuntime(
     const input = await openWaypointEditorDialog();
     if(!input) return false;
     if(typeof isCurrent === 'function' && !isCurrent()) return false;
-    return !!waypointController.addManualWaypoint({
+    return !!recordProjectEdit('添加标注点', 'Add waypoint', () => waypointController.addManualWaypoint({
       trailId:main.id,
       trackIndex:anchor.idx,
       point:anchor.point,
-    }, input);
+    }, input));
   }
 
   function handleWaypointInteractionEvent(event, session) {
@@ -5886,7 +5878,7 @@ export function startStudioRuntime(
     });
     const gapCount = trail.track_breaks.length;
     interactionManager.cancel('stitch-committed');
-    const result = fileImportController.addTrail(trail);
+    const result = recordProjectEdit('生成拼接轨迹', 'Create stitched trail', () => fileImportController.addTrail(trail));
     if(result.status !== 'added') {
       showToast(currentLang === 'zh' ? '生成结果与已有轨迹重复' : 'The stitched result duplicates an existing trail', 'info');
       return false;
@@ -6045,6 +6037,12 @@ export function startStudioRuntime(
       register(STUDIO_COMMANDS.FILE_IMPORT, () => addModal.classList.add('open')),
       register(STUDIO_COMMANDS.FILE_EXPORT, exportOffline, {enabled:hasTrails}),
       register(STUDIO_COMMANDS.PROJECT_CLEAR, clearAllTrails, {enabled:hasTrails}),
+      register(STUDIO_COMMANDS.EDIT_UNDO, () => projectHistoryController.undo(), {
+        enabled:() => projectHistoryController.canUndo,
+      }),
+      register(STUDIO_COMMANDS.EDIT_REDO, () => projectHistoryController.redo(), {
+        enabled:() => projectHistoryController.canRedo,
+      }),
       register(STUDIO_COMMANDS.TRAIL_REVERSE, reversePrimaryTrailCommand, {enabled:hasPrimaryTrail}),
       register(STUDIO_COMMANDS.TRAIL_STITCH, stitchTrailsCommand, {enabled:() => DATA.trails.length >= 2}),
       register(STUDIO_COMMANDS.MEASURE_TOGGLE, toggleMeasureCommand, {
@@ -6341,6 +6339,7 @@ export function startStudioRuntime(
       "primaryTrailIdForGroup": {enumerable:true, get:() => primaryTrailIdForGroup},
       "processTrack": {enumerable:true, get:() => processTrack},
       "projectArchiveController": {enumerable:true, get:() => projectArchiveController},
+      "projectHistoryController": {enumerable:true, get:() => projectHistoryController},
       "queueMeasureLiveUpdate": {enumerable:true, get:() => queueMeasureLiveUpdate},
       "rebuildAll": {enumerable:true, get:() => rebuildAll},
       "recordRenderPhase": {enumerable:true, get:() => recordRenderPhase},

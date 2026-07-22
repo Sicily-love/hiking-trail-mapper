@@ -25,6 +25,8 @@ export const APP_SHELL = `
         <button id="add-waypoint-btn" class="tb-btn" data-i18n="action.addWaypoint">标注</button>
         <button id="add-escape-btn" class="tb-btn" data-i18n="action.addEscape">下撤</button>
         <button id="reverse-btn" class="tb-btn" data-i18n="action.reverse">反向</button>
+        <button id="undo-btn" class="tb-btn">撤销</button>
+        <button id="redo-btn" class="tb-btn">重做</button>
         <button id="stitch-btn" class="tb-btn">拼接轨迹</button>
         <button id="add-trail-btn" class="tb-btn" data-i18n="action.add">添加轨迹</button>
         <button id="export-btn" class="tb-btn" data-i18n="action.export">导出</button>

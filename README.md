@@ -45,6 +45,7 @@ npm run dev
 | 标注管理 | 在主轨迹选点，选择图标与类型、填写描述并添加可选图片，也可筛选和改名 |
 | 下撤方案 | 切换同组依据轨迹并选择 A/B 路段，方案归档到主轨迹行程中 |
 | 轨迹拼接 | 从零多选来源轨迹，在地图中裁剪、反向和排序多个片段；断点不产生虚构里程或高差 |
+| 安全编辑 | “编辑”菜单提供全局撤销/重做，覆盖轨迹、分段、标注、下撤和拼接等持久修改 |
 | 数据迁移 | 将当前分组导出为 KML ZIP、将行程导出为 Markdown，或用版本化项目文件完整迁移轨迹与工作区 |
 
 完整交互说明见 [功能说明](docs/FEATURES.md)，实现边界见 [架构说明](docs/ARCHITECTURE.md)。
@@ -60,7 +61,7 @@ Workbench 使用同一组命令语义适配不同屏幕：
 
 ## 数据与隐私
 
-轨迹、标注和分组状态保存在当前浏览器的 IndexedDB 中，不会上传到应用服务器。清除浏览器数据、更换浏览器或设备前，请使用“导出 → 完整项目备份”生成 `.ors-project.json`；恢复时应用会先验证格式与 `schemaVersion`，再经确认完整替换当前项目。KML ZIP 更适合与其他地图软件交换路线，不包含全部工作区状态。
+轨迹、标注和分组状态保存在当前浏览器的 IndexedDB 中，不会上传到应用服务器。清除浏览器数据、更换浏览器或设备前，请使用“导出 → 完整项目备份”生成 `.ors-project.json`；恢复时应用会验证格式与 `schemaVersion`，自动迁移旧 schema，并在替换失败时回到恢复前快照。KML ZIP 更适合与其他地图软件交换路线，不包含全部工作区状态。
 
 ## 工程结构
 
@@ -82,7 +83,7 @@ index.html
 - `src/app` 与 `src/features` 负责状态和交互编排；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench 与对话框。
 - `InteractionManager` 保证测距、分段、标注、下撤、轨迹拼接和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
-- `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏和 Escape 快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
+- `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏、撤销/重做和快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
 `v2.0.0` 删除了 `executeClassicScript()`、runtime composer、raw runtime import 和 13 个 classic owner。`src/app/runtime/studio.ts` 作为普通 TypeScript 模块直接接收 `document`、`CommandRegistry` 与 `DialogController`，不再依赖 `window.HikingTrailCore/HikingTrailApp`。轨迹、存储、文件导入导出、标注、测距、分段、Day 预览和下撤的业务状态继续由 typed controller 持有；浏览器 DOM/Leaflet 编排集中在 direct runtime，后续新增逻辑应优先进入 controller、adapter 或 UI module。仅真实浏览器测试通过 `?studio-test=1` 启用只读 inspector，正常发布不暴露 classic globals。
 
@@ -127,7 +128,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v2.1.0
+版本：v2.2.0
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。

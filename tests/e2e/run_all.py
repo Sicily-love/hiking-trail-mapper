@@ -703,13 +703,46 @@ try:
     """)
     check("项目归档 schema 与格式标识正确",
           archive_roundtrip.get("ok") == True
-          and archive_roundtrip.get("schema") == 1
+          and archive_roundtrip.get("schema") == 2
           and archive_roundtrip.get("format") == "outdoor-route-studio-project",
           f"{archive_roundtrip}")
     check("清空内存后可完整恢复项目与组/主轨迹选择",
           archive_roundtrip.get("status") == "restored"
           and archive_roundtrip.get("actual") == archive_roundtrip.get("expected"),
           f"{archive_roundtrip}")
+
+    # ═══════════════════════════════════════════════════════════════
+    # E18 — 项目级撤销/重做
+    # ═══════════════════════════════════════════════════════════════
+    print("\n▸ E18 · 项目级撤销/重做")
+    history_roundtrip = evalj("""
+      (() => {
+        const trail = DATA.trails[0];
+        if(!trail) return {ok:false, error:'missing trail'};
+        const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
+        const original = trail.name;
+        projectHistoryController.clear();
+        projectHistoryController.execute('E2E rename', () => { trail.name = 'E2E history name'; });
+        const undoEnabled = registry.isEnabled('edit.undo');
+        registry.dispatch('edit.undo');
+        const undone = DATA.trails[0].name === original;
+        const redoEnabled = registry.isEnabled('edit.redo');
+        registry.dispatch('edit.redo');
+        const redone = DATA.trails[0].name === 'E2E history name';
+        registry.dispatch('edit.undo');
+        projectHistoryController.clear();
+        return {ok:true, undoEnabled, undone, redoEnabled, redone};
+      })()
+    """)
+    check("命令状态随历史栈更新",
+          history_roundtrip.get("ok") == True
+          and history_roundtrip.get("undoEnabled") == True
+          and history_roundtrip.get("redoEnabled") == True,
+          f"{history_roundtrip}")
+    check("撤销与重做往返后可恢复原项目",
+          history_roundtrip.get("undone") == True
+          and history_roundtrip.get("redone") == True,
+          f"{history_roundtrip}")
 
     # ═══════════════════════════════════════════════════════════════
     # 结果汇总

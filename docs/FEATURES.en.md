@@ -170,9 +170,15 @@ Click `☐ Batch group` at top of sidebar to enter batch mode:
 
 - File extension: `.ors-project.json`
 - Preserves all trails, Day segments, waypoints and images, escape routes, stitch gaps, groups, primary trails, display modes, and filters
-- Uses a fixed format identifier and `schemaVersion: 1`; restore checks file size, nesting depth, duplicate IDs, coordinates, and dangerous object keys
-- Restore shows the project name, trail count, source version, and export time before it may replace the current project and persist to IndexedDB
+- New backups use `schemaVersion: 2`; `schemaVersion: 1` is migrated automatically after size, depth, duplicate-ID, coordinate, and dangerous-key validation
+- Restore shows project name, trail count, source version, export time, and migration status before replacement; failures roll back to the pre-restore snapshot
 - KML ZIP is for route exchange; a complete project backup is for moving Outdoor Route Studio between browsers and devices
+
+### Undo and redo
+
+- **Edit → Undo/Redo**, `Ctrl/Cmd+Z`, and `Ctrl/Cmd+Shift+Z` share one command history
+- Durable trail identity/group/delete/reverse/clear, itinerary segmentation, waypoint, escape, nearby-itinerary reference, and stitch-result edits are covered
+- Map pan/zoom, measurement preview, panel positions, and browsing filters do not enter history; failed edits restore their pre-operation snapshot
 
 ## Persistence
 

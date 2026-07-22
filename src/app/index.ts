@@ -135,10 +135,25 @@ export {
 } from '../features/files/export-controller.ts';
 export {
   createProjectArchiveController,
+  applyProjectArchive,
   type ProjectArchiveController,
   type ProjectArchiveControllerDependencies,
   type ProjectArchiveEvent,
 } from '../features/project/archive-controller.ts';
+export {
+  createProjectHistoryController,
+  type ProjectHistoryController,
+  type ProjectHistoryControllerDependencies,
+  type ProjectHistoryEvent,
+} from '../features/history/controller.ts';
+export {
+  bindProjectRestoreUi,
+  createProjectRuntimeController,
+  type ProjectRestoreUiDependencies,
+  type ProjectRuntimeDependencies,
+  type ProjectRuntimeLanguage,
+  type ProjectRuntimeToast,
+} from '../features/project/runtime.ts';
 export {
   createWaypointController,
   type ManualWaypointAnchor,

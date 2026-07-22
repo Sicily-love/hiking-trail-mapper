@@ -1,5 +1,6 @@
 export const PROJECT_ARCHIVE_FORMAT = 'outdoor-route-studio-project' as const;
-export const PROJECT_ARCHIVE_SCHEMA_VERSION = 1 as const;
+export const PROJECT_ARCHIVE_SCHEMA_VERSION = 2 as const;
+export const PROJECT_ARCHIVE_MIN_SCHEMA_VERSION = 1 as const;
 export const PROJECT_ARCHIVE_EXTENSION = '.ors-project.json' as const;
 export const PROJECT_ARCHIVE_MIME = 'application/vnd.outdoor-route-studio.project+json;charset=utf-8' as const;
 
@@ -90,7 +91,7 @@ export type ProjectArchiveErrorCode =
   | 'unsafe-value';
 
 export type ProjectArchiveParseResult<TTrail extends ProjectArchiveTrail = ProjectArchiveTrail> =
-  | {ok: true; archive: ProjectArchive<TTrail>}
+  | {ok: true; archive: ProjectArchive<TTrail>; migratedFrom: number | null}
   | {ok: false; code: ProjectArchiveErrorCode; message: string};
 
 interface CloneBudget {
@@ -101,6 +102,35 @@ interface CloneBudget {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+type ArchiveMigration = (archive: Record<string, unknown>) => Record<string, unknown>;
+
+const PROJECT_ARCHIVE_MIGRATIONS: Readonly<Record<number, ArchiveMigration>> = Object.freeze({
+  1: archive => {
+    const project = isRecord(archive.project) ? {...archive.project} : archive.project;
+    if(isRecord(project) && !isRecord(project.calc_method)) project.calc_method = {};
+    return {...archive, schemaVersion:2, project};
+  },
+});
+
+function migrateArchive(value: Record<string, unknown>): {
+  value: Record<string, unknown>;
+  migratedFrom: number | null;
+} | null {
+  const sourceVersion = Number(value.schemaVersion);
+  if(!Number.isInteger(sourceVersion)
+    || sourceVersion < PROJECT_ARCHIVE_MIN_SCHEMA_VERSION
+    || sourceVersion > PROJECT_ARCHIVE_SCHEMA_VERSION) return null;
+  let migrated = value;
+  let version = sourceVersion;
+  while(version < PROJECT_ARCHIVE_SCHEMA_VERSION) {
+    const migration = PROJECT_ARCHIVE_MIGRATIONS[version];
+    if(!migration) return null;
+    migrated = migration(migrated);
+    version += 1;
+  }
+  return {value:migrated, migratedFrom:sourceVersion === version ? null : sourceVersion};
 }
 
 function cloneSafeJson(value: unknown, path: string, depth: number, budget: CloneBudget): ProjectArchiveJson {
@@ -192,20 +222,22 @@ function normalizeArchive(
   if(!isRecord(value) || value.format !== PROJECT_ARCHIVE_FORMAT) {
     return {ok:false, code:'invalid-format', message:'Not an Outdoor Route Studio project archive'};
   }
-  if(value.schemaVersion !== PROJECT_ARCHIVE_SCHEMA_VERSION) {
+  const migration = migrateArchive(value);
+  if(!migration) {
     return {
       ok:false,
       code:'unsupported-schema',
       message:`Unsupported project schema: ${String(value.schemaVersion)}`,
     };
   }
-  if(!isRecord(value.project) || !Array.isArray(value.project.trails)) {
+  const normalizedValue = migration.value;
+  if(!isRecord(normalizedValue.project) || !Array.isArray(normalizedValue.project.trails)) {
     return {ok:false, code:'invalid-project', message:'Project data or trail list is missing'};
   }
 
   let project: Record<string, ProjectArchiveJson>;
   try {
-    project = cloneSafeJson(value.project, 'project', 0, {
+    project = cloneSafeJson(normalizedValue.project, 'project', 0, {
       nodes:0,
       maxNodes:options.maxNodes ?? DEFAULT_MAX_NODES,
       maxDepth:options.maxDepth ?? DEFAULT_MAX_DEPTH,
@@ -251,19 +283,20 @@ function normalizeArchive(
     : {};
   return {
     ok:true,
+    migratedFrom:migration.migratedFrom,
     archive:{
       format:PROJECT_ARCHIVE_FORMAT,
       schemaVersion:PROJECT_ARCHIVE_SCHEMA_VERSION,
-      appVersion:typeof value.appVersion === 'string' ? value.appVersion : 'unknown',
-      exportedAt:typeof value.exportedAt === 'string' && Number.isFinite(Date.parse(value.exportedAt))
-        ? value.exportedAt
+      appVersion:typeof normalizedValue.appVersion === 'string' ? normalizedValue.appVersion : 'unknown',
+      exportedAt:typeof normalizedValue.exportedAt === 'string' && Number.isFinite(Date.parse(normalizedValue.exportedAt))
+        ? normalizedValue.exportedAt
         : new Date(0).toISOString(),
       project:{
         title:typeof project.title === 'string' && project.title.trim() ? project.title : 'Outdoor Route Studio',
         trails,
         calc_method:calcMethod,
       },
-      workspace:normalizeWorkspace(value.workspace, trails),
+      workspace:normalizeWorkspace(normalizedValue.workspace, trails),
     },
   };
 }

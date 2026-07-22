@@ -45,7 +45,7 @@ function stateInput(overrides = {}) {
 (async () => {
   console.log('\nProject archive');
 
-  await T('round trips complete trail and workspace data through schema v1', () => {
+  await T('round trips complete trail and workspace data through the current schema', () => {
     const archive = core.createProjectArchive({
       project:{title:'Weekend Route', trails:[trail()], calc_method:{threshold:10}},
       state:stateInput(),
@@ -54,8 +54,9 @@ function stateInput(overrides = {}) {
     });
     const parsed = core.parseProjectArchive(core.serializeProjectArchive(archive));
     assert.strictEqual(parsed.ok, true);
+    assert.strictEqual(parsed.migratedFrom, null);
     assert.strictEqual(parsed.archive.format, core.PROJECT_ARCHIVE_FORMAT);
-    assert.strictEqual(parsed.archive.schemaVersion, 1);
+    assert.strictEqual(parsed.archive.schemaVersion, 2);
     assert.strictEqual(parsed.archive.project.trails[0].waypoints[0].photo, 'data:image/png;base64,AA==');
     assert.deepStrictEqual(parsed.archive.project.trails[0].escape_routes[0].days, [1]);
     assert.deepStrictEqual(parsed.archive.project.trails[0].track_breaks, [1]);
@@ -88,7 +89,7 @@ function stateInput(overrides = {}) {
     const base = core.createProjectArchive({
       project:{title:'Route', trails:[trail()]}, state:stateInput(), appVersion:'v2.1.0',
     });
-    assert.strictEqual(core.parseProjectArchive(JSON.stringify({...base, schemaVersion:2})).code, 'unsupported-schema');
+    assert.strictEqual(core.parseProjectArchive(JSON.stringify({...base, schemaVersion:3})).code, 'unsupported-schema');
     const duplicate = JSON.parse(JSON.stringify(base));
     duplicate.project.trails.push(duplicate.project.trails[0]);
     assert.strictEqual(core.parseProjectArchive(JSON.stringify(duplicate)).code, 'duplicate-trail-id');
@@ -109,6 +110,21 @@ function stateInput(overrides = {}) {
     assert.strictEqual(parsed.ok, true);
     assert.strictEqual({}.polluted, undefined);
     assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed.archive.project.trails[0], '__proto__'), false);
+  });
+
+  await T('migrates schema 1 archives without losing nested route data', () => {
+    const legacy = JSON.parse(JSON.stringify(core.createProjectArchive({
+      project:{title:'Legacy', trails:[trail()]}, state:stateInput(), appVersion:'v2.1.0',
+    })));
+    legacy.schemaVersion = 1;
+    delete legacy.project.calc_method;
+    const parsed = core.parseProjectArchive(JSON.stringify(legacy));
+    assert.strictEqual(parsed.ok, true);
+    assert.strictEqual(parsed.migratedFrom, 1);
+    assert.strictEqual(parsed.archive.schemaVersion, 2);
+    assert.deepStrictEqual(parsed.archive.project.calc_method, {});
+    assert.strictEqual(parsed.archive.project.trails[0].waypoints[0].photo, 'data:image/png;base64,AA==');
+    assert.deepStrictEqual(parsed.archive.project.trails[0].escape_routes[0].days, [1]);
   });
 
   await T('controller exports and atomically restores project plus workspace', async () => {
@@ -157,13 +173,51 @@ function stateInput(overrides = {}) {
     assert.strictEqual(store.snapshot().mode, 'waypoint');
     assert.strictEqual(effects.commits, 1);
     assert.strictEqual(effects.resets, 1);
+    assert.strictEqual(controller.canRecover, true);
+    assert.strictEqual(controller.recoverLast().status, 'restored');
+    assert.strictEqual(context.project.title, 'Old project');
+    assert.strictEqual(effects.commits, 2);
+  });
+
+  await T('restore failure rolls back to its automatic recovery point', () => {
+    const original = trail('old', 'Old');
+    const store = app.createAppStateStore({trails:[original]});
+    const context = app.createRuntimeContext({
+      project:{title:'Safe', trails:[original], calc_method:{}},
+      state:store,
+      commands:new app.CommandRegistry(),
+      interactions:app.createStudioInteractionManager(),
+      renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
+      dialogs:{confirm:async () => true},
+    });
+    let commits = 0;
+    const controller = app.createProjectArchiveController(context, {
+      files:{download() {}, saveText:async () => 'download'},
+      appVersion:'v2.2.0',
+      commit:() => {
+        commits += 1;
+        if(commits === 1) throw new Error('storage failed');
+      },
+      resetView:() => {},
+    });
+    const incoming = core.createProjectArchive({
+      project:{title:'Broken restore', trails:[trail('new', 'New')]},
+      state:stateInput(), appVersion:'v2.2.0',
+    });
+    const result = controller.restore(incoming);
+    assert.strictEqual(result.status, 'failed');
+    assert.strictEqual(result.rolledBack, true);
+    assert.strictEqual(context.project.title, 'Safe');
+    assert.strictEqual(context.project.trails[0].id, 'old');
   });
 
   await T('runtime delegates archive data and writes to the typed controller', () => {
     const source = read('src/app/runtime/studio.ts');
-    assert.match(source, /createProjectArchiveController\(runtimeContext/);
-    assert.match(source, /projectArchiveController\.parse/);
-    assert.match(source, /projectArchiveController\.restore/);
+    const projectRuntime = read('src/features/project/runtime.ts');
+    assert.match(source, /createProjectRuntimeController\(runtimeContext/);
+    assert.match(projectRuntime, /createProjectArchiveController\(context/);
+    assert.match(projectRuntime, /archive\.parse/);
+    assert.match(projectRuntime, /archive\.restore/);
     assert.match(source, /projectArchiveController\.exportProject/);
     assert.match(source, /legendMinElevation/);
     assert.doesNotMatch(source, /<span>\$\{minE\}m<\/span>/);

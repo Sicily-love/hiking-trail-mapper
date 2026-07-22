@@ -21,6 +21,8 @@ export const COMMAND_DEFINITIONS = {
   'reverse-btn': { icon: 'rotate', label: 'Reverse trail', labelZh: '反向轨迹', commandId: STUDIO_COMMANDS.TRAIL_REVERSE },
   'stitch-btn': { icon: 'combine', label: 'Stitch trails', labelZh: '拼接轨迹', commandId: STUDIO_COMMANDS.TRAIL_STITCH },
   'clear-btn': { icon: 'trash', label: 'Clear all', labelZh: '清空项目', commandId: STUDIO_COMMANDS.PROJECT_CLEAR },
+  'undo-btn': { icon: 'undo', label: 'Undo', labelZh: '撤销', commandId: STUDIO_COMMANDS.EDIT_UNDO },
+  'redo-btn': { icon: 'redo', label: 'Redo', labelZh: '重做', commandId: STUDIO_COMMANDS.EDIT_REDO },
   'measure-btn': { icon: 'ruler', label: 'Measure', labelZh: '测距', commandId: STUDIO_COMMANDS.MEASURE_TOGGLE },
   'segment-btn': { icon: 'calendar', label: 'Plan segments', labelZh: '行程分段', commandId: STUDIO_COMMANDS.SEGMENT_TOGGLE },
   'add-escape-btn': { icon: 'shield', label: 'Add escape route', labelZh: '添加下撤路线', commandId: STUDIO_COMMANDS.ESCAPE_TOGGLE },
@@ -32,7 +34,7 @@ export const COMMAND_DEFINITIONS = {
 } as const satisfies Record<string, CommandDefinition>;
 
 export const MENU_DEFINITIONS = [
-  { key: 'edit', label: 'Edit', labelZh: '编辑', icon: 'pencil', commandIds: ['reverse-btn', 'stitch-btn', 'clear-btn'] },
+  { key: 'edit', label: 'Edit', labelZh: '编辑', icon: 'pencil', commandIds: ['undo-btn', 'redo-btn', 'reverse-btn', 'stitch-btn', 'clear-btn'] },
   { key: 'plan', label: 'Plan', labelZh: '规划', icon: 'calendar', commandIds: ['segment-btn', 'add-escape-btn'] },
 ] as const satisfies ReadonlyArray<{
   key: string;
@@ -752,6 +754,15 @@ export function upgradeWorkbenchLayout(
     if(event.target && !toolbar.contains(event.target as Node)) closeMenus(false);
   };
   const onDocumentKeydown = (event: KeyboardEvent): void => {
+    const target = event.target;
+    const isEditingText = target instanceof Element
+      && !!target.closest('input, textarea, select, [contenteditable="true"]');
+    if(!isEditingText && (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      dispatchCommand(event.shiftKey ? STUDIO_COMMANDS.EDIT_REDO : STUDIO_COMMANDS.EDIT_UNDO);
+      closeMenus(false);
+      return;
+    }
     if(event.key !== 'Escape' || event.defaultPrevented) return;
     if(activeMenu) {
       event.preventDefault();

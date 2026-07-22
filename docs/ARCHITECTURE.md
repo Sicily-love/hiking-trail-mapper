@@ -42,11 +42,11 @@ src/
 
 ### Core
 
-`core/` 只接收普通数据并返回确定性结果。距离、海拔、KML、测距、分段、统计、抽稀、marker diff、revision 和版本化项目归档不依赖 DOM、Leaflet 或存储句柄。`projectArchive.ts` 持有 `schemaVersion`、输入预算、数据校验和未来迁移入口。
+`core/` 只接收普通数据并返回确定性结果。距离、海拔、KML、测距、分段、统计、触摸策略、复位动画计划、抽稀、marker diff、revision 和版本化项目归档不依赖 DOM、Leaflet 或存储句柄。`projectArchive.ts` 持有 schema 迁移链、输入预算和数据校验。
 
 ### App
 
-`AppStateStore` 是持久应用状态的写入边界。写操作使用可判别联合类型命令，并产生带 revision 的事件。`CommandRegistry` 让顶部菜单、桌面侧栏、移动底栏和快捷键分发同一语义命令。
+`AppStateStore` 是持久应用状态的写入边界。写操作使用可判别联合类型命令，并产生带 revision 的事件。`CommandRegistry` 让顶部菜单、桌面侧栏、移动底栏和快捷键分发同一语义命令；`ProjectHistoryController` 以版本化项目快照实现有界撤销/重做，并在失败编辑后回滚。
 
 `InteractionManager` 统一测距、分段、标注、下撤和 Day 预览的 `select -> preview -> dragging -> commit` 生命周期，并负责取消旧会话、timer、RAF 与异步回调。
 
@@ -54,7 +54,7 @@ src/
 
 ### Features 与 Adapters
 
-trail、storage、file import/export、project archive、waypoint、measure、segment、itinerary、escape 和 localization 各自持有 typed controller 或数据模块。项目恢复通过单个 `workspace.restore` command 原子更新持久状态，runtime 只选择文件、请求确认和同步控件。浏览器能力由 adapter 隔离：
+trail、storage、file import/export、project archive/history runtime、waypoint、measure、segment、itinerary、escape 和 localization 各自持有 typed controller 或数据模块。项目恢复 UI、schema 迁移提示、恢复回滚和历史通知由 `features/project/runtime.ts` 编排；direct runtime 只提供浏览器副作用。浏览器能力由 adapter 隔离：
 
 - Leaflet adapter 接收 track/marker render model，并差异更新图层；
 - elevation renderer 接收 Canvas context、尺寸和降采样 model；

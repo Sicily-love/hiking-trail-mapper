@@ -25,7 +25,7 @@ T('desktop toolbar is one grouped command surface with stable controls', () => {
   assert.ok(css.includes('.toolbar-brand {'));
   assert.ok(css.includes('width:54px;'));
   assert.ok(css.includes('left:52px;'));
-  assert.strictEqual((html.match(/class="tb-btn"/g) || []).length, 11);
+  assert.strictEqual((html.match(/class="tb-btn"/g) || []).length, 13);
 });
 T('toolbar brand text is clipped within its own column', () => {
   assert.ok(css.includes('.toolbar-brand > span:last-child'));
