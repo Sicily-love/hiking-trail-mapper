@@ -62,7 +62,7 @@ npm run check:generated
 | `test_math.js` / `test_enrich.js` | 距离、海拔、统计、标注吸附与内容 hash |
 | `test_core_contract.js` / `test_kml_core.js` | `src/core` 出口、KML 坐标、`gx:Track`、waypoint 和 import model |
 | `test_storage_core.js` / `test_indexeddb_adapter.js` | IndexedDB snapshot、事务提交、Set 序列化、每组主轨迹和 legacy 恢复 |
-| `test_project_archive.js` / `test_project_history.js` | schema 迁移、输入预算、恢复回滚，以及历史分支、边界和撤销/重做 |
+| `test_project_archive.js` / `test_project_history.js` | schema 迁移、输入预算、恢复回滚，以及历史分支、条数/字节边界和撤销/重做 |
 | `test_storage_controller.js` / `test_file_import_controller.js` / `test_waypoint_controller.js` | typed 存储、导入、标注点 controller 与 direct runtime 边界 |
 | `test_file_export_controller.js` | KML/Markdown 模型、ZIP/Blob adapter、导出 controller 与 direct DOM 边界 |
 | `test_measure_controller.js` | typed 测距会话、拖动抑制、计算失效和 direct runtime 边界 |

@@ -14,7 +14,8 @@ function trail(id = 'main', name = 'Main') {
     stats:{distance_km:1, ascent_m:100, descent_m:0}, waypoints:[]};
 }
 
-function harness(maxEntries = 30) {
+function harness(options = {}) {
+  if(typeof options === 'number') options = {maxEntries:options};
   const source = trail();
   const project = {title:'History', trails:[source], calc_method:{}};
   const state = app.createAppStateStore({trails:[source]});
@@ -24,12 +25,15 @@ function harness(maxEntries = 30) {
     renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
     dialogs:{confirm:async () => true},
   });
-  const effects = {persist:0, render:0, before:0};
+  const effects = {persist:0, render:0, before:0, events:[]};
   const history = app.createProjectHistoryController(context, {
-    appVersion:'v2.2.0', maxEntries,
+    appVersion:'v2.2.0',
+    maxEntries:options.maxEntries,
+    maxBytes:options.maxBytes,
     persist:() => { effects.persist += 1; },
     render:() => { effects.render += 1; },
     beforeApply:() => { effects.before += 1; },
+    onEvent:event => effects.events.push(event),
   });
   return {project, state, history, effects};
 }
@@ -84,6 +88,31 @@ function harness(maxEntries = 30) {
     history.undo();
     assert.strictEqual(project.title, 'One');
     assert.strictEqual(history.undo(), false);
+  });
+
+  await T('bounds retained history by serialized bytes', () => {
+    const maxBytes = 3000;
+    const {project, history} = harness({maxBytes});
+    for(const title of ['A'.repeat(120), 'B'.repeat(120), 'C'.repeat(120)]) {
+      history.execute('Rename', () => { project.title = title; });
+    }
+    assert.ok(history.undoCount >= 1 && history.undoCount < 3);
+    assert.ok(history.retainedBytes > 0 && history.retainedBytes <= maxBytes);
+  });
+
+  await T('clears unsafe history when one edit exceeds the byte budget', () => {
+    const {project, history, effects} = harness({maxBytes:3000});
+    history.execute('Small edit', () => { project.title = 'Small'; });
+    assert.strictEqual(history.canUndo, true);
+    history.execute('Attach large content', () => {
+      project.title = 'X'.repeat(6000);
+    });
+    assert.strictEqual(history.canUndo, false);
+    assert.strictEqual(history.canRedo, false);
+    assert.strictEqual(history.retainedBytes, 0);
+    const skipped = effects.events.find(event => event.type === 'history.skipped');
+    assert.strictEqual(skipped.label, 'Attach large content');
+    assert.ok(skipped.estimatedBytes > skipped.maxBytes);
   });
 
   await T('runtime routes durable edits through project history', () => {

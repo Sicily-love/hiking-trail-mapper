@@ -46,7 +46,7 @@ src/
 
 ### App
 
-`AppStateStore` owns persistent application-state writes. Mutations use discriminated commands and emit revisioned events. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands. `ProjectHistoryController` implements bounded Undo/Redo with versioned project snapshots and rolls back failed edits.
+`AppStateStore` owns persistent application-state writes. Mutations use discriminated commands and emit revisioned events. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands. `ProjectHistoryController` stores compact versioned snapshots, bounds both entry count and retained bytes, and rolls back failed edits.
 
 `InteractionManager` unifies the `select -> preview -> dragging -> commit` lifecycle for measure, segment, waypoint, escape, and Day preview. It cancels stale sessions, timers, RAF callbacks, and asynchronous work.
 

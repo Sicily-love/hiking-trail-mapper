@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.2.1',
+    date: '2026-07-22',
+    items: {
+      zh: ['撤销历史改用紧凑内部快照，并增加 30 条记录与 32 MiB 总预算，降低大轨迹和图片项目的内存占用。', '超大编辑无法安全进入历史时清空旧撤销栈并明确提示，避免撤销跨越当前项目状态。'],
+      en: ['Stored undo history as compact internal snapshots with both a 30-entry and 32 MiB budget to reduce memory use on large routes and image-heavy projects.', 'Oversized edits now clear stale undo history and report that the edit could not be retained safely.'],
+    },
+  },
+  {
     version: 'v2.2.0',
     date: '2026-07-21',
     items: {

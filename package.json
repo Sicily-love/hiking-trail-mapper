@@ -1,6 +1,6 @@
 {
   "name": "hiking-trail-mapper",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "description": "Static KML hiking trail mapper with a modular TypeScript core and single-file-compatible release.",
   "scripts": {

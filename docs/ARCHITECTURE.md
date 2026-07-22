@@ -46,7 +46,7 @@ src/
 
 ### App
 
-`AppStateStore` 是持久应用状态的写入边界。写操作使用可判别联合类型命令，并产生带 revision 的事件。`CommandRegistry` 让顶部菜单、桌面侧栏、移动底栏和快捷键分发同一语义命令；`ProjectHistoryController` 以版本化项目快照实现有界撤销/重做，并在失败编辑后回滚。
+`AppStateStore` 是持久应用状态的写入边界。写操作使用可判别联合类型命令，并产生带 revision 的事件。`CommandRegistry` 让顶部菜单、桌面侧栏、移动底栏和快捷键分发同一语义命令；`ProjectHistoryController` 以紧凑版本化快照实现有界撤销/重做，同时限制记录数与总字节，并在失败编辑后回滚。
 
 `InteractionManager` 统一测距、分段、标注、下撤和 Day 预览的 `select -> preview -> dragging -> commit` 生命周期，并负责取消旧会话、timer、RAF 与异步回调。
 

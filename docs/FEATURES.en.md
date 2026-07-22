@@ -179,6 +179,7 @@ Click `☐ Batch group` at top of sidebar to enter batch mode:
 - **Edit → Undo/Redo**, `Ctrl/Cmd+Z`, and `Ctrl/Cmd+Shift+Z` share one command history
 - Durable trail identity/group/delete/reverse/clear, itinerary segmentation, waypoint, escape, nearby-itinerary reference, and stitch-result edits are covered
 - Map pan/zoom, measurement preview, panel positions, and browsing filters do not enter history; failed edits restore their pre-operation snapshot
+- History is bounded by both 30 entries and a 32 MiB serialized budget; an oversized edit clears stale history and reports that it could not be retained safely
 
 ## Persistence
 

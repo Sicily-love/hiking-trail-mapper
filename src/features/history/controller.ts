@@ -1,14 +1,16 @@
 import type { RuntimeContext } from '../../app/runtime/context.ts';
 import {
   createProjectArchive,
+  parseProjectArchive,
   type ProjectArchive,
   type ProjectArchiveTrail,
 } from '../../core/projectArchive.ts';
 import { applyProjectArchive } from '../project/archive-controller.ts';
 
 export type ProjectHistoryEvent =
-  | {type:'history.changed'; undoCount: number; redoCount: number}
-  | {type:'history.applied'; direction: 'undo' | 'redo'; label: string};
+  | {type:'history.changed'; undoCount: number; redoCount: number; retainedBytes: number}
+  | {type:'history.applied'; direction: 'undo' | 'redo'; label: string}
+  | {type:'history.skipped'; label: string; estimatedBytes: number; maxBytes: number};
 
 export interface ProjectHistoryControllerDependencies {
   appVersion: string;
@@ -17,12 +19,14 @@ export interface ProjectHistoryControllerDependencies {
   beforeApply?: () => void;
   onEvent?: (event: ProjectHistoryEvent) => void;
   maxEntries?: number;
+  maxBytes?: number;
 }
 
-interface ProjectHistoryEntry<TTrail extends ProjectArchiveTrail> {
+interface ProjectHistoryEntry {
   label: string;
-  before: ProjectArchive<TTrail>;
-  after: ProjectArchive<TTrail>;
+  before: string;
+  after: string;
+  bytes: number;
 }
 
 export interface ProjectHistoryController<TTrail extends ProjectArchiveTrail> {
@@ -32,6 +36,7 @@ export interface ProjectHistoryController<TTrail extends ProjectArchiveTrail> {
   readonly redoLabel: string | null;
   readonly undoCount: number;
   readonly redoCount: number;
+  readonly retainedBytes: number;
   capture: () => ProjectArchive<TTrail>;
   commit: (label: string, before: ProjectArchive<TTrail>) => boolean;
   execute: <TResult>(label: string, operation: () => TResult) => TResult;
@@ -50,12 +55,19 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
   context: RuntimeContext<TTrail>,
   dependencies: ProjectHistoryControllerDependencies,
 ): ProjectHistoryController<TTrail> {
-  const undoEntries: ProjectHistoryEntry<TTrail>[] = [];
-  const redoEntries: ProjectHistoryEntry<TTrail>[] = [];
+  const undoEntries: ProjectHistoryEntry[] = [];
+  const redoEntries: ProjectHistoryEntry[] = [];
   const maxEntries = Math.max(1, Math.trunc(dependencies.maxEntries ?? 30));
+  const maxBytes = Math.max(1024, Math.trunc(dependencies.maxBytes ?? 32 * 1024 * 1024));
+  const textEncoder = new TextEncoder();
   let applying = false;
+  const retainedBytes = (): number => [...undoEntries, ...redoEntries]
+    .reduce((total, entry) => total + entry.bytes, 0);
   const emitChanged = (): void => dependencies.onEvent?.({
-    type:'history.changed', undoCount:undoEntries.length, redoCount:redoEntries.length,
+    type:'history.changed',
+    undoCount:undoEntries.length,
+    redoCount:redoEntries.length,
+    retainedBytes:retainedBytes(),
   });
   const capture = (): ProjectArchive<TTrail> => createProjectArchive({
     project:context.project,
@@ -69,9 +81,19 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
     const beforeText = JSON.stringify({project:before.project, workspace:before.workspace});
     const afterText = JSON.stringify({project:after.project, workspace:after.workspace});
     if(beforeText === afterText) return false;
-    undoEntries.push({label:label.trim() || 'Edit project', before, after});
-    if(undoEntries.length > maxEntries) undoEntries.splice(0, undoEntries.length - maxEntries);
+    const historyLabel = label.trim() || 'Edit project';
+    const bytes = textEncoder.encode(beforeText).byteLength + textEncoder.encode(afterText).byteLength;
     redoEntries.length = 0;
+    if(bytes > maxBytes) {
+      undoEntries.length = 0;
+      dependencies.onEvent?.({
+        type:'history.skipped', label:historyLabel, estimatedBytes:bytes, maxBytes,
+      });
+      emitChanged();
+      return false;
+    }
+    undoEntries.push({label:historyLabel, before:beforeText, after:afterText, bytes});
+    while(undoEntries.length > maxEntries || retainedBytes() > maxBytes) undoEntries.shift();
     emitChanged();
     return true;
   };
@@ -110,12 +132,20 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
     return result;
   };
 
-  const applyEntry = (entry: ProjectHistoryEntry<TTrail>, direction: 'undo' | 'redo'): boolean => {
+  const applyEntry = (entry: ProjectHistoryEntry, direction: 'undo' | 'redo'): boolean => {
     if(applying) return false;
     applying = true;
     try {
       dependencies.beforeApply?.();
-      applyProjectArchive(context, direction === 'undo' ? entry.before : entry.after);
+      const parsed = parseProjectArchive(JSON.stringify({
+        format:'outdoor-route-studio-project',
+        schemaVersion:2,
+        appVersion:dependencies.appVersion,
+        exportedAt:new Date(0).toISOString(),
+        ...JSON.parse(direction === 'undo' ? entry.before : entry.after),
+      }));
+      if(!parsed.ok) throw new TypeError(parsed.message);
+      applyProjectArchive(context, parsed.archive as ProjectArchive<TTrail>);
       dependencies.persist();
       dependencies.render();
       dependencies.onEvent?.({type:'history.applied', direction, label:entry.label});
@@ -157,6 +187,7 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
     get redoLabel() { return redoEntries.at(-1)?.label ?? null; },
     get undoCount() { return undoEntries.length; },
     get redoCount() { return redoEntries.length; },
+    get retainedBytes() { return retainedBytes(); },
     capture,
     commit,
     execute,

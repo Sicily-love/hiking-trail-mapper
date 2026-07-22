@@ -61,6 +61,12 @@ export function createProjectRuntimeController<TTrail extends ProjectArchiveTrai
     beforeApply:dependencies.beforeHistoryApply,
     onEvent:event => {
       dependencies.notifyCommands();
+      if(event.type === 'history.skipped') {
+        dependencies.notify(language() === 'zh'
+          ? `“${event.label}”已完成，但项目过大，本次修改未加入撤销历史`
+          : `“${event.label}” completed, but the project is too large to retain this edit in undo history`, 'error');
+        return;
+      }
       if(event.type !== 'history.applied') return;
       const action = event.direction === 'undo'
         ? (language() === 'zh' ? '已撤销' : 'Undid')
