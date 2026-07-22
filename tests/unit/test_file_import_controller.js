@@ -2,6 +2,7 @@
 const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -21,14 +22,7 @@ function createHarness(trails = []) {
   const state = app.createAppStateStore({trails});
   const project = {title:'Import', trails};
   const effects = {commits:0, resets:0, events:[]};
-  const context = app.createRuntimeContext({
-    project,
-    state,
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const context = createTestRuntimeContext(app, project, state);
   const controller = app.createFileImportController(context, {
     contentHash:item => JSON.stringify(item.track),
     unzip:() => ({}),
@@ -127,7 +121,7 @@ function createHarness(trails = []) {
   });
 
   await T('direct runtime keeps import DOM but not project writes', () => {
-    const source = read('src/app/runtime/studio.ts');
+    const source = [read('src/app/runtime/studio.ts'), read('src/ui/import/runtime-owner.ts')].join('\n');
     assert.match(source, /createFileImportController\(runtimeContext/);
     assert.match(source, /fileImportController\.addTrail\(trail\)/);
     assert.match(source, /fileImportController\.renameTrail/);

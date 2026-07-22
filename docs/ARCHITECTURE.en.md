@@ -25,15 +25,20 @@ src/
 │   ├── bootstrap.ts              Startup and dependency assembly
 │   ├── version.ts                Single version source
 │   ├── state-store.ts            Application state write boundary
+│   ├── actions.ts                Semantic typed state actions
+│   ├── selectors.ts              Read-only state selectors
+│   ├── project-store.ts          Project and trail-data write boundary
+│   ├── project-actions.ts        Semantic project mutations
+│   ├── project-selectors.ts      Read-only project queries
 │   ├── command.ts                Unified commands
 │   ├── interaction-manager.ts    Map interaction sessions
 │   ├── render-scheduler.ts       Frame batching and last-fit wins
 │   ├── runtime-context.ts        Typed service context
-│   └── runtime/studio.ts         DOM/Leaflet browser orchestration
+│   └── runtime/studio.ts         Startup glue and shared map orchestration (~3,950 lines)
 ├── core/                         DOM-free domain algorithms and render models
 ├── features/                     Vertical feature controllers and data
 ├── adapters/                     Leaflet, IndexedDB, file, and browser effects
-├── ui/                           Workbench, dialogs, and UI components
+├── ui/                           Workbench, dialogs, sidebar/import owners, and UI components
 ├── styles/                       Layout, components, and theme
 └── vendor/                       Browser dependencies in the Vite graph
 ```
@@ -46,7 +51,7 @@ src/
 
 ### App
 
-`AppStateStore` owns persistent application-state writes. Mutations use discriminated commands and emit revisioned events. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands. `ProjectHistoryController` stores compact versioned snapshots, bounds both entry count and retained bytes, and rolls back failed edits.
+`AppStateStore` owns workspace-preference writes, while `ProjectStore` owns project, trail, and durable business-data writes. Both emit typed revisioned events. Features mutate through `AppStateActions` / `ProjectActions` and read through `AppStateSelectors` / `ProjectSelectors`; they no longer receive a raw store or writable project context. `CommandRegistry` lets the top menu, desktop rail, mobile bar, and keyboard shortcuts dispatch the same semantic commands. `ProjectHistoryController` stores compact versioned snapshots, bounds both entry count and retained bytes, and rolls back failed edits.
 
 `InteractionManager` unifies the `select -> preview -> dragging -> commit` lifecycle for measure, segment, waypoint, escape, and Day preview. It cancels stale sessions, timers, RAF callbacks, and asynchronous work.
 
@@ -54,7 +59,7 @@ src/
 
 ### Features and Adapters
 
-Trail, storage, file import/export, project archive/history runtime, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. `features/project/runtime.ts` orchestrates restore UI, schema migration notices, restore rollback, and history feedback, leaving only browser effects in the direct runtime. Adapters isolate browser capabilities:
+Trail, storage, file import/export, project archive/history runtime, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. `features/project/runtime.ts` composes archives and history feedback, while `ui/import/project-restore.ts` owns restore inputs, status text, and confirmation interaction. Adapters isolate browser capabilities:
 
 - Leaflet adapters consume track/marker render models and update layers by diff;
 - the elevation renderer consumes a Canvas context, dimensions, and a downsampled model;
@@ -65,7 +70,7 @@ Trail, storage, file import/export, project archive/history runtime, waypoint, m
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` centralizes mature orchestration that still shares DOM and Leaflet instances. It currently uses `@ts-nocheck`, but starts directly through explicit parameters and calls typed core, controller, adapter, and UI APIs. New domain logic must not enter this boundary, and deleted feature runtime owners must not return.
+`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 3,940 lines. KML project building, reset/fit ownership, sidebar and itinerary DOM, and import DOM now live in `features/files/kml-project-builder.ts`, `features/map/workspace-controller.ts`, `ui/sidebar/runtime-owner.ts`, and `ui/import/runtime-owner.ts`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates the frozen test inspector.
 
 Real-browser tests receive a frozen, read-only inspector only when the URL includes `?studio-test=1`. Normal releases do not create it and do not expose `HikingTrailCore`, `HikingTrailApp`, command, or dialog classic globals.
 

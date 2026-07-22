@@ -51,7 +51,7 @@ export function createFileExportController(
   const emit = (event: FileExportEvent): void => dependencies.onEvent?.(event);
 
   const downloadTrailKml = (trailId: string): FileExportResult => {
-    const trail = context.project.trails.find(candidate => candidate.id === trailId);
+    const trail = context.projectSelectors.trailById(trailId);
     if(!trail) return {status:'missing'};
     const filename = `${sanitizeExportFilename(trail.name)}.kml`;
     dependencies.files.download(buildTrailKml(trail), filename, KML_MIME);
@@ -60,8 +60,8 @@ export function createFileExportController(
   };
 
   const exportGroupKml = async (): Promise<FileExportResult> => {
-    const state = context.state.snapshot();
-    const trails = context.project.trails.filter(trail =>
+    const state = context.stateSelectors.snapshot();
+    const trails = context.projectSelectors.trails().filter(trail =>
       state.activeGroup != null
       && (trail.group || '默认') === state.activeGroup
       && state.activeTrails.has(trail.id));
@@ -105,8 +105,8 @@ export function createFileExportController(
   };
 
   const exportItineraryMarkdown = async (): Promise<FileExportResult> => {
-    const primaryId = context.state.snapshot().primaryTrailId;
-    const trail = context.project.trails.find(candidate => candidate.id === primaryId);
+    const primaryId = context.stateSelectors.primaryTrailId();
+    const trail = context.projectSelectors.trailById(primaryId);
     if(!trail) {
       emit({type:'export.error', reason:'missing-primary'});
       return {status:'missing'};

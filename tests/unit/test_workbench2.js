@@ -14,6 +14,7 @@ const mainPath = path.join(root, 'src/main.ts');
 const bootstrapPath = path.join(root, 'src/app/bootstrap.ts');
 const shellPath = path.join(root, 'src/ui/layout/app-shell.ts');
 const runtimePath = path.join(root, 'src/app/runtime/studio.ts');
+const sidebarRuntimePath = path.join(root, 'src/ui/sidebar/runtime-owner.ts');
 const iconSource = fs.readFileSync(iconPath, 'utf8');
 const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
 const css = fs.readFileSync(cssPath, 'utf8');
@@ -23,7 +24,9 @@ const toastSource = fs.readFileSync(toastPath, 'utf8');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
 const shellSource = fs.readFileSync(shellPath, 'utf8');
-const runtimeSource = fs.readFileSync(runtimePath, 'utf8');
+const runtimeSource = [runtimePath, sidebarRuntimePath]
+  .map(file => fs.readFileSync(file, 'utf8'))
+  .join('\n');
 
 let iconModule = null;
 let workbenchModule = null;
@@ -136,7 +139,7 @@ test('top toolbar keeps only multi-command menus and flattens direct commands', 
 });
 
 test('activity rail exposes trail groups as its first dedicated destination', () => {
-  const expected = ['Trail Groups', 'Trails', 'Itinerary', 'Waypoints'];
+  const expected = ['Trail Groups', 'Trails', 'Itinerary'];
   if(workbenchModule) {
     assert.deepStrictEqual(workbenchModule.ACTIVITY_DEFINITIONS.map(item => item.label), expected);
   } else {

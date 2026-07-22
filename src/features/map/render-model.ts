@@ -58,8 +58,8 @@ export function createMapRenderController(
   const buildTracks = (
     options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount' | 'escapeReferenceTrailId'>,
   ): TrackRenderModel => {
-    const state = context.state.snapshot();
-    const trails: TrackRenderInputTrail[] = context.project.trails.map(trail => ({
+    const state = context.stateSelectors.snapshot();
+    const trails: TrackRenderInputTrail[] = context.projectSelectors.trails().map(trail => ({
       ...trail,
       active:state.activeGroup !== null
         && (trail.group || '默认') === state.activeGroup

@@ -1,6 +1,6 @@
 export interface PrimaryMiniTrail {
   name: string;
-  stats: {distance_km: number; ascent_m: number; max_elev: number};
+  stats: {distance_km: number; ascent_m: number; descent_m: number};
 }
 
 export interface PrimaryMiniStorage {
@@ -115,9 +115,9 @@ export function createPrimaryMiniController(
       <div class="primary-mini__eyebrow">${t('mini.primary')}</div>
       <div class="primary-mini__name">${dependencies.escapeText(trail.name)}</div>
       <div class="primary-mini__stats">
-        <div><b>${trail.stats.distance_km}</b><span>${t('mini.km')}</span></div>
-        <div><b>${trail.stats.ascent_m}</b><span>${t('mini.ascent')}</span></div>
-        <div><b>${trail.stats.max_elev}</b><span>${t('mini.peak')}</span></div>
+        <div><b>${trail.stats.distance_km}<small> km</small></b><span>${t('mini.distance')}</span></div>
+        <div><b>${trail.stats.ascent_m}<small> m</small></b><span>↑ ${t('mini.ascent')}</span></div>
+        <div><b>${trail.stats.descent_m}<small> m</small></b><span>↓ ${t('mini.descent')}</span></div>
       </div>
     `;
     applyPosition();

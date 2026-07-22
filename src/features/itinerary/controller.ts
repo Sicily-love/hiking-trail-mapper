@@ -60,10 +60,10 @@ export function createDayPreviewController(
     dayMeta: Partial<DayMeta>,
     maxPoints = 1200,
   ): DayPreviewPlan | null => {
-    const trail = context.project.trails.find(candidate => candidate.id === trailId);
+    const trail = context.projectSelectors.trailById(trailId);
     const day = Number(dayMeta.d);
     if(!trail?.track.length || !Number.isInteger(day) || day < 1) return null;
-    if(context.state.snapshot().primaryTrailId !== trailId) return null;
+    if(context.stateSelectors.primaryTrailId() !== trailId) return null;
     const range = getDayIndexRange(trail, dayMeta);
     if(!range) return null;
     const model = buildDayPreviewRenderModel(trail.track, range, maxPoints, trail.track_breaks);
@@ -73,8 +73,8 @@ export function createDayPreviewController(
   };
 
   const activate = (plan: DayPreviewPlan): boolean => {
-    const trail = context.project.trails.find(candidate => candidate.id === plan.trailId);
-    if(trail !== plan.trail || context.state.snapshot().primaryTrailId !== plan.trailId) return false;
+    const trail = context.projectSelectors.trailById(plan.trailId);
+    if(trail !== plan.trail || context.stateSelectors.primaryTrailId() !== plan.trailId) return false;
     state.active = true;
     state.trailId = plan.trailId;
     state.day = plan.day;

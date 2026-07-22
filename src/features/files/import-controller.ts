@@ -105,9 +105,9 @@ export function createFileImportController<TTrail extends ImportTrail>(
 
   const findDuplicate = (trail: TTrail): TTrail | null => {
     const hash = dependencies.contentHash(trail);
-    const duplicate = context.project.trails.find(existing => {
-      existing._contentHash ||= dependencies.contentHash(existing);
-      return existing._contentHash === hash;
+    const duplicate = context.projectSelectors.trails().find(existing => {
+      const existingHash = existing._contentHash || dependencies.contentHash(existing);
+      return existingHash === hash;
     });
     if(duplicate) return duplicate;
     trail._contentHash = hash;
@@ -118,7 +118,7 @@ export function createFileImportController<TTrail extends ImportTrail>(
     const baseId = trail.id;
     let nextId = baseId;
     let suffix = 0;
-    while(context.project.trails.some(existing => existing.id === nextId)) {
+    while(context.projectSelectors.trails().some(existing => existing.id === nextId)) {
       suffix += 1;
       nextId = `${baseId}-${suffix}`;
     }
@@ -130,39 +130,41 @@ export function createFileImportController<TTrail extends ImportTrail>(
     const duplicate = findDuplicate(trail);
     if(duplicate) return {status:'duplicate', trail, duplicate};
     ensureUniqueId(trail);
-    trail.color = dependencies.palette[context.project.trails.length % dependencies.palette.length];
-    if(!trail.group) trail.group = context.state.snapshot().activeGroup || '默认';
-    context.project.trails.push(trail);
-    context.state.dispatch({type:'active-trail.set', trailId:trail.id, active:true});
+    trail.color = dependencies.palette[context.projectSelectors.trailCount() % dependencies.palette.length];
+    if(!trail.group) trail.group = context.stateSelectors.activeGroup() || '默认';
+    context.projectActions.addTrail(trail, 'trail.import');
+    context.stateActions.setTrailActive(trail.id, true);
     return {status:'added', trail};
   };
 
   const renameTrail = (oldId: string, requestedId: string): RenameTrailResult<TTrail> => {
-    const trail = context.project.trails.find(candidate => candidate.id === oldId);
+    const trail = context.projectSelectors.trailById(oldId);
     if(!trail) return {status:'missing'};
     const newId = requestedId.trim();
     if(!newId) return {status:'empty'};
     if(newId === oldId) return {status:'unchanged'};
-    if(context.project.trails.some(candidate => candidate !== trail && candidate.id === newId)) {
+    if(context.projectSelectors.trails().some(candidate => candidate !== trail && candidate.id === newId)) {
       return {status:'duplicate'};
     }
-    trail.id = newId;
-    context.state.dispatch({type:'trail-id.rename', oldId, newId});
+    context.projectActions.mutateTrail(oldId, 'trail.rename-id', candidate => { candidate.id = newId; });
+    context.stateActions.renameTrailId(oldId, newId);
     dependencies.commit();
     return {status:'renamed', trail, oldId, newId};
   };
 
   const updateSource = (trailId: string, source: string): boolean => {
-    const trail = context.project.trails.find(candidate => candidate.id === trailId);
+    const trail = context.projectSelectors.trailById(trailId);
     if(!trail) return false;
-    trail.source = source.trim();
+    context.projectActions.mutateTrail(trailId, 'trail.source', candidate => {
+      candidate.source = source.trim();
+    });
     dependencies.commit();
     return true;
   };
 
   const finalizeImport = (addedCount: number): boolean => {
     if(addedCount <= 0) return false;
-    context.state.dispatch({type:'escape.set-active', escapeId:null});
+    context.stateActions.setActiveEscape(null);
     dependencies.commit();
     dependencies.resetView();
     return true;

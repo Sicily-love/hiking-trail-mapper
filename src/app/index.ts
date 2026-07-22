@@ -160,13 +160,15 @@ export {
   type ProjectHistoryEvent,
 } from '../features/history/controller.ts';
 export {
-  bindProjectRestoreUi,
   createProjectRuntimeController,
-  type ProjectRestoreUiDependencies,
   type ProjectRuntimeDependencies,
   type ProjectRuntimeLanguage,
   type ProjectRuntimeToast,
 } from '../features/project/runtime.ts';
+export {
+  bindProjectRestoreUi,
+  type ProjectRestoreUiDependencies,
+} from '../ui/import/project-restore.ts';
 export {
   createWaypointController,
   type ManualWaypointAnchor,
@@ -184,6 +186,21 @@ export {
   type CommandState,
   type StudioCommandId,
 } from './command.ts';
+export {
+  ProjectStore,
+  createProjectStore,
+  type ProjectMutationReason,
+  type ProjectState,
+  type ProjectStateEvent,
+} from './project-store.ts';
+export {
+  createProjectActions,
+  type ProjectActions,
+} from './project-actions.ts';
+export {
+  createProjectSelectors,
+  type ProjectSelectors,
+} from './project-selectors.ts';
 export * from './interactions/index.ts';
 export * from './rendering/index.ts';
 export {
@@ -228,3 +245,39 @@ export {
   type StorageInfoSnapshot,
 } from '../features/localization/storage-content.ts';
 export { shouldCloseSidebarForFit } from '../ui/layout/workbench.ts';
+export {
+  createAppStateSelectors,
+  trailGroupOf,
+  type AppStateSelectors,
+  type GroupedTrail,
+} from './selectors.ts';
+export {
+  createAppStateActions,
+  type AppStateActions,
+} from './actions.ts';
+export {
+  createReadonlyRuntimeInspector,
+  type RuntimeInspectorBindings,
+} from './runtime/inspector.ts';
+export {
+  createKmlProjectBuilder,
+  KML_WAYPOINT_RULES,
+  type KmlProjectBuilder,
+  type KmlProjectBuilderDependencies,
+} from '../features/files/kml-project-builder.ts';
+export {
+  createWorkspaceController,
+  type WorkspaceController,
+  type WorkspaceControllerDependencies,
+  type WorkspaceFitRequest,
+  type WorkspaceMeasureState,
+  type WorkspaceTrail,
+} from '../features/map/workspace-controller.ts';
+export {
+  createSidebarRuntime,
+  type SidebarRuntimeDependencies,
+} from '../ui/sidebar/runtime-owner.ts';
+export {
+  createImportRuntime,
+  type ImportRuntimeDependencies,
+} from '../ui/import/runtime-owner.ts';

@@ -140,7 +140,7 @@ try:
     trail_count = evaluate(f"""
       (async () => {{
         DATA.trails = [];
-        state.activeTrails = new Set();
+        stateActions.replaceActiveTrails([]);
         const bytes = Uint8Array.from(atob('{sample_b64}'), c => c.charCodeAt(0));
         const file = {{
           name: 'workbench-sample.kml',

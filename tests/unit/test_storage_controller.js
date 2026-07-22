@@ -2,6 +2,7 @@
 const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -11,14 +12,8 @@ const T = async (name, fn) => {
 };
 
 function createContext(trails = [{id:'a', group:'A'}]) {
-  return app.createRuntimeContext({
-    project:{title:'Storage', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  return createTestRuntimeContext(app, {title:'Storage', trails}, state);
 }
 
 (async () => {
@@ -83,7 +78,7 @@ function createContext(trails = [{id:'a', group:'A'}]) {
     const restored = await controller.load('A');
     assert.strictEqual(restored.ok, true);
     assert.strictEqual(restored.primaryTrailId, 'b');
-    assert.strictEqual(context.project.trails[0].id, 'a');
+    assert.strictEqual(context.projectSelectors.trails()[0].id, 'a');
     assert.deepStrictEqual(events, ['storage.snapshot', 'storage.loaded']);
   });
 
@@ -126,7 +121,7 @@ function createContext(trails = [{id:'a', group:'A'}]) {
     const source = read('src/app/runtime/studio.ts');
     assert.match(source, /createStorageController\(runtimeContext/);
     assert.match(source, /storageController\.scheduleSave\(\)/);
-    assert.match(source, /storageController\.load\(state\.activeGroup\)/);
+    assert.match(source, /storageController\.load\(selectors\.activeGroup\(\)\)/);
     assert.doesNotMatch(source, /indexedDB\.open\(/);
     assert.doesNotMatch(source, /let _dbPromise/);
     assert.doesNotMatch(source, /let _saveTimer/);

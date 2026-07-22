@@ -2,6 +2,7 @@
 const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -11,14 +12,8 @@ const T = (name, fn) => {
 };
 
 function createHarness(trails) {
-  const context = app.createRuntimeContext({
-    project:{title:'Waypoints', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  const context = createTestRuntimeContext(app, {title:'Waypoints', trails}, state);
   const effects = {revision:0, waypoints:0, filters:0, days:0, persist:0, messages:[]};
   const controller = app.createWaypointController(context, {
     iconForTag:tag => `icon:${tag}`,

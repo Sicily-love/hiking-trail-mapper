@@ -14,7 +14,7 @@ const {createPrimaryMiniController} = moduleShim.exports;
 let passed = 0;
 const test = (name, fn) => { fn(); passed++; console.log(`  PASS ${name}`); };
 
-function fixture(trail = {name:'A very long trail', stats:{distance_km:12.4, ascent_m:820, max_elev:4680}}) {
+function fixture(trail = {name:'A very long trail', stats:{distance_km:12.4, ascent_m:820, descent_m:760}}) {
   const values = new Map();
   const listeners = new Map();
   const element = {
@@ -48,6 +48,10 @@ test('renders a class-based compact summary without inline style', () => {
   assert.match(element.innerHTML, /primary-mini__eyebrow/);
   assert.match(element.innerHTML, /primary-mini__name/);
   assert.match(element.innerHTML, /primary-mini__stats/);
+  assert.match(element.innerHTML, /12\.4<small> km<\/small>/);
+  assert.match(element.innerHTML, /820<small> m<\/small><\/b><span>↑ mini\.ascent/);
+  assert.match(element.innerHTML, /760<small> m<\/small><\/b><span>↓ mini\.descent/);
+  assert.doesNotMatch(element.innerHTML, /mini\.peak/);
   assert.doesNotMatch(element.innerHTML, /style=/);
   assert.match(element.title, /Drag to move/);
 });

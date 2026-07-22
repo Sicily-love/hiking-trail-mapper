@@ -70,7 +70,6 @@ export const ACTIVITY_DEFINITIONS = [
   { key: 'groups', label: 'Trail Groups', labelZh: '轨迹组', icon: 'folder-tree', commandId: STUDIO_COMMANDS.WORKSPACE_GROUPS },
   { key: 'trails', label: 'Trails', labelZh: '轨迹', icon: 'route', commandId: STUDIO_COMMANDS.WORKSPACE_TRAILS },
   { key: 'itinerary', label: 'Itinerary', labelZh: '行程', icon: 'calendar', commandId: STUDIO_COMMANDS.WORKSPACE_ITINERARY },
-  { key: 'waypoints', label: 'Waypoints', labelZh: '标注点', icon: 'waypoints', commandId: STUDIO_COMMANDS.WORKSPACE_WAYPOINTS },
 ] as const satisfies ReadonlyArray<{
   key: string;
   label: string;

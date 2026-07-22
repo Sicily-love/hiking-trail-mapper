@@ -1,6 +1,7 @@
 /** Declarative map models and Leaflet instance ownership contracts. */
 const assert = require('assert');
 const app = require('../../src/app/index.ts');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -46,14 +47,8 @@ function createLeafletHarness() {
 }
 
 function createRenderContext(trails) {
-  return app.createRuntimeContext({
-    project:{title:'Render', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  return createTestRuntimeContext(app, {title:'Render', trails}, state);
 }
 
 console.log('\n▸ Map and Marker Leaflet boundaries');
@@ -231,7 +226,7 @@ T('Marker controller owns mode, group, tag, and primary visibility', () => {
     tagColors:{camp:'#080'}, iconForWaypoint:() => 'C',
   });
   assert.deepStrictEqual(controller.build().waypoints.map(model => model.trail.id), ['a']);
-  context.state.dispatch({type:'mode.set', mode:'waypoint'});
+  context.stateActions.setMode('waypoint');
   assert.deepStrictEqual(controller.build().waypoints.map(model => model.trail.id), ['a', 'b']);
 });
 

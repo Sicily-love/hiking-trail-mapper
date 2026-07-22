@@ -70,8 +70,8 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
     retainedBytes:retainedBytes(),
   });
   const capture = (): ProjectArchive<TTrail> => createProjectArchive({
-    project:context.project,
-    state:context.state.snapshot(),
+    project:context.projectSelectors.snapshot(),
+    state:context.stateSelectors.snapshot(),
     appVersion:dependencies.appVersion,
   }) as ProjectArchive<TTrail>;
 
@@ -101,7 +101,7 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
   const rollbackFailedOperation = (before: ProjectArchive<TTrail>): void => {
     applying = true;
     try {
-      applyProjectArchive(context, before);
+      applyProjectArchive(context, before, 'history.restore');
       dependencies.persist();
       dependencies.render();
     } finally {
@@ -145,7 +145,7 @@ export function createProjectHistoryController<TTrail extends ProjectArchiveTrai
         ...JSON.parse(direction === 'undo' ? entry.before : entry.after),
       }));
       if(!parsed.ok) throw new TypeError(parsed.message);
-      applyProjectArchive(context, parsed.archive as ProjectArchive<TTrail>);
+      applyProjectArchive(context, parsed.archive as ProjectArchive<TTrail>, 'history.restore');
       dependencies.persist();
       dependencies.render();
       dependencies.onEvent?.({type:'history.applied', direction, label:entry.label});

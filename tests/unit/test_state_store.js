@@ -91,8 +91,17 @@ T('direct runtime cannot bypass the typed application-state boundary', () => {
   assert.doesNotMatch(source, /\bstate\.[A-Za-z_$][\w$]*\.(?:add|delete|clear)\s*\(/);
   assert.doesNotMatch(source, /\bstate\.primaryByGroup\[[^\]]+\]\s*=(?!=)/);
   assert.doesNotMatch(source, /\bdelete\s+state\.primaryByGroup/);
-  assert.match(source, /createAppStateStore\(DATA\)/);
-  assert.match(source, /function dispatchState\(command\)/);
+  assert.match(source, /createAppStateStore\(initialProject\)/);
+  assert.match(source, /createAppStateActions\(appStateStore\)/);
+  assert.match(source, /createAppStateSelectors\(\(\) => appStateStore\.snapshot\(\)\)/);
+  assert.doesNotMatch(source, /function dispatchState\(/);
+  for(const owner of ['src/ui/sidebar/runtime-owner.ts', 'src/ui/import/runtime-owner.ts']) {
+    const ownerSource = require('./runtime_source.js').read(owner)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    assert.doesNotMatch(ownerSource, /\bstate\./, owner);
+    assert.doesNotMatch(ownerSource, /\bdispatchState\b/, owner);
+  }
 });
 T('removed classic mirror fields stay absent', () => {
   for(const name of [

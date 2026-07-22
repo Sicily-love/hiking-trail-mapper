@@ -58,24 +58,38 @@ test('runtime has no fragment slots or dynamic script execution', () => {
   assert.ok(runtimeSource.includes('export function startStudioRuntime'));
 });
 
-test('all browser capabilities remain present exactly once', () => {
+test('browser capabilities have one explicit module owner', () => {
+  const sidebar = read('src/ui/sidebar/runtime-owner.ts');
+  const importer = read('src/ui/import/runtime-owner.ts');
+  const workspace = read('src/features/map/workspace-controller.ts');
   for(const functionName of [
-    'handleFiles', 'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow',
-    'drawElevBar', 'setLang', 'beginRuntimeInteraction',
-    'buildTrailList', 'showDaySegmentPreview', 'measureEnter', 'addEscapeEnter',
-    'segmentEnter', 'resetView', 'addManualWaypointAt',
-  ]) {
-    assert.strictEqual(
-      (runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length,
-      1,
-      functionName,
-    );
+    'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar',
+    'setLang', 'beginRuntimeInteraction', 'measureEnter', 'addEscapeEnter',
+    'segmentEnter', 'addManualWaypointAt',
+  ]) assert.strictEqual((runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
+  for(const functionName of ['buildTrailList', 'showDaySegmentPreview']) {
+    assert.strictEqual((sidebar.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
+    assert.strictEqual(runtimeSource.includes(`function ${functionName}(`), false, functionName);
   }
+  assert.strictEqual((importer.match(/function handleFiles\(/g) || []).length, 1);
+  assert.strictEqual(runtimeSource.includes('function handleFiles('), false);
+  assert.match(workspace, /const resetView =/);
+  assert.match(runtimeSource, /createWorkspaceController\(/);
+  assert.match(runtimeSource, /createSidebarRuntime\(/);
+  assert.match(runtimeSource, /createImportRuntime\(/);
   const lightbox = read('src/ui/lightbox.ts');
   assert.match(runtimeSource, /createImageLightboxController\(/);
   assert.match(runtimeSource, /const openLightbox = .*lightboxController\.open/);
   assert.match(lightbox, /container\.addEventListener\('touchstart'/);
   assert.doesNotMatch(runtimeSource, /lightboxEl\.addEventListener/);
+});
+
+test('production runtime does not publish mutable business globals', () => {
+  assert.doesNotMatch(runtimeSource, /window\.__exportedMap/);
+  assert.doesNotMatch(runtimeSource, /window\.downloadTrailKml/);
+  assert.doesNotMatch(runtimeSource, /window\.__HTM_RUNTIME_COMMAND_DISPOSERS__/);
+  assert.match(runtimeSource, /if\(studioTestMode\) window\.__HTM_BOOT_READY__/);
+  assert.match(runtimeSource, /if\(studioTestMode\) \{/);
 });
 
 console.log(`\nResult: ${passed}/${passed + failed} passed`);

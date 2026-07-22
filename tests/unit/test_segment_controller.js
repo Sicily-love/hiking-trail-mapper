@@ -2,6 +2,7 @@
 const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -23,14 +24,8 @@ const point = (trail, index) => {
 };
 
 function createHarness(trails) {
-  const context = app.createRuntimeContext({
-    project:{title:'Segments', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  const context = createTestRuntimeContext(app, {title:'Segments', trails}, state);
   const effects = {revisions:0};
   const controller = app.createSegmentController(context, {
     markRevision:() => { effects.revisions++; },
@@ -142,7 +137,7 @@ T('rejects commit after the primary trail changes', () => {
   const second = {id:'b', group:'A', track:track()};
   const {context, controller, effects} = createHarness([first, second]);
   controller.enter('a');
-  context.state.dispatch({type:'primary-trail.set', trailId:'b'});
+  context.stateActions.setPrimaryTrail('b');
   assert.strictEqual(controller.apply(), null);
   assert.strictEqual(effects.revisions, 0);
 });

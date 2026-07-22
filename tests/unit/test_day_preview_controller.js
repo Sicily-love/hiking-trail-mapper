@@ -2,6 +2,7 @@
 const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -19,14 +20,8 @@ const track = () => [
 ];
 
 function createHarness(trails) {
-  const context = app.createRuntimeContext({
-    project:{title:'Day preview', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  const context = createTestRuntimeContext(app, {title:'Day preview', trails}, state);
   return {context, controller:app.createDayPreviewController(context)};
 }
 
@@ -82,12 +77,12 @@ T('rejects invalid days, non-primary trails, and stale plans', () => {
   assert.strictEqual(controller.prepare('a', {d:0}), null);
   assert.strictEqual(controller.prepare('b', second.day_meta[0]), null);
   const plan = controller.prepare('a', first.day_meta[0]);
-  context.state.dispatch({type:'primary-trail.set', trailId:'b'});
+  context.stateActions.setPrimaryTrail('b');
   assert.strictEqual(controller.activate(plan), false);
 });
 
 T('direct runtime delegates Day selection state and uses core range helpers', () => {
-  const source = read('src/app/runtime/studio.ts');
+  const source = read('src/ui/sidebar/runtime-owner.ts');
   const directBusinessWrite = /dayPreviewState\.(?:active|trailId|day|iStart|iEnd)\s*(?:=(?!=)|\+\+)/;
   assert.match(source, /createDayPreviewController\(runtimeContext\)/);
   assert.match(source, /const dayPreviewState = dayPreviewController\.state/);

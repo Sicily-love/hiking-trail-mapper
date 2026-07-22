@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const app = require('../../src/app/index.ts');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -19,12 +20,7 @@ function harness(options = {}) {
   const source = trail();
   const project = {title:'History', trails:[source], calc_method:{}};
   const state = app.createAppStateStore({trails:[source]});
-  const context = app.createRuntimeContext({
-    project, state, commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const context = createTestRuntimeContext(app, project, state);
   const effects = {persist:0, render:0, before:0, events:[]};
   const history = app.createProjectHistoryController(context, {
     appVersion:'v2.2.0',
@@ -116,7 +112,11 @@ function harness(options = {}) {
   });
 
   await T('runtime routes durable edits through project history', () => {
-    const source = fs.readFileSync('src/app/runtime/studio.ts', 'utf8');
+    const source = [
+      'src/app/runtime/studio.ts',
+      'src/ui/sidebar/runtime-owner.ts',
+      'src/ui/import/runtime-owner.ts',
+    ].map(file => fs.readFileSync(file, 'utf8')).join('\n');
     const feature = fs.readFileSync('src/features/project/runtime.ts', 'utf8');
     assert.match(source, /createProjectRuntimeController\(runtimeContext/);
     assert.match(feature, /createProjectHistoryController\(context/);

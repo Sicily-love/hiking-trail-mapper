@@ -79,7 +79,7 @@ export function createWaypointController(
   const state: WaypointControllerState = {active:false, trailId:null};
 
   const enter = (trailId: string): boolean => {
-    const trail = context.project.trails.find(candidate => candidate.id === trailId);
+    const trail = context.projectSelectors.trailById(trailId);
     if(!trail?.track.length) return false;
     state.active = true;
     state.trailId = trailId;
@@ -101,9 +101,8 @@ export function createWaypointController(
   const addManualWaypoint = (anchor: ManualWaypointAnchor, input: ManualWaypointInput): WaypointRecord | null => {
     const cleanName = input.name.trim();
     if(!cleanName) return null;
-    const trail = context.project.trails.find(candidate => candidate.id === anchor.trailId);
-    const appState = context.state.snapshot();
-    if(!trail || trail.id !== appState.primaryTrailId) return null;
+    const trail = context.projectSelectors.trailById(anchor.trailId);
+    if(!trail || trail.id !== context.stateSelectors.primaryTrailId()) return null;
     if(trail.track[anchor.trackIndex] !== anchor.point) return null;
 
     const point = anchor.point;
@@ -125,8 +124,11 @@ export function createWaypointController(
       description:input.description?.trim() || '',
       manuallyAdded:true,
     };
-    (trail.waypoints ||= []).push(waypoint);
-    dependencies.markRevision(trail);
+    const updated = context.projectActions.mutateTrail(trail.id, 'waypoint.add', candidate => {
+      (candidate.waypoints ||= []).push(waypoint);
+    });
+    if(!updated) return null;
+    dependencies.markRevision(updated);
     dependencies.renderWaypoints();
     dependencies.renderFilters();
     dependencies.renderDays();

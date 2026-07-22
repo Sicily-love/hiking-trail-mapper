@@ -153,7 +153,7 @@ export function createSegmentController(
   let initialPoints: TrackIndexPoint[] = [];
   let initialCampEdits: SegmentCampEdits = {};
   const findTrail = (trailId = state.trailId): SegmentTrail | null =>
-    context.project.trails.find(trail => trail.id === trailId) || null;
+    context.projectSelectors.trailById(trailId);
 
   const rememberSelection = (): void => {
     initialPoints = state.points.map(point => ({...point}));
@@ -255,15 +255,18 @@ export function createSegmentController(
   const apply = (): SegmentApplyResult | null => {
     const trail = findTrail();
     if(!trail?.track.length || state.points.length < 2) return null;
-    if(context.state.snapshot().primaryTrailId !== trail.id) return null;
+    if(context.stateSelectors.primaryTrailId() !== trail.id) return null;
 
-    assignTrackDayIds(trail.track, state.points);
-    trail.day_meta = buildDayMetaFromSegments(trail.track, state.points, state.campEdits);
-    trail.days = trail.day_meta.length;
-    assignWaypointDays(trail);
-    dependencies.markRevision(trail);
+    const updated = context.projectActions.mutateTrail(trail.id, 'segment.apply', candidate => {
+      assignTrackDayIds(candidate.track, state.points);
+      candidate.day_meta = buildDayMetaFromSegments(candidate.track, state.points, state.campEdits);
+      candidate.days = candidate.day_meta.length;
+      assignWaypointDays(candidate);
+    });
+    if(!updated) return null;
+    dependencies.markRevision(updated);
     rememberSelection();
-    return {trail, dayCount:trail.days};
+    return {trail:updated, dayCount:updated.days || 1};
   };
 
   return Object.freeze({

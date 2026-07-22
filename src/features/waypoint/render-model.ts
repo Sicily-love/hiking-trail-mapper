@@ -120,12 +120,12 @@ export function createMarkerRenderController(
   options: MarkerRenderControllerOptions,
 ): MarkerRenderController {
   const build = (): MarkerRenderScene => {
-    const state = context.state.snapshot();
+    const state = context.stateSelectors.snapshot();
     const waypointMode = state.mode === 'waypoint';
     const waypoints: LeafletMarkerRenderModel[] = [];
     const highPoints: LeafletMarkerRenderModel[] = [];
 
-    for(const trail of context.project.trails) {
+    for(const trail of context.projectSelectors.trails()) {
       const active = state.activeGroup !== null
         && (trail.group || '默认') === state.activeGroup
         && state.activeTrails.has(trail.id);

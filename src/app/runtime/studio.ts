@@ -30,6 +30,7 @@ export function startStudioRuntime(
   const { document } = dependencies;
   const window = document.defaultView;
   if(!window) throw new Error('Studio runtime requires a document with a window');
+  const studioTestMode = new URL(window.location.href).searchParams.has('studio-test');
   const commandRegistry = dependencies.commands;
   const studioDialogs = dependencies.dialogs;
   const STUDIO_COMMANDS = HTM_APP.STUDIO_COMMANDS;
@@ -38,7 +39,7 @@ export function startStudioRuntime(
   if(!L) throw new Error('Leaflet runtime is missing');
   if(!fflate) throw new Error('fflate runtime is missing');
 
-  let DATA = {title:'徒步路线地图', trails:[], calc_method:{}};
+  const initialProject = {title:'徒步路线地图', trails:[], calc_method:{}};
 
   function dispatchStudioCommand(commandId) {
     try {
@@ -145,7 +146,7 @@ export function startStudioRuntime(
   async function showStorageInfo() {
     const storageApi = navigator.storage;
     let snapshot = {
-      trailCount:DATA.trails.length,
+      trailCount:projectSelectors.trails().length,
       estimateSupported:Boolean(storageApi && storageApi.estimate),
       persistSupported:Boolean(storageApi && storageApi.persist),
       persisted:false,
@@ -183,9 +184,12 @@ export function startStudioRuntime(
     }
   }
   /* ============ State ============ */
-  const appStateStore = HTM_APP.createAppStateStore(DATA);
-  const state = appStateStore.snapshot();
-  function dispatchState(command) { return appStateStore.dispatch(command); }
+  const appStateStore = HTM_APP.createAppStateStore(initialProject);
+  const selectors = HTM_APP.createAppStateSelectors(() => appStateStore.snapshot());
+  const stateActions = HTM_APP.createAppStateActions(appStateStore);
+  const projectStore = HTM_APP.createProjectStore(initialProject);
+  const projectActions = HTM_APP.createProjectActions(projectStore);
+  const projectSelectors = HTM_APP.createProjectSelectors(() => projectStore.snapshot());
   appStateStore.subscribe(() => commandRegistry.notifyChanged());
   const interactionManager = HTM_APP.createStudioInteractionManager();
   const runtimeTrailRevisions = new WeakMap();
@@ -258,8 +262,8 @@ export function startStudioRuntime(
 
   function runtimeInteractionOwnerIsCurrent(session = interactionManager.current) {
     if(!session || session.kind === 'idle') return true;
-    const trail = DATA.trails.find(item => String(item.id) === session.owner.trailId);
-    if(!trail || String(state.primaryTrailId) !== session.owner.trailId) return false;
+    const trail = projectSelectors.trails().find(item => String(item.id) === session.owner.trailId);
+    if(!trail || String(selectors.primaryTrailId()) !== session.owner.trailId) return false;
     return HTM_APP.sameInteractionOwner(session.owner, runtimeInteractionOwner(trail));
   }
 
@@ -286,9 +290,8 @@ export function startStudioRuntime(
     markers: {add:0, update:0, remove:0, keep:0},
     fit: {requested:0, applied:0, superseded:0, lastEpoch:0, lastResetEpoch:0},
   };
-  let workspaceResetEpoch = 0;
-  let pendingWorkspaceFit = null;
-  const trailBoundsCache = new WeakMap();
+  let workspaceController = null;
+  let kmlProjectBuilder = null;
 
   function recordRenderPhase(context) {
     if(renderRuntimeStats.lastTimestamp !== context.timestamp) {
@@ -307,19 +310,23 @@ export function startStudioRuntime(
       days(context) { recordRenderPhase(context); renderDaysNow(); },
       legend(context) { recordRenderPhase(context); renderLegendNow(); },
       chart(context) { recordRenderPhase(context); renderElevationChartNow(); },
-      fit(context) { recordRenderPhase(context); executeWorkspaceFit(context); },
+      fit(context) { recordRenderPhase(context); workspaceController?.executeFit(context); },
     },
   });
   const runtimeContext = HTM_APP.createRuntimeContext({
-    project:DATA,
-    state:appStateStore,
+    projectActions,
+    projectSelectors,
+    stateActions,
+    stateSelectors:selectors,
     commands:commandRegistry,
     interactions:interactionManager,
     renderer:renderScheduler,
     dialogs:studioDialogs,
   });
-  window.__HTM_RENDER_SCHEDULER__ = renderScheduler;
-  window.__HTM_RENDER_STATS__ = renderRuntimeStats;
+  if(studioTestMode) {
+    window.__HTM_RENDER_SCHEDULER__ = renderScheduler;
+    window.__HTM_RENDER_STATS__ = renderRuntimeStats;
+  }
 
   function invalidateRender(mask) {
     renderScheduler.invalidate(mask);
@@ -330,16 +337,6 @@ export function startStudioRuntime(
      rebuildAll + saveToStorage 模式。所有涉及 state 变更的 UI 事件都应
      走这些 helper，减少漏调 saveToStorage 的隐蔽 bug。
      ─────────────────────────────────────────────────────────────── */
-
-  /**
-   * 切换 Set 中的元素（存在则删除，不存在则添加）
-   * @param {Set} set - 目标 Set
-   * @param {*} item - 元素
-   * @returns {boolean} 切换后该元素是否存在于 Set
-   */
-  function toggleSetItem(set, item) {
-    return HTM_APP.toggleSetItem(set, item);
-  }
 
   /**
    * 应用一次状态变更后的完整刷新流程
@@ -365,22 +362,22 @@ export function startStudioRuntime(
    * @param {string} trailId
    */
   function toggleTrailActive(trailId) {
-    dispatchState({type:'active-trail.set', trailId, active:!state.activeTrails.has(trailId)});
+    stateActions.setTrailActive(trailId, !selectors.activeTrailIds().has(trailId));
     // v1.21.0：主轨迹兜底只在当前组内挑
-    if(state.activeGroup != null && !state.activeTrails.has(state.primaryTrailId)) {
-      const inGroupActive = [...state.activeTrails].filter(id => {
-        const tr = DATA.trails.find(t => t.id === id);
-        return tr && trailGroup(tr) === state.activeGroup;
+    if(selectors.activeGroup() != null && !selectors.activeTrailIds().has(selectors.primaryTrailId())) {
+      const inGroupActive = [...selectors.activeTrailIds()].filter(id => {
+        const tr = projectSelectors.trails().find(t => t.id === id);
+        return tr && trailGroup(tr) === selectors.activeGroup();
       });
-      dispatchState({type:'primary-trail.set', trailId:inGroupActive[0] || null});
+      stateActions.setPrimaryTrail(inGroupActive[0] || null);
     }
   }
 
   /** 切换详情展开态 */
-  function toggleTrailExpanded(trailId) { dispatchState({type:'expanded.toggle', trailId}); }
+  function toggleTrailExpanded(trailId) { stateActions.toggleExpanded(trailId); }
 
   /** 切换批量选中态 */
-  function toggleTrailBatch(trailId) { dispatchState({type:'batch.toggle', trailId}); }
+  function toggleTrailBatch(trailId) { stateActions.toggleBatch(trailId); }
 
 
   /* v1.14.1：分组支持 ─────────────────────────────────────────────
@@ -388,17 +385,15 @@ export function startStudioRuntime(
      只有 state.activeGroup 组内的轨迹参与地图渲染/统计/行程等一切功能。
      v1.20.0：允许 state.activeGroup = null（"无选中"状态），此时所有渲染归零。
      ─────────────────────────────────────────────────────────────── */
-  function trailGroup(trail) { return trail.group || '默认'; }
+  const trailGroup = HTM_APP.trailGroupOf;
   function isTrailActive(trail) {
-    // v1.20.0：无选中分组时，所有轨迹都不显示
-    if(state.activeGroup == null) return false;
-    return trailGroup(trail) === state.activeGroup && state.activeTrails.has(trail.id);
+    return selectors.isTrailActive(trail);
   }
   function getGroups() {
     const seen = new Set();
     const groups = [];
-    if(DATA.trails.some(t => trailGroup(t) === '默认')) { groups.push('默认'); seen.add('默认'); }
-    DATA.trails.forEach(t => {
+    if(projectSelectors.trails().some(t => trailGroup(t) === '默认')) { groups.push('默认'); seen.add('默认'); }
+    projectSelectors.trails().forEach(t => {
       const g = trailGroup(t);
       if(!seen.has(g)) { seen.add(g); groups.push(g); }
     });
@@ -413,17 +408,17 @@ export function startStudioRuntime(
    * @param {string|null} groupName 分组名，或 null 进入无选中状态
    */
   function switchGroup(groupName) {
-    dispatchState({type:'group.set-active', group:groupName});
+    stateActions.setActiveGroup(groupName);
     if(groupName == null) {
       // 无选中状态：不动 primaryByGroup 记忆值，只是 getter 返回 null
       rebuildAll({ fit: false });
     } else {
       // 校验/回填该组的记忆值
-      const inGroup = DATA.trails.filter(t => trailGroup(t) === groupName);
-      const memorized = state.primaryByGroup[groupName];
+      const inGroup = projectSelectors.trails().filter(t => trailGroup(t) === groupName);
+      const memorized = selectors.primaryForGroup(groupName);
       if(!memorized || !inGroup.find(t => t.id === memorized)) {
         // 记忆值失效或不存在 → 挑组内第一条
-        dispatchState({type:'group.set-primary', group:groupName, trailId:inGroup[0] ? inGroup[0].id : null});
+        stateActions.setGroupPrimary(groupName, inGroup[0] ? inGroup[0].id : null);
       }
       rebuildAll({ fit: false });
       // v1.22.0：切组时自动执行完整复位（比原来只是 fitBounds 更彻底：会重新算 primary + 重绘）
@@ -546,7 +541,7 @@ export function startStudioRuntime(
     onHoverEnd:() => hideTooltip(),
     onInspectPoint:(event, model) => inspectTrackPoint(event, model.trail),
     onSelectTrail:trailId => {
-      dispatchState({type:'primary-trail.set', trailId});
+      stateActions.setPrimaryTrail(trailId);
       rebuildAll({fit:false});
       saveToStorage();
     },
@@ -687,7 +682,7 @@ export function startStudioRuntime(
   }
   function addWpMarker(trail, wp, isPrimary) {
         const color = tagColors[wp.tag] || '#aaa';
-        const isWpMode = state.mode === 'waypoint';
+        const isWpMode = selectors.mode() === 'waypoint';
         const iconText = waypointIconMarkup(wp);
         return HTM_APP.buildWaypointMarkerModel({trail, waypoint:wp, isPrimary, waypointMode:isWpMode, color, iconText});
   }
@@ -823,1522 +818,26 @@ export function startStudioRuntime(
     document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
   }
   /* ============ Build sidebar ============ */
-  function renderPrimaryCard() {
-    const card = document.getElementById('primary-card');
-    const toolbarContext = document.getElementById('toolbar-context');
-    if(!card) return;
-    const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
-    if(!main) {
-      // v1.20.0：区分"未选中分组"和"没有轨迹/主轨迹"两种空态
-      const emptyKey = (state.activeGroup == null && DATA.trails.length > 0)
-        ? 'pc.emptyGroup'
-        : 'pc.empty';
-      card.innerHTML = `<div style="font-size:11px;color:var(--text-muted);font-style:italic;text-align:center;padding:20px 4px">${t(emptyKey)}</div>`;
-      if(toolbarContext) toolbarContext.textContent = t(DATA.trails.length ? 'toolbar.noGroup' : 'toolbar.noTrail');
-      return;
-    }
-    if(toolbarContext) toolbarContext.textContent = `${main.stats.distance_km} KM · ${main.name}`;
-    const primarySourceUrl = sanitizeExternalHttpUrl(main.source);
-    const sourceLink = primarySourceUrl
-      ? `<a href="${escapeUiText(primarySourceUrl)}" target="_blank" rel="noopener noreferrer" class="pc-link" title="${escapeUiText(primarySourceUrl)}">${t('pc.source')}</a>` : '';
-    card.innerHTML = `
-      <div class="pc-eyebrow">${t('pc.eyebrow')}</div>
-      <div class="pc-name" id="pc-name" title="${currentLang === 'zh' ? '点击重命名' : 'Click to rename'}" style="cursor:pointer">${escapeUiText(main.name)}</div>
-      <div class="pc-stats">
-        <div class="pc-stat"><b>${main.stats.distance_km}</b><span>${t('pc.distance')}</span></div>
-        <div class="pc-stat"><b>${main.days || '-'}</b><span>${(main.days||1) > 1 ? t('pc.daysUnit') : t('pc.dayUnit')}</span></div>
-        <div class="pc-stat"><b>${main.stats.ascent_m}</b><span>${t('pc.ascent')}</span></div>
-        <div class="pc-stat"><b>${main.stats.descent_m || 0}</b><span>${t('pc.descent')}</span></div>
-        <div class="pc-stat"><b>${main.stats.max_elev}</b><span>${t('pc.maxElev')}</span></div>
-        <div class="pc-stat"><b>${main.stats.min_elev || '-'}</b><span>${t('pc.minElev')}</span></div>
-      </div>
-      <div class="pc-actions">
-        <a href="#" class="pc-dl-kml" id="pc-dl-kml" title="下载 KML">${t('pc.dlKml')}</a>
-        ${sourceLink}
-        <a href="#" class="pc-edit-link" id="pc-edit-link" title="编辑链接">${t('pc.editLink')}</a>
-      </div>
-    `;
-    // 绑定事件
-    const renameEl = document.getElementById('pc-name');
-    if(renameEl) renameEl.addEventListener('click', () => void editTrailName(main));
-    const dlBtn = document.getElementById('pc-dl-kml');
-    if(dlBtn) dlBtn.addEventListener('click', e => {
-      e.preventDefault();
-      if(window.downloadTrailKml) window.downloadTrailKml(main.id);
-      else if(typeof downloadTrailKML === 'function') downloadTrailKML(main.id);
-    });
-    const editLinkBtn = document.getElementById('pc-edit-link');
-    if(editLinkBtn) editLinkBtn.addEventListener('click', async e => {
-      e.preventDefault();
-      const newLink = await studioDialogs.prompt({
-        title:currentLang === 'zh' ? '编辑来源链接' : 'Edit source link',
-        inputLabel:'URL',
-        value:main.source || '',
-        selectOnOpen:true,
-        confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
-        cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-      });
-      if(newLink !== null) {
-        main.source = newLink.trim();
-        saveToStorage(); renderPrimaryCard();
-      }
-    });
-    // 同步小卡（侧栏收起时显示）
-    buildPrimaryMini();
-  }
+  // Sidebar, itinerary, filters, and map-mode DOM are owned by createSidebarRuntime.
 
-  const primaryMiniController = HTM_APP.createPrimaryMiniController({
-    element:document.getElementById('primary-mini'),
-    mapElement:document.getElementById('map'),
-    storage:window.localStorage,
-    getTrail:() => state.activeGroup == null ? null : DATA.trails.find(trail => trail.id === state.primaryTrailId) || null,
-    translate:t,
-    escapeText:escapeUiText,
-    dragHint:() => currentLang === 'zh' ? '拖动可移动' : 'Drag to move',
-    openSidebar:() => toggleSidebar(true),
+  // KML/ZIP import DOM is owned by createImportRuntime.
+
+  const importRuntime = HTM_APP.createImportRuntime({
+    document, HTM_APP, fflate, runtimeContext, trailContentHash, applyChange,
+    resetView:options => workspaceController?.resetView(options),
+    selectors, projectActions, projectSelectors,
+    buildEscapeRoutes:(...args) => kmlProjectBuilder.buildEscapeRoutes(...args),
+    parseAndProcessKml:(...args) => kmlProjectBuilder.parseAndProcessKml(...args),
+    escapeUiText, t, studioDialogs, getCurrentLang:() => currentLang,
   });
-  const PRIMARY_MINI_POS_KEY = primaryMiniController.storageKey;
-  function clampPrimaryMiniPosition(_mini, left, top) { return primaryMiniController.clamp(left, top); }
-  function applyPrimaryMiniPosition() { primaryMiniController.applyPosition(); }
-  function schedulePrimaryMiniPositionApply() { primaryMiniController.schedulePositionApply(); }
-  function savePrimaryMiniPosition() { primaryMiniController.savePosition(); }
-  function bindPrimaryMiniDrag() { return primaryMiniController; }
-  function buildPrimaryMini() { return primaryMiniController.render(); }
+  const {
+    addBtn, addModal, addCancel, addStatus, kmlDrop, kmlFile, kmlList,
+    projectRestoreBtn, projectFile, PALETTE_LOCAL, fileArchiveAdapter,
+    fileImportController, _closeAddModal, handleFileImportEvent, expandZipFiles,
+    ensureUniqueTrailId, findDuplicateTrail, renderKmlImportRow,
+    bindKmlImportRowEvents, importSingleKml, postImportFinalize, handleFiles,
+  } = importRuntime;
 
-  const floatingPanelController = createFloatingPanelPositionController({
-    document,
-    viewport:window,
-    storage:window.localStorage,
-    disablePropagation:element => {
-      L.DomEvent?.disableClickPropagation(element);
-      L.DomEvent?.disableScrollPropagation(element);
-    },
-  });
-
-  function initFloatingPanelPositions() {
-    floatingPanelController.bind(document.getElementById('elev-bar'), {
-      storageKey: 'hiking_elev_bar_pos',
-      mode: 'map',
-      handleSelector: '[data-panel-drag]',
-      defaultStyle: { left:'14px', right:'auto', top:'auto', bottom:'28px', transform:'' },
-    });
-    floatingPanelController.bind(document.getElementById('measure-panel'), {
-      storageKey: 'hiking_measure_panel_pos',
-      mode: 'measure-dock',
-      handleSelector: '[data-panel-drag]',
-      defaultStyle: { left:'auto', right:'10px', top:'auto', bottom:'8px', transform:'none' },
-    });
-  }
-
-  // 更新当前模式 · 标注点 标题
-  function updateModeTagTitle() {
-    const el = document.getElementById('mode-tag-title');
-    if(!el) return;
-    const key = 'mode.tagTitle.' + state.mode;
-    el.textContent = t(key);
-  }
-
-  // 生成轨迹缩略图：左侧轨迹形状（GPS 平面投影 + 类等高线底） + 右侧海拔迷你图
-  function buildTrailThumbnail(tr) {
-    const W = 280, H = 60;
-    const pad = 4;
-    const track = tr.track || [];
-    if(track.length < 2) return '';
-    // 左侧 33% 区域：地图轨迹（lat/lng 投影到 box）
-    const mapW = Math.floor(W * 0.34) - pad * 2;
-    const mapH = H - pad * 2;
-    const lats = track.map(p => p[0]);
-    const lngs = track.map(p => p[1]);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-    const latR = maxLat - minLat || 1, lngR = maxLng - minLng || 1;
-    // 等比缩放
-    const aspectMap = mapW / mapH;
-    const aspectGeo = lngR / latR;
-    let mw, mh;
-    if(aspectGeo > aspectMap) { mw = mapW; mh = mapW / aspectGeo; }
-    else { mh = mapH; mw = mapH * aspectGeo; }
-    const mox = pad + (mapW - mw) / 2;
-    const moy = pad + (mapH - mh) / 2;
-    const proj = (lat, lng) => [
-      mox + ((lng - minLng) / lngR) * mw,
-      moy + (1 - (lat - minLat) / latR) * mh,
-    ];
-    // 抽稀：最多 80 个点
-    const stride = Math.max(1, Math.floor(track.length / 80));
-    const mapPts = [];
-    for(let i = 0; i < track.length; i += stride) mapPts.push(proj(track[i][0], track[i][1]));
-    if(mapPts[mapPts.length-1][0] !== proj(track[track.length-1][0], track[track.length-1][1])[0])
-      mapPts.push(proj(track[track.length-1][0], track[track.length-1][1]));
-    const mapPath = 'M ' + mapPts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L ');
-    // 起终点
-    const startPt = mapPts[0], endPt = mapPts[mapPts.length-1];
-    // 山顶（最高海拔点）在地图上的位置
-    let peakIdxAll = 0, maxAlt = -Infinity;
-    for(let i=0; i<track.length; i++) {
-      if((track[i][2] || 0) > maxAlt) { maxAlt = track[i][2] || 0; peakIdxAll = i; }
-    }
-    const peakMapPt = proj(track[peakIdxAll][0], track[peakIdxAll][1]);
-
-    // 右侧 65% 区域：迷你海拔
-    const elevX = Math.floor(W * 0.36) + pad;
-    const elevW = W - elevX - pad;
-    const elevH = H - pad * 2;
-    const eY = pad;
-    const alts = track.map(p => p[2]);
-    const minE = Math.min(...alts), maxE = Math.max(...alts);
-    const eR = maxE - minE || 1;
-    const eStride = Math.max(1, Math.floor(track.length / 70));
-    const ePts = [];
-    for(let i = 0; i < track.length; i += eStride) {
-      const x = elevX + (i / (track.length - 1)) * elevW;
-      const y = eY + elevH * (1 - (alts[i] - minE) / eR);
-      ePts.push([x, y]);
-    }
-    ePts.push([elevX + elevW, eY + elevH * (1 - (alts[alts.length-1] - minE) / eR)]);
-    const elevPath = 'M ' + ePts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L ');
-    const elevFill = elevPath + ` L ${elevX + elevW},${eY + elevH} L ${elevX},${eY + elevH} Z`;
-    // 海拔图最高点
-    const ePeakX = elevX + (peakIdxAll / (track.length - 1)) * elevW;
-    const ePeakY = eY + elevH * (1 - (maxE - minE) / eR);
-    // 最低点
-    let valleyIdxAll = 0, minAlt = Infinity;
-    for(let i=0; i<track.length; i++) {
-      if((track[i][2] || 0) < minAlt) { minAlt = track[i][2] || 0; valleyIdxAll = i; }
-    }
-    const eValleyX = elevX + (valleyIdxAll / (track.length - 1)) * elevW;
-    const eValleyY = eY + elevH * (1 - (minE - minE) / eR); // 最低点 y = elevH 底部
-
-    const c = tr.color || '#3F5238';
-
-    return `
-      <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="width:100%;height:60px;display:block">
-        <!-- 整体米色底 -->
-        <rect x="0" y="0" width="${W}" height="${H}" fill="#FAF6EA" rx="3"/>
-        <!-- 中间分隔线 -->
-        <line x1="${Math.floor(W*0.345)}" y1="${pad}" x2="${Math.floor(W*0.345)}" y2="${H-pad}" stroke="#C8B998" stroke-width="0.5" stroke-dasharray="2,2"/>
-        <!-- 左：地图轨迹 -->
-        <path d="${mapPath}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-        <circle cx="${startPt[0].toFixed(1)}" cy="${startPt[1].toFixed(1)}" r="2" fill="#3F5238" stroke="#fff" stroke-width="0.7"/>
-        <circle cx="${endPt[0].toFixed(1)}" cy="${endPt[1].toFixed(1)}" r="2" fill="#A8543C" stroke="#fff" stroke-width="0.7"/>
-        <!-- 右：海拔填充 -->
-        <path d="${elevFill}" fill="${c}" opacity="0.18"/>
-        <path d="${elevPath}" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
-        <!-- 海拔图山顶 -->
-        <circle cx="${ePeakX.toFixed(1)}" cy="${ePeakY.toFixed(1)}" r="1.6" fill="#A8543C" stroke="#fff" stroke-width="0.5"/>
-        <!-- 海拔 max/min 标签（min 标在最低点附近） -->
-        <text x="${ePeakX+4}" y="${ePeakY+3}" font-family="'Source Serif 4',serif" font-size="8" fill="#A8543C" font-style="italic">${Math.round(maxE)}m</text>
-        <circle cx="${eValleyX.toFixed(1)}" cy="${eValleyY.toFixed(1)}" r="1.4" fill="#5C7A8C" stroke="#fff" stroke-width="0.4"/>
-        <text x="${eValleyX+4}" y="${eValleyY-2}" font-family="'Source Serif 4',serif" font-size="8" fill="#5C7A8C" font-style="italic">${Math.round(minE)}m</text>
-      </svg>
-    `;
-  }
-
-  /* ═════════════════════════════════════════════════════════════════
-     Trail 列表渲染（v1.17.0 拆分：主函数 + 4 个辅助）
-     ─────────────────────────────────────────────────────────────────
-     主函数 buildTrailList() 只负责编排：
-       1. renderGroupTabs()        —— 顶部分组切换
-       2. renderBatchToolbar()     —— 批量操作工具栏（size>0 才显示）
-       3. renderTrailCard(tr)      —— 单张轨迹卡片
-       4. attachTrailCardHandlers() —— 卡片事件绑定
-     ═════════════════════════════════════════════════════════════════ */
-
-  /** 独立轨迹组页面中的分组选择列表。 */
-  function renderGroupTabs() {
-    const groups = getGroups();
-    const bar = document.createElement('div');
-    bar.className = 'group-tab-bar studio-group-list';
-    groups.forEach(g => {
-      const btn = document.createElement('button');
-      const count = DATA.trails.filter(t => trailGroup(t) === g).length;
-      btn.className = 'group-tab' + (g === state.activeGroup ? ' active' : '');
-      btn.setAttribute('aria-pressed', String(g === state.activeGroup));
-      const name = document.createElement('span');
-      const meta = document.createElement('span');
-      name.className = 'group-tab-name';
-      meta.className = 'group-tab-meta';
-      name.textContent = g;
-      meta.textContent = currentLang === 'zh' ? `${count} 条轨迹` : `${count} trails`;
-      btn.append(name, meta);
-      btn.title = g === state.activeGroup
-        ? (currentLang === 'zh' ? `再次点击取消选中「${g}」组` : `Select again to clear “${g}”`)
-        : (currentLang === 'zh' ? `切换到「${g}」组` : `Switch to “${g}”`);
-      btn.addEventListener('click', () => {
-        // v1.20.0：再次点击当前 tab → 取消选中（进入无分组显示状态）
-        if(g === state.activeGroup) switchGroup(null);
-        else switchGroup(g);
-      });
-      bar.appendChild(btn);
-    });
-    return bar;
-  }
-
-  /** 批量工具栏（仅在 batchSelected.size > 0 时显示） */
-  function renderBatchToolbar(others) {
-    if(state.batchSelected.size === 0) return null;
-    const toolbar = document.createElement('div');
-    toolbar.className = 'batch-toolbar';
-
-    const info = document.createElement('span');
-    info.className = 'info';
-    info.textContent = `已选 ${state.batchSelected.size} / ${others.length}`;
-    toolbar.appendChild(info);
-
-    const btn = (text, muted, onClick) => {
-      const b = document.createElement('button');
-      if(muted) b.className = 'muted';
-      b.textContent = text;
-      b.addEventListener('click', onClick);
-      return b;
-    };
-    toolbar.appendChild(btn('全选', false, () => {
-      dispatchState({type:'batch.replace', trailIds:others.map(t => t.id)});
-      buildTrailList();
-    }));
-    toolbar.appendChild(btn('反选', false, () => {
-      const cur = state.batchSelected;
-      dispatchState({type:'batch.replace', trailIds:others.map(t => t.id).filter(id => !cur.has(id))});
-      buildTrailList();
-    }));
-
-    const moveSel = document.createElement('select');
-    const appendMoveOption = (value, label) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      moveSel.appendChild(option);
-    };
-    appendMoveOption('', '移到…');
-    getGroups().filter(g => g !== state.activeGroup).forEach(g => appendMoveOption(g, g));
-    appendMoveOption('__new__', '＋ 新建组…');
-    moveSel.addEventListener('change', async e => {
-      let target = e.target.value;
-      if(!target) return;
-      if(target === '__new__') {
-        const name = await studioDialogs.prompt({
-          title:currentLang === 'zh' ? '新建分组' : 'New group',
-          inputLabel:currentLang === 'zh' ? '分组名称' : 'Group name',
-          required:true,
-          confirmLabel:currentLang === 'zh' ? '创建' : 'Create',
-          cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-        });
-        if(!name || !name.trim()) { e.target.value = ''; return; }
-        target = name.trim();
-      }
-      moveBatchToGroup(target);
-    });
-    toolbar.appendChild(moveSel);
-
-    toolbar.appendChild(btn('清除', true, () => {
-      dispatchState({type:'batch.replace', trailIds:[]});
-      buildTrailList();
-    }));
-    return toolbar;
-  }
-
-  /** 执行批量移动（供 renderBatchToolbar 调用） */
-  function moveBatchToGroup(target) {
-    const ids = [...state.batchSelected];
-    let moved = 0;
-    DATA.trails.forEach(t => {
-      if(!ids.includes(t.id)) return;
-      const oldGroup = trailGroup(t);
-      t.group = target;
-      // v1.21.0：如果被移动的 trail 是 activeGroup 的主轨迹，重新挑一条
-      if(t.id === state.primaryTrailId) {
-        const remaining = DATA.trails.filter(x => trailGroup(x) === state.activeGroup && x.id !== t.id);
-        dispatchState({type:'primary-trail.set', trailId:remaining[0] ? remaining[0].id : null});
-      }
-      // v1.21.0：如果 trail 是它原来组的主轨迹，清掉原组的记忆（避免"幽灵主轨迹"）
-      if(oldGroup !== target && state.primaryByGroup[oldGroup] === t.id) {
-        const remaining = DATA.trails.filter(x => trailGroup(x) === oldGroup && x.id !== t.id);
-        dispatchState({type:'group.set-primary', group:oldGroup, trailId:remaining[0] ? remaining[0].id : null});
-      }
-      moved++;
-    });
-    dispatchState({type:'batch.replace', trailIds:[]});
-    applyChange();
-    showToast(`✓ 已将 ${moved} 条轨迹移至「${target}」`);
-  }
-
-  /** 单张轨迹卡片的 HTML 头部（收起态和展开态共用） */
-  /**
-   * 单张轨迹卡片的头部 HTML
-   * @param {Trail} tr
-   * @param {boolean} isActive       是否叠加到地图
-   * @param {boolean} isExpanded     是否展开详情
-   * @param {boolean} isBatchChecked 是否被批量选中
-   * @param {boolean} [isPrimary]    是否是当前分组的主轨迹（v1.21.0）
-   */
-  function trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary) {
-    const trailId = escapeUiText(tr.id);
-    return `
-      <div class="trail-card-hdr">
-        <div class="trail-checkbox ${isBatchChecked ? 'checked' : ''}" data-action="batch-toggle" title="${isBatchChecked ? '已选（点击取消）' : '选中此轨迹'}">${isBatchChecked ? '☑' : '☐'}</div>
-        <div class="trail-expand-arrow ${isExpanded ? 'expanded' : ''}" data-action="toggle-expand" title="${isExpanded ? '收起详情' : '展开详情'}">${isExpanded ? '▾' : '▸'}</div>
-        <div class="trail-color-dot" style="background:${sanitizeHexColor(tr.color)}"></div>
-        <div class="trail-name">${escapeUiText(tr.name)}</div>
-        <button type="button" class="trail-rename-btn" data-tid="${trailId}" title="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}" aria-label="${currentLang === 'zh' ? '重命名轨迹' : 'Rename trail'}"></button>
-        <div class="trail-toggle" style="${isActive ? 'color:var(--accent);font-weight:600' : ''}">${isActive ? '叠加中 ●' : '点击叠加'}</div>
-      </div>
-    `;
-  }
-
-  /** 单张轨迹卡片的详情区 HTML（仅展开态） */
-  function trailCardExpandedHtml(tr) {
-    const thumbSvg = buildTrailThumbnail(tr);
-    const trailId = escapeUiText(tr.id);
-    const sourceUrl = sanitizeExternalHttpUrl(tr.source);
-    const linkArea = sourceUrl
-      ? `<a href="${escapeUiText(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="trail-link-btn" title="${escapeUiText(sourceUrl)}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${escapeUiText(tr.name)}</a><a href="#" class="trail-edit-link-btn" data-tid="${escapeUiText(tr.id)}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
-      : `<a href="#" class="trail-edit-link-btn" data-tid="${escapeUiText(tr.id)}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`;
-    const groupOpts = getGroups().map(g => `<option value="${escapeUiText(g)}" ${trailGroup(tr)===g?'selected':''}>${escapeUiText(g)}</option>`).join('');
-    // v1.21.0：主轨迹卡不显示"设为主轨迹"按钮，显示 "★ 主轨迹" 标识
-    const isPrimary = (tr.id === state.primaryTrailId);
-    const primaryLabel = isPrimary
-      ? `<span style="color:#C6912D;font-size:10px;font-weight:600;letter-spacing:0.02em">★ ${t('trail.isPrimary') || '主轨迹'}</span>`
-      : `<a href="#" class="set-primary-btn" data-tid="${trailId}" style="color:var(--accent);font-size:10px;text-decoration:none;font-weight:600;letter-spacing:0.02em">${t('trail.setPrimary')}</a>`;
-    return `
-      <div class="trail-thumb">${thumbSvg}</div>
-      <div class="trail-info" style="align-items:center;gap:8px;flex-wrap:wrap">
-        <span><b>${tr.stats.distance_km}</b>${t('header.km')}</span>
-        <span>↑<b>${tr.stats.ascent_m}</b>m</span>
-        <span>↓<b>${tr.stats.descent_m || 0}</b>m</span>
-        <span><b>${tr.days}</b>${t('trail.days')}</span>
-        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-family:monospace;font-size:10px;color:var(--text-muted);user-select:all">${t('trail.id')}: <span class="trail-id-text" data-tid="${trailId}">${trailId}</span><a href="#" class="trail-edit-id-btn" data-tid="${trailId}" title="${t('trail.editId')}" style="color:var(--accent);font-size:10px;text-decoration:none">✎</a></span>
-      </div>
-      <div class="trail-info" style="margin-top:4px;align-items:center;gap:10px">
-        ${primaryLabel}
-        ${linkArea}
-        <a href="#" class="trail-dl-kml-btn" data-tid="${trailId}" title="下载 KML" style="color:var(--accent);font-size:10px;text-decoration:none">⬇ KML</a>
-        <a href="#" class="trail-delete-btn" data-tid="${trailId}" title="${t('trail.delete')}" style="margin-left:auto;color:var(--accent-2);font-size:10px;text-decoration:none">${t('trail.delete')}</a>
-      </div>
-      <div class="trail-info" style="margin-top:4px;align-items:center;gap:6px">
-        <span style="font-size:10px;color:var(--text-muted)">分组：</span>
-        <select class="trail-group-select" data-tid="${trailId}" style="font-size:10px;padding:2px 6px;border:1px solid var(--line);border-radius:3px;background:var(--bg-0);color:var(--text);cursor:pointer;max-width:120px">
-          ${groupOpts}
-          <option value="__new__">＋ 新建组…</option>
-        </select>
-      </div>
-    `;
-  }
-
-  /** 判断 click 是否来自"要走详情按钮独立 handler"的元素 */
-  function isDetailButtonTarget(el) {
-    return el.closest('.trail-link-btn')
-        || el.closest('.trail-rename-btn')
-        || el.classList.contains('trail-edit-link-btn')
-        || el.classList.contains('trail-edit-id-btn')
-        || el.classList.contains('trail-dl-kml-btn')
-        || el.classList.contains('trail-reverse-btn')
-        || el.classList.contains('trail-delete-btn')
-        || el.classList.contains('set-primary-btn')
-        || el.classList.contains('trail-group-select');
-  }
-
-  /** 卡片主点击 handler（复选框 / 展开箭头 / 其他区域=切换叠加） */
-  function handleTrailCardClick(tr, e) {
-    if(e.target.classList.contains('trail-checkbox')) {
-      e.preventDefault(); e.stopPropagation();
-      toggleTrailBatch(tr.id);
-      buildTrailList();
-      return true;
-    }
-    if(e.target.classList.contains('trail-expand-arrow')) {
-      e.preventDefault(); e.stopPropagation();
-      toggleTrailExpanded(tr.id);
-      buildTrailList();
-      return true;
-    }
-    if(isDetailButtonTarget(e.target)) return false; // 让详情按钮 handler 接管
-    // 其他区域：切换地图叠加
-    toggleTrailActive(tr.id);
-    dispatchState({type:'escape.set-active', escapeId:null});
-    document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-    applyChange();
-    return true;
-  }
-
-  /** 展开态特有的详情按钮 handler（编辑 ID / 编辑链接 / 删除 / 反向 / 设为主 等） */
-  async function editTrailSource(tr) {
-    const newUrl = await studioDialogs.prompt({
-      title:t('trail.editLink'),
-      inputLabel:'URL',
-      value:tr.source || '',
-      selectOnOpen:true,
-      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-    });
-    if(newUrl === null || !DATA.trails.includes(tr)) return false;
-    return recordProjectEdit('编辑轨迹来源', 'Edit trail source', () => {
-      tr.source = newUrl.trim();
-      applyChange();
-      return true;
-    });
-  }
-
-  async function editTrailName(tr) {
-    const newName = await studioDialogs.prompt({
-      title:currentLang === 'zh' ? '重命名轨迹' : 'Rename trail',
-      inputLabel:currentLang === 'zh' ? '轨迹名称' : 'Trail name',
-      value:tr.name,
-      required:true,
-      maxLength:120,
-      selectOnOpen:true,
-      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-    });
-    if(!newName || !DATA.trails.includes(tr)) return false;
-    return recordProjectEdit('重命名轨迹', 'Rename trail', () => trailController.renameTrail(tr.id, newName));
-  }
-
-  async function editTrailId(tr) {
-    const newId = await studioDialogs.prompt({
-      title:t('trail.editId'),
-      inputLabel:'ID',
-      value:tr.id,
-      required:true,
-      selectOnOpen:true,
-      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-      validate:value => {
-        const trimmed = value.trim();
-        return DATA.trails.some(other => other !== tr && other.id === trimmed)
-          ? 'ID 已存在 / ID already exists'
-          : null;
-      },
-    });
-    if(!newId || !newId.trim() || newId === tr.id || !DATA.trails.includes(tr)) return false;
-    return recordProjectEdit('编辑轨迹 ID', 'Edit trail ID', () => {
-      const trimmed = newId.trim();
-      const oldId = tr.id;
-      tr.id = trimmed;
-      dispatchState({type:'trail-id.rename', oldId, newId:trimmed});
-      applyChange();
-      return true;
-    });
-  }
-
-  async function confirmDeleteTrail(tr) {
-    const confirmed = await studioDialogs.confirm({
-      title:currentLang === 'zh' ? '删除轨迹' : 'Delete trail',
-      message:currentLang === 'zh' ? `确定删除「${tr.name}」吗？` : `Delete "${tr.name}"?`,
-      danger:true,
-      confirmLabel:currentLang === 'zh' ? '删除' : 'Delete',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-    });
-    if(!confirmed || !DATA.trails.includes(tr)) return false;
-    deleteTrail(tr.id);
-    return true;
-  }
-
-  function handleTrailDetailClick(tr, e) {
-    if(e.target.closest('.trail-rename-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      void editTrailName(tr);
-      return true;
-    }
-    if(e.target.classList.contains('trail-edit-link-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      void editTrailSource(tr);
-      return true;
-    }
-    if(e.target.classList.contains('trail-edit-id-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      void editTrailId(tr);
-      return true;
-    }
-    if(e.target.classList.contains('trail-dl-kml-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      downloadTrailKML(tr.id); return true;
-    }
-    if(e.target.classList.contains('trail-reverse-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      reverseTrail(tr.id); return true;
-    }
-    if(e.target.classList.contains('trail-delete-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      void confirmDeleteTrail(tr);
-      return true;
-    }
-    if(e.target.classList.contains('set-primary-btn')) {
-      e.preventDefault(); e.stopPropagation();
-      dispatchState({type:'primary-trail.set', trailId:tr.id});
-      dispatchState({type:'active-trail.set', trailId:tr.id, active:true});
-      dispatchState({type:'escape.set-active', escapeId:null});
-      document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-      applyChange();
-      return true;
-    }
-    return false;
-  }
-
-  /** 分组下拉的 change handler（展开态） */
-  async function handleTrailGroupChange(tr, newGroup, selectEl) {
-    if(newGroup === '__new__') {
-      const name = await studioDialogs.prompt({
-        title:currentLang === 'zh' ? '新建分组' : 'New group',
-        inputLabel:currentLang === 'zh' ? '分组名称' : 'Group name',
-        required:true,
-        confirmLabel:currentLang === 'zh' ? '创建' : 'Create',
-        cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-      });
-      if(!name || !name.trim()) { selectEl.value = trailGroup(tr); return; }
-      newGroup = name.trim();
-    }
-    recordProjectEdit('移动轨迹组', 'Move trail to group', () => {
-      const oldGroup = trailGroup(tr);
-      tr.group = newGroup;
-      // v1.21.0：如果被移出的 trail 是原组的主轨迹，清掉原组的记忆
-      if(oldGroup !== newGroup && state.primaryByGroup[oldGroup] === tr.id) {
-        const remaining = DATA.trails.filter(t => trailGroup(t) === oldGroup && t.id !== tr.id);
-        dispatchState({type:'group.set-primary', group:oldGroup, trailId:remaining[0] ? remaining[0].id : null});
-      }
-      applyChange();
-      showToast(`已移至「${newGroup}」组`);
-    });
-  }
-
-  /** 渲染单张 trail 卡片并绑定所有 handler */
-  function renderTrailCard(tr) {
-    const card = document.createElement('div');
-    const isActive = state.activeTrails.has(tr.id);
-    const isExpanded = state.expandedTrails.has(tr.id);
-    const isBatchChecked = state.batchSelected.has(tr.id);
-    const isPrimary = (tr.id === state.primaryTrailId);
-
-    card.className = 'trail-card'
-      + (isActive ? ' active' : '')
-      + (isBatchChecked ? ' batch-checked' : '')
-      + (isPrimary ? ' is-primary' : '');
-    card.style.setProperty('--card-color', tr.color || '#3F5238');
-    if(isBatchChecked) {
-      card.style.outline = '2px solid var(--accent)';
-      card.style.outlineOffset = '-2px';
-    }
-
-    const headerHtml = trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary);
-
-    const bindCardEvents = () => {
-      const renameButton = card.querySelector('.trail-rename-btn');
-      if(renameButton) renameButton.replaceChildren(createWorkbenchIcon(document, 'pencil', {size:13}));
-      card.addEventListener('click', e => {
-        if(handleTrailDetailClick(tr, e)) return;
-        handleTrailCardClick(tr, e);
-      });
-    };
-
-    if(!isExpanded) {
-      card.innerHTML = headerHtml;
-      bindCardEvents();
-      return card;
-    }
-
-    // 展开态：header + 详情
-    card.innerHTML = headerHtml + trailCardExpandedHtml(tr);
-
-    // 详情区里的 <a class="trail-link-btn"> 保留浏览器默认行为（打开新标签），阻止 click 冒泡即可
-    const linkBtn = card.querySelector('.trail-link-btn');
-    if(linkBtn) linkBtn.addEventListener('click', e => e.stopPropagation());
-
-    bindCardEvents();
-
-    const groupSel = card.querySelector('.trail-group-select');
-    if(groupSel) {
-      groupSel.addEventListener('change', e => {
-        e.stopPropagation();
-        void handleTrailGroupChange(tr, e.target.value, e.target);
-      });
-    }
-    return card;
-  }
-
-  function buildTrailList() {
-    const list = document.getElementById('trail-list');
-    list.innerHTML = '';
-
-    const groupPanel = document.getElementById('trail-group-panel');
-    const groupList = document.getElementById('trail-group-list');
-    const tabs = renderGroupTabs();
-    if(groupList) groupList.replaceChildren(tabs);
-    if(groupPanel) groupPanel.hidden = false;
-
-    // v1.20.0：无选中分组时给一个明确提示（而不是"当前组暂无备选轨迹"的误导）
-    if(state.activeGroup == null && DATA.trails.length > 0) {
-      const hint = document.createElement('div');
-      hint.style.cssText = 'font-size:11px;color:var(--text-muted);font-style:italic;padding:10px 4px;letter-spacing:0.04em;text-align:center';
-      hint.textContent = t('trail.emptyNoGroup');
-      list.appendChild(hint);
-      return;
-    }
-
-    // v1.21.0：主轨迹不再被剔除，而是保留在列表里（用 is-primary class 视觉标记）
-    //          排序：主轨迹在最前，其他按原顺序
-    const inGroup = DATA.trails.filter(tr => trailGroup(tr) === state.activeGroup);
-    const primary = inGroup.find(tr => tr.id === state.primaryTrailId);
-    const others = primary
-      ? [primary, ...inGroup.filter(tr => tr.id !== state.primaryTrailId)]
-      : inGroup;
-
-    const toolbar = renderBatchToolbar(others);
-    if(toolbar) list.appendChild(toolbar);
-
-    if(others.length === 0) {
-      const empty = document.createElement('div');
-      empty.style.cssText = 'font-size:11px;color:var(--text-muted);font-style:italic;padding:10px 4px;letter-spacing:0.04em';
-      empty.textContent = '当前组暂无轨迹，点 ＋ 添加或从其他组移入。';
-      list.appendChild(empty);
-      return;
-    }
-    others.forEach(tr => list.appendChild(renderTrailCard(tr)));
-  }
-
-  function buildFilterGrid() {
-    const grid = document.getElementById('filter-grid');
-    grid.innerHTML = '';
-    // 统计各tag数量（active trails）
-    const counts = {};
-    DATA.trails.forEach(t => {
-      if(!isTrailActive(t)) return;
-      t.waypoints.forEach(w => counts[w.tag] = (counts[w.tag]||0) + 1);
-    });
-
-    const tagOrder = ['camp','pass','supply','water','fork','warn','shelter','village','bridge','river','other','start','end'];
-
-    tagOrder.forEach(tag => {
-      if(!counts[tag]) return;
-      const chip = document.createElement('div');
-      chip.className = 'filter-chip' + (state.visibleTags.has(tag) ? ' on' : '');
-      chip.dataset.waypointTag = tag;
-      chip.innerHTML = `<span class="ic waypoint-filter-icon" aria-hidden="true" style="color:${tagColors[tag] || '#64748b'}">${waypointIconMarkup(tag)}</span><span class="filter-chip-label">${t('tag.'+tag)}</span><span class="cnt">${counts[tag]}</span>`;
-      chip.addEventListener('click', () => {
-        dispatchState({type:'visible-tag.set', tag, visible:!state.visibleTags.has(tag)});
-        buildFilterGrid();
-        drawWaypoints();
-      });
-      grid.appendChild(chip);
-    });
-  }
-  const dayPreviewController = HTM_APP.createDayPreviewController(runtimeContext);
-  const dayPreviewState = dayPreviewController.state;
-
-  function clearDaySegmentPreview(opts = {}) {
-    if(!opts.fromManager && cancelRuntimeInteraction('day-preview', opts.reason || 'cancelled')) return;
-    if(dayPreviewState.layer) dayPreviewState.layer.clearLayers();
-    dayPreviewController.exit();
-    document.querySelectorAll('.day-preview-target.active').forEach(el => el.classList.remove('active'));
-    if(!measureState.active) hideMeasureElevReadout();
-    if(!opts.silent && typeof refreshElevBar === 'function') refreshElevBar();
-  }
-
-  function handleDayPreviewInteractionEvent(event) {
-    if(event.type === 'refresh' && typeof refreshElevBar === 'function') refreshElevBar();
-  }
-
-  function showDaySegmentPreview(trail, dm) {
-    if(interactionManager.current.kind === 'segment') {
-      void requestSegmentExit('switch-day-preview').then(exited => {
-        if(exited) showDaySegmentPreview(trail, dm);
-      });
-      return;
-    }
-    const plan = dayPreviewController.prepare(trail.id, dm, 1200);
-    if(!plan) { showToast('这一天缺少可定位的轨迹范围', 'error'); return; }
-    if(interactionManager.current.kind === 'day-preview'
-        && dayPreviewController.isActive(trail.id, dm.d)) {
-      clearDaySegmentPreview();
-      return;
-    }
-    const session = beginRuntimeInteraction('day-preview', 'preview', trail, {
-      onEvent: handleDayPreviewInteractionEvent,
-      onCancel: opts => clearDaySegmentPreview(opts),
-    });
-    if(!session) return;
-    if(!dayPreviewController.activate(plan)) {
-      clearDaySegmentPreview({reason:'owner-invalid'});
-      return;
-    }
-    const model = plan.model;
-    if(!dayPreviewState.layer) dayPreviewState.layer = L.layerGroup().addTo(map);
-    dayPreviewState.layer.clearLayers();
-    L.polyline(model.latLngs, model.lineStyle).addTo(dayPreviewState.layer);
-    fitWorkspaceBounds(
-      L.latLngBounds(model.latLngs),
-      model.fitOptions,
-      {source:'day-preview'},
-    );
-    model.endpoints.forEach(endpoint => {
-      measureMarker(endpoint.lat, endpoint.lng, endpoint.label, endpoint.color).addTo(dayPreviewState.layer);
-    });
-    document.querySelectorAll(`[data-day-preview="${dm.d}"]`).forEach(el => el.classList.add('active'));
-    const stats = plan.stats;
-    const distEl = document.getElementById('m-dist');
-    const distBox = document.getElementById('measure-distance');
-    if(distEl && stats) distEl.textContent = Number(stats.km || 0).toFixed(1) + ' km';
-    if(distBox) distBox.classList.add('active');
-    setMeasureElevHint('');
-    if(typeof refreshElevBar === 'function') refreshElevBar();
-  }
-
-  function buildDaysTab() {
-    const tab = document.getElementById('tab-days');
-    tab.innerHTML = '';
-    // 只显示主轨迹的行程
-    const trail = DATA.trails.find(t => t.id === state.primaryTrailId);
-    if(!trail) return;
-    const trailHdr = document.createElement('div');
-    trailHdr.className = 'days-summary';
-    const totalDays = trail.day_meta && trail.day_meta.length ? trail.day_meta.length : (trail.days || 0);
-    trailHdr.innerHTML = `
-      <h3 style="color:${sanitizeHexColor(trail.color)}">★ ${escapeUiText(trail.name)}（主轨迹）</h3>
-      <div class="days-summary-meta">
-        <span>${totalDays || '-'} 天</span>
-        <span>${trail.stats && trail.stats.distance_km != null ? trail.stats.distance_km : '-'} km</span>
-        <span>↑ ${trail.stats && trail.stats.ascent_m != null ? trail.stats.ascent_m : '-'} m</span>
-        <span>最高 ${trail.stats && trail.stats.max_elev != null ? trail.stats.max_elev : '-'} m</span>
-      </div>
-    `;
-    tab.appendChild(trailHdr);
-
-    const escapeFilters = appendEscapeTools(tab, trail);
-
-    // v1.26.0：若无 day_meta，显示占位提示
-    if(!trail.day_meta || trail.day_meta.length === 0) {
-      const empty = document.createElement('div');
-      empty.style.cssText = 'padding:12px;color:var(--text-muted);font-size:11px;line-height:1.6';
-      empty.innerHTML = '尚未设置每日行程。<br>点工具栏 <b>📅 分段</b> 在主轨迹上选点标记每天。';
-      tab.appendChild(empty);
-      appendEscapeRoutesForDay(tab, trail, null, true);
-      if(escapeFilters) applyEscapeFilters(tab, escapeFilters);
-      return;
-    }
-
-    const unassignedRoutes = (trail.escape_routes || []).filter(route => HTM_CORE.escapeRouteDays(route).length === 0);
-    if(unassignedRoutes.length) appendEscapeRoutesForDay(tab, trail, null);
-
-    trail.day_meta.forEach((dm, dIdx) => {
-        const range = HTM_CORE.getDayIndexRange(trail, dm);
-        const computed = HTM_CORE.computeDayRangeStats(trail, range) || {};
-        const dayKm = Number.isFinite(Number(dm.km)) ? Number(dm.km) : (computed.km || 0);
-        const dayAsc = Number.isFinite(Number(dm.asc)) ? Number(dm.asc) : (computed.asc || 0);
-        const dayDesc = Number.isFinite(Number(dm.desc)) ? Number(dm.desc) : (computed.desc || 0);
-        const dayMax = Number.isFinite(Number(dm.max)) ? Number(dm.max) : (computed.max || 0);
-        const dayMin = Number.isFinite(Number(dm.min)) ? Number(dm.min) : (computed.min || 0);
-        const dayWps = trail.waypoints.filter(w => {
-          // v1.27.0：优先用 wp.day 字段；否则用 day_meta cumulative km 划分
-          if(w.day != null) return w.day === dm.d;
-          if(range && w.gps_idx != null) return w.gps_idx >= range.iStart && w.gps_idx <= range.iEnd;
-          let prevKm = 0;
-          for(let i=0;i<dIdx;i++) prevKm += trail.day_meta[i].km;
-          const endKm = prevKm + dm.km;
-          return w.km >= prevKm - 0.5 && w.km <= endKm + 0.5;
-        });
-        const block = document.createElement('div');
-        block.className = 'day-block';
-        block.dataset.day = String(dm.d);
-        const color = dayPalette[dIdx % dayPalette.length];
-        const routeText = dm.seg || ((dayKm || '-') + 'km · ↑' + (Math.round(dayAsc) || '-') + ' · ↓' + (Math.round(dayDesc) || '-') + ' · ⛰' + (Math.round(dayMax) || '-'));
-        const campName = dm.camp || '未设置扎营点';
-        const dayEndPoint = range ? trail.track[range.iEnd] : null;
-        const campElevNum = dayEndPoint && Number.isFinite(Number(dayEndPoint[2]))
-          ? Number(dayEndPoint[2])
-          : ((dm.camp_elev == null || dm.camp_elev === '') ? NaN : Number(dm.camp_elev));
-        const campElevText = Number.isFinite(campElevNum) ? Math.round(campElevNum) + ' m' : '-';
-        block.style.setProperty('--day-color', color);
-        block.innerHTML = `
-          <div class="day-hdr" data-toggle>
-            <span class="day-tag">D${dm.d}</span>
-            <span class="day-head-main">
-              <span class="day-route">${escapeUiText(routeText)}</span>
-              <span class="day-title">${dayKm.toFixed(1)} km · ↑${Math.round(dayAsc)} m · ↓${Math.round(dayDesc)} m</span>
-            </span>
-            <span class="day-meta">▾</span>
-          </div>
-          <div class="day-body open">
-            <div class="day-seg day-preview-target" data-day-preview="${dm.d}" title="点击高亮当天轨迹">
-              <span class="ic">📍</span><span>${escapeUiText(routeText)}</span>
-            </div>
-            <div class="day-stats day-preview-target" data-day-preview="${dm.d}" title="点击高亮当天轨迹">
-              <span class="lab">距离</span><span class="val">${dayKm.toFixed(1)} km</span>
-              <span class="lab">当日爬升</span><span class="val">${Math.round(dayAsc)} m</span>
-              <span class="lab">当日下降</span><span class="val">${Math.round(dayDesc)} m</span>
-              <span class="lab">最高海拔</span><span class="val">${Math.round(dayMax)} m</span>
-              <span class="lab">最低海拔</span><span class="val">${Math.round(dayMin)} m</span>
-            </div>
-            <div class="day-camp"><span>🏕</span><span>扎营点</span><b>${escapeUiText(campName)}</b><em>${campElevText}</em></div>
-            <div class="wp-list"></div>
-            <div class="nearby-waypoint-slot"></div>
-            <div class="day-escape-slot"></div>
-          </div>
-        `;
-        tab.appendChild(block);
-        block.querySelectorAll('.day-preview-target').forEach(el => {
-          el.addEventListener('click', e => {
-            e.stopPropagation();
-            showDaySegmentPreview(trail, dm);
-          });
-        });
-        const list = block.querySelector('.wp-list');
-        // v1.27.0：行程 tab 固定显示这几类关键信息（不受 filter 影响）
-        dayWps.forEach(wp => {
-          if(!DAY_ITINERARY_WAYPOINT_TAGS.has(wp.tag)) return;
-          const item = document.createElement('div');
-          item.className = 'wp-item';
-          item.dataset.waypointTag = wp.tag;
-          item.innerHTML = `
-            <div class="wp-icon" style="color:${tagColors[wp.tag] || '#64748b'}">${waypointIconMarkup(wp)}</div>
-            <div style="flex:1">
-              <div class="wp-name" style="color:${sanitizeHexColor(tagColors[wp.tag])}">${escapeUiText(wp.label)}</div>
-              <div class="wp-meta">km ${wp.km} · ${wp.elev}m · ${t('tag.'+wp.tag) || wp.tag}</div>
-            </div>
-          `;
-          item.addEventListener('click', () => {
-            clearEscape();
-            map.flyTo([wp.lat, wp.lng], 15, {duration:0.7});
-            setTimeout(() => {
-              const m = wpMarkers[`${trail.id}#${wp.id}`];
-              if(m) m.openPopup();
-            }, 800);
-          });
-          list.appendChild(item);
-        });
-        appendNearbyWaypointPicker(block.querySelector('.nearby-waypoint-slot'), trail, dm, range);
-        appendEscapeRoutesForDay(block.querySelector('.day-escape-slot'), trail, dm.d);
-      });
-    if(escapeFilters) applyEscapeFilters(tab, escapeFilters);
-  }
-
-  function selectedNearbyWaypointRefs(trail, day) {
-    const stored = trail.itinerary_waypoint_refs;
-    if(!stored || typeof stored !== 'object') return new Set();
-    return new Set(Array.isArray(stored[String(day)]) ? stored[String(day)] : []);
-  }
-
-  function appendNearbyWaypointPicker(container, trail, dm, range) {
-    if(!container || !range) return;
-    const sources = DATA.trails.filter(candidate =>
-      candidate.id !== trail.id && trailGroup(candidate) === state.activeGroup);
-    const candidates = HTM_CORE.collectNearbyItineraryWaypoints(trail.track, range, sources, 200)
-      .filter(candidate => DAY_ITINERARY_WAYPOINT_TAGS.has(candidate.waypoint.tag));
-    if(!candidates.length) return;
-    const selected = selectedNearbyWaypointRefs(trail, dm.d);
-    const details = document.createElement('details');
-    details.className = 'nearby-waypoint-picker';
-    const summary = document.createElement('summary');
-    const updateSummary = () => {
-      const count = [...details.querySelectorAll('input[type="checkbox"]')].filter(input => input.checked).length;
-      summary.textContent = `${currentLang === 'zh' ? '附近轨迹标注' : 'Nearby trail waypoints'} · ${count}/${candidates.length}`;
-    };
-    details.append(summary);
-    const options = document.createElement('div');
-    options.className = 'nearby-waypoint-options';
-    candidates.forEach(candidate => {
-      const wp = candidate.waypoint;
-      const item = document.createElement('label');
-      item.className = 'nearby-waypoint-option';
-      item.dataset.waypointRef = candidate.ref;
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = selected.has(candidate.ref);
-      const icon = document.createElement('span');
-      icon.className = 'wp-icon';
-      icon.style.color = tagColors[wp.tag] || '#64748b';
-      icon.innerHTML = waypointIconMarkup(wp);
-      const copy = document.createElement('span');
-      copy.className = 'nearby-waypoint-copy';
-      const title = document.createElement('b');
-      title.textContent = wp.label || wp.name || t('tag.' + (wp.tag || 'other'));
-      const meta = document.createElement('small');
-      meta.textContent = `${candidate.sourceTrailName} · ${candidate.distanceM} m · ${t('tag.' + (wp.tag || 'other'))}`;
-      copy.append(title, meta);
-      item.append(checkbox, icon, copy);
-      checkbox.addEventListener('change', () => {
-        const refs = selectedNearbyWaypointRefs(trail, dm.d);
-        if(checkbox.checked) refs.add(candidate.ref);
-        else refs.delete(candidate.ref);
-        recordProjectEdit('编辑行程标注', 'Edit itinerary waypoints', () => {
-          trail.itinerary_waypoint_refs = {...(trail.itinerary_waypoint_refs || {}), [String(dm.d)]:[...refs]};
-          item.classList.toggle('selected', checkbox.checked);
-          markTrailRevision(trail);
-          saveToStorage();
-          updateSummary();
-        });
-      });
-      item.classList.toggle('selected', checkbox.checked);
-      options.append(item);
-    });
-    details.append(options);
-    container.append(details);
-    updateSummary();
-  }
-
-  function appendEscapeTools(container, trail) {
-    const routes = trail.escape_routes || [];
-    const tools = document.createElement('section');
-    tools.className = 'itinerary-escape-tools';
-    const addBtn = document.createElement('button');
-    addBtn.className = 'itinerary-escape-add';
-    addBtn.textContent = currentLang === 'zh' ? '＋ 规划下撤路线' : '+ Plan escape route';
-    addBtn.dataset.commandId = STUDIO_COMMANDS.ESCAPE_TOGGLE;
-    addBtn.addEventListener('click', () => dispatchStudioCommand(STUDIO_COMMANDS.ESCAPE_TOGGLE));
-    if(!routes.length) {
-      tools.append(addBtn);
-      container.append(tools);
-      return null;
-    }
-    const filters = document.createElement('div');
-    filters.className = 'escape-filter-bar';
-    const nameFilter = document.createElement('input');
-    nameFilter.type = 'search';
-    nameFilter.className = 'escape-filter-input';
-    nameFilter.placeholder = currentLang === 'zh' ? '筛选下撤方案' : 'Filter escape routes';
-    nameFilter.setAttribute('aria-label', nameFilter.placeholder);
-    const directionFilter = document.createElement('select');
-    const dayFilter = document.createElement('select');
-    const referenceFilter = document.createElement('select');
-    for(const select of [directionFilter, dayFilter, referenceFilter]) select.className = 'escape-filter-select';
-    const addOption = (select, value, label) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      select.append(option);
-    };
-    addOption(directionFilter, 'all', currentLang === 'zh' ? '全部方向' : 'All directions');
-    addOption(directionFilter, 'forward', currentLang === 'zh' ? '正向' : 'Forward');
-    addOption(directionFilter, 'reverse', currentLang === 'zh' ? '反向' : 'Reverse');
-    addOption(dayFilter, 'all', currentLang === 'zh' ? '全部 Day' : 'All days');
-    [...new Set(routes.flatMap(route => HTM_CORE.escapeRouteDays(route)))]
-      .sort((left, right) => left - right)
-      .forEach(day => addOption(dayFilter, String(day), `D${day}`));
-    if(routes.some(route => HTM_CORE.escapeRouteDays(route).length === 0)) {
-      addOption(dayFilter, 'none', currentLang === 'zh' ? '未关联 Day' : 'No day');
-    }
-    addOption(referenceFilter, 'all', currentLang === 'zh' ? '全部依据轨迹' : 'All references');
-    const references = new Map();
-    routes.forEach(route => references.set(route._anchor?.trailId || trail.id, route._anchor?.trailName || trail.name));
-    references.forEach((name, id) => addOption(referenceFilter, id, name));
-    const count = document.createElement('span');
-    count.className = 'escape-filter-count';
-    filters.append(nameFilter, directionFilter, dayFilter, referenceFilter, count);
-    tools.append(filters, addBtn);
-    container.append(tools);
-    for(const control of [nameFilter, directionFilter, dayFilter, referenceFilter]) {
-      control.addEventListener(control === nameFilter ? 'input' : 'change', () => applyEscapeFilters(container, {nameFilter, directionFilter, dayFilter, referenceFilter, count}));
-    }
-    return {nameFilter, directionFilter, dayFilter, referenceFilter, count};
-  }
-
-  function applyEscapeFilters(container, filters) {
-    const query = filters.nameFilter.value.trim().toLocaleLowerCase();
-    const visibleRouteIds = new Set();
-    container.querySelectorAll('.escape-item').forEach(item => {
-      const days = (item.dataset.days || '').split(',').filter(Boolean);
-      const dayMatches = filters.dayFilter.value === 'all'
-        || (filters.dayFilter.value === 'none' ? days.length === 0 : days.includes(filters.dayFilter.value));
-      const matches = (!query || (item.dataset.name || '').includes(query))
-        && (filters.directionFilter.value === 'all' || item.dataset.direction === filters.directionFilter.value)
-        && dayMatches
-        && (filters.referenceFilter.value === 'all' || item.dataset.reference === filters.referenceFilter.value);
-      item.hidden = !matches;
-      if(matches) visibleRouteIds.add(item.dataset.id);
-    });
-    container.querySelectorAll('.day-escape-section').forEach(section => {
-      section.hidden = !section.querySelector('.escape-item:not([hidden])');
-    });
-    filters.count.textContent = `${visibleRouteIds.size}/${new Set([...container.querySelectorAll('.escape-item')].map(item => item.dataset.id)).size}`;
-  }
-
-  function appendEscapeRoutesForDay(container, trail, day, includeAll = false) {
-    if(!container) return;
-    const routes = (trail.escape_routes || []).filter(route => {
-      if(includeAll) return true;
-      const days = HTM_CORE.escapeRouteDays(route);
-      return day == null ? days.length === 0 : days.includes(Number(day));
-    });
-    if(!routes.length) return;
-    const section = document.createElement('section');
-    section.className = 'day-escape-section';
-    const heading = document.createElement('h4');
-    heading.className = 'day-escape-heading';
-    heading.textContent = day == null
-      ? (currentLang === 'zh' ? '未关联行程的下撤方案' : 'Unassigned escape routes')
-      : `${currentLang === 'zh' ? '本日下撤方案' : 'Escape routes'} · ${routes.length}`;
-    const routeList = document.createElement('div');
-    routeList.className = 'escape-route-list';
-    routes.forEach(r => {
-        const item = document.createElement('div');
-        item.className = 'escape-item';
-        item.dataset.trail = trail.id;
-        item.dataset.id = r.id;
-        const direction = HTM_CORE.resolveEscapeRouteDirection(r);
-        const referenceId = r._anchor?.trailId || trail.id;
-        const referenceName = r._anchor?.trailName || trail.name;
-        const routeDays = HTM_CORE.escapeRouteDays(r);
-        item.dataset.name = String(r.name || '').toLocaleLowerCase();
-        item.dataset.direction = direction;
-        item.dataset.reference = referenceId;
-        item.setAttribute('data-days', routeDays.join(','));
-        const isOtherTrail = r._anchor && r._anchor.trailId !== trail.id;
-        const crossTag = isOtherTrail
-          ? `<span style="background:#1e3a5f;color:#60a5fa;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">跨轨迹</span>`
-          : '';
-        const manualTag = r._manual
-          ? `<span style="background:#1a2e1a;color:#4ade80;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">手动</span>`
-          : '';
-        const dayTag = routeDays.length
-          ? `<span class="escape-day-tag">${routeDays.map(value => `D${value}`).join(' · ')}</span>`
-          : '';
-        const directionTag = `<span class="escape-direction-tag ${direction}">${direction === 'reverse' ? (currentLang === 'zh' ? '反向' : 'Reverse') : (currentLang === 'zh' ? '正向' : 'Forward')}</span>`;
-        const delBtn = r._manual
-          ? `<button class="escape-del-btn" data-id="${escapeUiText(r.id)}" style="float:right;background:transparent;border:none;color:#6b7280;font-size:13px;cursor:pointer;padding:0 2px;line-height:1" title="删除">🗑</button>`
-          : '';
-        item.innerHTML = `
-          <h4>${delBtn}⚡ ${escapeUiText(r.name)}${dayTag}${directionTag}${crossTag}${manualTag}</h4>
-          <p>${escapeUiText(r.desc)}</p>
-          <div class="meta">
-            <span>📏 沿迹 ${r.distance_km} km</span>
-            ${r.straight_km != null ? `<span>↗直线 ${r.straight_km} km</span>` : ''}
-            <span>${r.drop_m > 0 ? '⬇' : r.drop_m < 0 ? '⬆' : '—'} ${Math.abs(r.drop_m)} m</span>
-          </div>
-        `;
-        item.addEventListener('click', e => {
-          if(e.target.classList.contains('escape-del-btn')) {
-            const delId = e.target.dataset.id;
-            const wasActive = state.activeEscape === delId;
-            if(recordProjectEdit('删除下撤路线', 'Delete escape route', () => escapeController.deleteRoute(trail.id, delId))) {
-              if(wasActive) clearEscape();
-              saveToStorage();
-              buildDaysTab();
-            }
-            return;
-          }
-          if(state.activeEscape === r.id) {
-            clearEscape();
-          } else {
-            document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.escape-item').forEach(el => {
-              if(el.dataset.id === r.id && el.dataset.trail === trail.id) el.classList.add('active');
-            });
-            showEscape(trail.id, r.id);
-          }
-        });
-        routeList.appendChild(item);
-      });
-    section.append(heading, routeList);
-    container.appendChild(section);
-  }
-  function buildLegend() {
-    const lg = document.getElementById('legend');
-    if(state.mode === 'day') {
-      if(DATA.trails.length === 1) {
-        lg.innerHTML = `
-          <h4>按天分色</h4>
-          ${dayPalette.map((c,i)=>`<div class="lg-row"><div class="swatch" style="background:${c}"></div>D${i+1}</div>`).join('')}
-        `;
-      } else {
-        lg.innerHTML = `<h4><span data-i18n="legend.title">多轨迹（主轨迹高亮）</span></h4>` + DATA.trails.filter(t=>isTrailActive(t))
-          .map(t=>{
-            const isP = t.id === state.primaryTrailId;
-            return `<div class="lg-row" style="opacity:${isP?1:0.6}"><div class="swatch" style="background:${sanitizeHexColor(t.color)};height:${isP?5:3}px"></div>${isP?'★ ':''}${escapeUiText(t.name)}</div>`;
-          }).join('');
-      }
-    } else if(state.mode === 'elev') {
-      let legendMinElevation = Infinity;
-      let legendMaxElevation = -Infinity;
-      for(const trail of DATA.trails) {
-        if(!isTrailActive(trail)) continue;
-        for(const point of trail.track || []) {
-          const elevation = Number(point[2]);
-          if(!Number.isFinite(elevation)) continue;
-          if(elevation < legendMinElevation) legendMinElevation = elevation;
-          if(elevation > legendMaxElevation) legendMaxElevation = elevation;
-        }
-      }
-      const minLabel = Number.isFinite(legendMinElevation) ? `${Math.round(legendMinElevation)}m` : '-';
-      const maxLabel = Number.isFinite(legendMaxElevation) ? `${Math.round(legendMaxElevation)}m` : '-';
-      lg.innerHTML = `
-        <h4>海拔渐变</h4>
-        <div class="lg-row"><div class="swatch elev-grad" style="width:140px"></div></div>
-        <div class="lg-row" style="justify-content:space-between"><span>${minLabel}</span><span>${maxLabel}</span></div>
-      `;
-    }
-  }
-  /* ============ Wire up controls ============ */
-  // tabs
-  let lastNonDayMode = state.mode === 'day' ? 'elev' : state.mode;
-  const sidebarTabCommands = {
-    groups:STUDIO_COMMANDS.WORKSPACE_GROUPS,
-    trails:STUDIO_COMMANDS.WORKSPACE_TRAILS,
-    days:STUDIO_COMMANDS.WORKSPACE_ITINERARY,
-  };
-
-  function activateSidebarTab(tabName) {
-    const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
-    const pane = document.getElementById('tab-' + tabName);
-    if(!tab || !pane) return false;
-    document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(item => item.classList.remove('active'));
-    tab.classList.add('active');
-    pane.classList.add('active');
-    if(tabName === 'days') {
-      if(state.mode !== 'day') lastNonDayMode = state.mode;
-      buildDaysTab();
-      setMapMode('day');
-    } else if(state.mode === 'day') {
-      if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
-      setMapMode(lastNonDayMode || 'elev');
-      if(typeof refreshElevBar === 'function') refreshElevBar();
-    }
-    return true;
-  }
-
-  document.querySelectorAll('.tab').forEach(t => {
-    const commandId = sidebarTabCommands[t.dataset.tab];
-    if(commandId) t.dataset.commandId = commandId;
-    t.addEventListener('click', () => {
-      if(commandId) dispatchStudioCommand(commandId);
-    });
-  });
-
-  // day collapse
-  document.addEventListener('click', e => {
-    if(e.target.closest('[data-toggle]')) {
-      e.target.closest('[data-toggle]').nextElementSibling.classList.toggle('open');
-    }
-  });
-
-  function setMapMode(mode, opts = {}) {
-    document.querySelectorAll('[data-mode]').forEach(x => {
-      const active = x.dataset.mode === mode;
-      x.classList.toggle('on', active);
-      x.setAttribute('aria-pressed', String(active));
-    });
-    dispatchState({type:'mode.set', mode});
-    if(mode !== 'day') lastNonDayMode = mode;
-    // 标注点模式下显示 tag 选择面板，并确保已渲染按钮
-    const wpModePanel = document.getElementById('waypoint-mode-tags');
-    if(wpModePanel) {
-      wpModePanel.style.display = state.mode === 'waypoint' ? 'block' : 'none';
-      if(state.mode === 'waypoint') {
-        // 防御性重渲染（避免在某些时序下 grid 为空）
-        try { buildWaypointModeTagGrid(); } catch(e) {}
-      }
-    }
-    // 切换模式后更新模式·标注点 标题 + 重建 filter-grid（visibleTags 现在是该模式独立 Set）
-    if(typeof updateModeTagTitle === 'function') updateModeTagTitle();
-    if(typeof buildFilterGrid === 'function') buildFilterGrid();
-    drawTracks(); drawWaypoints(); buildLegend();
-    if(opts.toast) showToast(opts.toast, 'info');
-    commandRegistry.notifyChanged();
-  }
-
-  function enterInteractionRenderMode(toolName) {
-    if(state.mode !== 'waypoint') {
-      setMapMode('waypoint', { toast: `${toolName}已切换到标注点模式以提升拖动流畅度` });
-    }
-  }
-
-  // mode buttons
-  document.querySelectorAll('[data-mode]').forEach(b => {
-    const commandId = b.dataset.mode === 'waypoint'
-      ? STUDIO_COMMANDS.MODE_WAYPOINT
-      : STUDIO_COMMANDS.MODE_ELEVATION;
-    b.dataset.commandId = commandId;
-    b.addEventListener('click', () => dispatchStudioCommand(commandId));
-  });
-
-  // 标注点模式：tag 选择按钮
-  function buildWaypointModeTagGrid() {
-    const grid = document.getElementById('wpmode-tag-grid');
-    if(!grid) return;
-    grid.innerHTML = '';
-    if(typeof TAG_RULES_JS === 'undefined') return;  // 还没定义，等后面再调
-    TAG_RULES_JS.forEach(([tag, kws, icon, color]) => {
-      const btn = document.createElement('button');
-      const on = state.waypointModeTags.has(tag);
-      btn.className = 'btn-mini waypoint-mode-tag' + (on ? ' on' : '');
-      btn.innerHTML = `<span class="waypoint-filter-icon" aria-hidden="true" style="color:${color}">${waypointIconMarkup(tag)}</span><span>${t('tag.'+tag)}</span>`;
-      btn.addEventListener('click', () => {
-        dispatchState({type:'waypoint-tag.set', tag, visible:!state.waypointModeTags.has(tag)});
-        buildWaypointModeTagGrid();
-        if(state.mode === 'waypoint') drawWaypoints();
-      });
-      grid.appendChild(btn);
-    });
-  }
-  // 不在这里立即调，TAG_RULES_JS 还未定义；放到 Boot 里调
-
-  // base layer
-  document.querySelectorAll('[data-base]').forEach(b => {
-    b.addEventListener('click', () => {
-      document.querySelectorAll('[data-base]').forEach(x=>x.classList.remove('on'));
-      b.classList.add('on');
-      map.removeLayer(currentBase);
-      currentBase = baseLayers[b.dataset.base].addTo(map);
-    });
-  });
-
-  // show track checkbox
-  const _showTrackEl = document.getElementById('showTrack');
-  if(_showTrackEl) _showTrackEl.addEventListener('change', e => {
-    dispatchState({type:'display.set', option:'showTrack', visible:e.target.checked});
-    drawTracks();
-  });
-  const _showLabelEl = document.getElementById('showLabel');
-  if(_showLabelEl) _showLabelEl.addEventListener('change', e => {
-    dispatchState({type:'display.set', option:'showLabel', visible:e.target.checked});
-    drawWaypoints();
-  });
-  const _showHighPointEl = document.getElementById('showHighPoint');
-  if(_showHighPointEl) _showHighPointEl.addEventListener('change', e => {
-    dispatchState({type:'display.set', option:'showHighPoint', visible:e.target.checked});
-    drawWaypoints();
-  });
-
-  // filter all/none
-  document.getElementById('filterAll').addEventListener('click', () => {
-    dispatchState({
-      type:'visible-tags.replace',
-      tags:['start','end','camp','pass','water','supply','fork','warn','shelter','village','bridge','river','other'],
-    });
-    buildFilterGrid(); drawWaypoints();
-  });
-  document.getElementById('filterNone').addEventListener('click', () => {
-    dispatchState({type:'visible-tags.replace', tags:[]});
-    buildFilterGrid(); drawWaypoints();
-  });
-
-  // click empty to clear escape
-  map.on('click', e => {
-    if(state.activeEscape) {
-      const target = e.originalEvent.target;
-      if(!target.closest('.leaflet-marker-icon, .leaflet-interactive')) clearEscape();
-    }
-  });
-
-  /* ============ Add Trail UI (KML upload) ============ */
-  const addBtn = document.getElementById('add-trail-btn');
-  const addModal = document.getElementById('add-trail-modal');
-  const addCancel = document.getElementById('add-cancel');
-  const addStatus = document.getElementById('add-status');
-  const kmlDrop = document.getElementById('kml-drop');
-  const kmlFile = document.getElementById('kml-file');
-  const kmlList = document.getElementById('kml-list');
-  const projectRestoreBtn = document.getElementById('project-restore-btn');
-  const projectFile = document.getElementById('project-file');
-
-  function _closeAddModal() {
-    addModal.classList.remove('open');
-    // 清除上次的解析记录
-    setTimeout(() => {
-      if(kmlList) kmlList.innerHTML = '';
-      if(addStatus) addStatus.textContent = '';
-      if(kmlFile) kmlFile.value = '';
-      if(projectFile) projectFile.value = '';
-    }, 250);
-  }
-  addCancel.addEventListener('click', _closeAddModal);
-  addModal.addEventListener('click', e => { if(e.target === addModal) _closeAddModal(); });
-
-  kmlDrop.addEventListener('click', () => kmlFile.click());
-  kmlDrop.addEventListener('dragover', e => { e.preventDefault(); kmlDrop.style.borderColor = 'var(--accent)'; kmlDrop.style.background = 'var(--bg-2)'; });
-  kmlDrop.addEventListener('dragleave', e => { kmlDrop.style.borderColor = 'var(--line)'; kmlDrop.style.background = 'var(--bg-0)'; });
-  kmlDrop.addEventListener('drop', e => {
-    e.preventDefault();
-    kmlDrop.style.borderColor = 'var(--line)';
-    kmlDrop.style.background = 'var(--bg-0)';
-    handleFiles(e.dataTransfer.files);
-  });
-  kmlFile.addEventListener('change', e => handleFiles(e.target.files));
-
-  const PALETTE_LOCAL = ['#f97316','#3b82f6','#10b981','#a855f7','#eab308','#ec4899','#06b6d4','#f59e0b','#84cc16'];
-
-  function handleFileImportEvent(event) {
-    if(event.type === 'archive.expanded') {
-      kmlList.innerHTML += `<div style="color:#5cb85c;font-size:11px">📦 ${event.archiveName} → 提取 ${event.count} 个 KML</div>`;
-    } else if(event.type === 'archive.empty') {
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${event.archiveName}：压缩包内未找到 .kml 文件</div>`;
-    } else if(event.type === 'archive.failed') {
-      console.error('[expandZipFiles] 解压 zip 失败:', event.archiveName, event.error);
-      const detail = event.error && event.error.message ? event.error.message : String(event.error);
-      kmlList.innerHTML += `<div style="color:#ff8888">❌ ${event.archiveName}：解压失败（${detail}）</div>`;
-    }
-  }
-
-  const fileArchiveAdapter = HTM_APP.createFileArchiveAdapter(
-    typeof fflate === 'undefined' ? null : fflate,
-  );
-  const fileImportController = HTM_APP.createFileImportController(runtimeContext, {
-    contentHash:trailContentHash,
-    unzip:fileArchiveAdapter.unzip,
-    decode:fileArchiveAdapter.decode,
-    palette:PALETTE_LOCAL,
-    onEvent:handleFileImportEvent,
-    commit:() => applyChange({fit:false}),
-    resetView:() => { if(typeof resetView === 'function') resetView(); },
-  });
-
-
-  /* ═════════════════════════════════════════════════════════════════
-     File Import Pipeline（v1.18.0 拆分：主函数 + 6 个辅助）
-     ─────────────────────────────────────────────────────────────────
-     handleFiles(files)
-       │
-       ├── expandZipFiles(files)          —— .zip → 逐条虚拟 File-like
-       ├── for each file:
-       │     ├── importSingleKml(f)        —— 解析 + 去重 + 加入 DATA
-       │     └── renderKmlImportRow(f, trail, displayLabel)  —— UI 反馈行
-       └── postImportFinalize(addedCount)  —— 全部完成后统一 fit+save
-     ═════════════════════════════════════════════════════════════════ */
-
-  /**
-   * 将 zip 文件展开为一批虚拟 File-like 对象。非 zip 文件原样返回。
-   * @param {FileList|Array<File>} files
-   * @returns {Promise<Array<File | {name:string, text:()=>Promise<string>, _fromZip:string}>>}
-   */
-  async function expandZipFiles(files) {
-    return fileImportController.expandFiles(files);
-  }
-
-  /**
-   * 保证 trail.id 在 DATA.trails 中唯一（时间戳+随机极端撞车时补序号）
-   */
-  function ensureUniqueTrailId(trail) {
-    return fileImportController.ensureUniqueId(trail);
-  }
-
-  /**
-   * 检查 trail 是否与已有轨迹重复（基于 trailContentHash）
-   * @returns {Trail|null} 重复的现有轨迹；null 表示不重复
-   */
-  function findDuplicateTrail(trail) {
-    return fileImportController.findDuplicate(trail);
-  }
-
-  /**
-   * 渲染一条 KML 导入的 UI 行（含 ID / source 可编辑输入框）
-   */
-  function renderKmlImportRow(displayLabel, trail) {
-    const row = document.createElement('div');
-    row.style.cssText = 'border:1px solid var(--line);border-radius:5px;padding:8px;margin-top:6px;background:var(--bg-0)';
-    const trailId = escapeUiText(trail.id);
-    const trailSource = escapeUiText(trail.source || '');
-    row.innerHTML = `
-      <div style="color:#5cb85c;font-size:11px;margin-bottom:6px">✓ ${escapeUiText(displayLabel)} → <b>${escapeUiText(trail.name)}</b> (${trail.stats.distance_km}km, ↑${trail.stats.ascent_m}m, ${trail.waypoints.length} ${t('add.waypoints') || '标注点'})</div>
-      <div style="display:flex;gap:6px;align-items:center;font-size:11px">
-        <span style="color:var(--text-muted);min-width:30px">${t('trail.id')}:</span>
-        <input type="text" class="kml-row-id" data-tid="${trailId}" value="${trailId}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px;font-family:monospace">
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;font-size:11px;margin-top:4px">
-        <span style="color:var(--text-muted);min-width:30px">🔗:</span>
-        <input type="text" class="kml-row-source" data-tid="${trailId}" value="${trailSource}" placeholder="${t('add.urlPlaceholder') || 'None'}" style="flex:1;background:var(--bg-2);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:3px;font-size:11px">
-      </div>
-    `;
-    kmlList.appendChild(row);
-    bindKmlImportRowEvents(row, trail);
-  }
-
-  /**
-   * 绑定导入行的 ID / source 输入框事件（v1.18.0 从 handleFiles 拆出）
-   */
-  function bindKmlImportRowEvents(row, trail) {
-    const idInput = row.querySelector('.kml-row-id');
-    const srcInput = row.querySelector('.kml-row-source');
-    let cachedTid = trail.id;
-
-    idInput.addEventListener('change', () => {
-      const newId = idInput.value.trim();
-      const result = fileImportController.renameTrail(cachedTid, newId);
-      if(result.status === 'missing' || result.status === 'unchanged') return;
-      if(result.status === 'empty') { idInput.value = cachedTid; return; }
-      if(result.status === 'duplicate') {
-        void studioDialogs.info({
-          title:currentLang === 'zh' ? '无法修改 ID' : 'Cannot change ID',
-          message:'ID 已存在 / ID already exists',
-          danger:true,
-        });
-        idInput.value = cachedTid;
-        return;
-      }
-      cachedTid = result.newId;
-      srcInput.dataset.tid = result.newId;
-      idInput.dataset.tid = result.newId;
-    });
-
-    srcInput.addEventListener('change', () => {
-      fileImportController.updateSource(cachedTid, srcInput.value);
-    });
-  }
-
-  /**
-   * 导入单个 KML 文件（含解析、去重、入库、UI 反馈）
-   * @returns {'added' | 'skipped' | 'failed'}
-   */
-  async function importSingleKml(f) {
-    if(!f.name.toLowerCase().endsWith('.kml')) {
-      kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(f.name)}：不是 KML/ZIP 文件</div>`);
-      return 'failed';
-    }
-    const displayLabel = f._fromZip ? `${f._fromZip} → ${f.name}` : f.name;
-    addStatus.textContent = `⏳ 解析 ${displayLabel}...`;
-    addStatus.style.color = 'var(--text-dim)';
-
-    try {
-      const text = await f.text();
-      const trail = parseAndProcessKml(text, f.name);
-      if(!trail) {
-        kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(displayLabel)}：未找到轨迹点</div>`);
-        return 'failed';
-      }
-
-      const result = fileImportController.addTrail(trail);
-      if(result.status === 'duplicate') {
-        kmlList.insertAdjacentHTML('beforeend', `<div style="color:#f59e0b">⚠ ${escapeUiText(displayLabel)}：与「${escapeUiText(result.duplicate.name)}」重复，已跳过</div>`);
-        return 'skipped';
-      }
-
-      renderKmlImportRow(displayLabel, trail);
-      addStatus.textContent = '';
-      return 'added';
-    } catch(err) {
-      console.error('[importSingleKml] 处理失败:', displayLabel, err);
-      kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(displayLabel)}：${escapeUiText(err.message)}</div>`);
-      return 'failed';
-    }
-  }
-
-  /**
-   * 完成导入后的收尾：清下撤高亮、重算 escape_routes（可选）、fit 视野、持久化
-   */
-  function postImportFinalize(addedCount) {
-    if(addedCount === 0) return;
-    if(state.autoGenerateEscape) {
-      for(const tr of DATA.trails) {
-        if(!tr.waypoints || !tr.track || !tr.track.length) continue;
-        const fakePts = tr.track.map(p => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
-        const others = DATA.trails.filter(t => t.id !== tr.id);
-        tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
-      }
-    }
-    fileImportController.finalizeImport(addedCount);
-  }
-
-  async function handleFiles(files) {
-    if(!files || files.length === 0) return;
-
-    const expanded = await expandZipFiles(files);
-    let added = 0;
-
-    // 串行处理，让出主线程避免同 tick id 冲突
-    for(const f of expanded) {
-      const result = await importSingleKml(f);
-      if(result === 'added') added++;
-      // 每条之间让出主线程一帧
-      await new Promise(r => setTimeout(r, 0));
-    }
-    postImportFinalize(added);
-  }
   /* ============ Lightbox ============ */
   const lightboxEl = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightbox-img');
@@ -2355,7 +854,7 @@ export function startStudioRuntime(
   const measureStatsCache = new WeakMap();
 
   function nearestTrackIdxOnPrimary(lat, lng) {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) return null;
     const tk = main.track;
     const sig = `${tk[0][0]},${tk[0][1]}|${tk[tk.length-1][0]},${tk[tk.length-1][1]}`;
@@ -2413,7 +912,7 @@ export function startStudioRuntime(
   }
 
   function nearestTrackIdxNearPrimary(lat, lng, centerIdx, windowSize = 700) {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length || centerIdx == null || !isFinite(centerIdx)) {
       return nearestTrackIdxOnPrimary(lat, lng);
     }
@@ -2560,7 +1059,7 @@ export function startStudioRuntime(
   }
 
   function computeMeasureStats(a, b) {
-    const main = DATA.trails.find(t => t.id === (measureState.trailId || state.primaryTrailId));
+    const main = projectSelectors.trails().find(t => t.id === (measureState.trailId || selectors.primaryTrailId()));
     if(!main || !main.track || !a || !b) return null;
     const cache = getMeasureStatsCache(main);
     if(!cache) return null;
@@ -2709,7 +1208,7 @@ export function startStudioRuntime(
   }
 
   function measureEnter() {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) {
       showToast('请先设置主轨迹', 'error');
       return;
@@ -2725,7 +1224,7 @@ export function startStudioRuntime(
     if(window.PERF_DEBUG === true) {
       console.log('[measure-perf] 主轨迹点数:', main.track.length,
         '· 主轨迹 waypoint 数:', (main.waypoints || []).length,
-        '· DATA.trails 数:', DATA.trails.length);
+        '· projectSelectors.trails() 数:', projectSelectors.trails().length);
     }
     if(!measureState.layer) measureState.layer = L.layerGroup().addTo(map);
     clearMeasureLayer();
@@ -2828,7 +1327,7 @@ export function startStudioRuntime(
 
   function renderMeasureSegmentLine(maxPoints = 900) {
     if(!measureState.layer || !measureState.ptA || !measureState.ptB) return;
-    const main = DATA.trails.find(t => t.id === (measureState.trailId || state.primaryTrailId));
+    const main = projectSelectors.trails().find(t => t.id === (measureState.trailId || selectors.primaryTrailId()));
     if(!main || !main.track) return;
     const model = buildMeasureSegmentRenderModel(
       main.track,
@@ -2918,8 +1417,8 @@ export function startStudioRuntime(
   /* ============ 手动添加下撤路线 ============ */
 
   function escapeReferenceTrails() {
-    if(state.activeGroup == null) return [];
-    return DATA.trails.filter(trail => trailGroup(trail) === state.activeGroup && trail.track && trail.track.length);
+    if(selectors.activeGroup() == null) return [];
+    return selectors.trailsInActiveGroup(projectSelectors.trails()).filter(trail => trail.track && trail.track.length);
   }
 
   function ensureEscapeTrailSelector() {
@@ -2947,12 +1446,12 @@ export function startStudioRuntime(
     if(!select) return;
     const label = select.previousElementSibling;
     if(label) label.textContent = currentLang === 'zh' ? '依据轨迹：' : 'Reference trail:';
-    const selectedId = addEscapeState.referenceTrailId || state.primaryTrailId || '';
+    const selectedId = addEscapeState.referenceTrailId || selectors.primaryTrailId() || '';
     select.replaceChildren();
     escapeReferenceTrails().forEach(trail => {
       const option = document.createElement('option');
       option.value = trail.id;
-      option.textContent = trail.name + (trail.id === state.primaryTrailId
+      option.textContent = trail.name + (trail.id === selectors.primaryTrailId()
         ? (currentLang === 'zh' ? '（主轨迹）' : ' (Primary)')
         : '');
       option.selected = trail.id === selectedId;
@@ -3019,7 +1518,7 @@ export function startStudioRuntime(
   }
 
   function addEscapeEnter() {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) { showToast('请先设置主轨迹', 'error'); return; }
     beginRuntimeInteraction('escape', 'select-a', main, {
       onEvent: handleEscapeInteractionEvent,
@@ -3126,8 +1625,8 @@ export function startStudioRuntime(
       refreshEscapeTrailSelector();
       return;
     }
-    if(!state.activeTrails.has(trailId)) {
-      dispatchState({type:'active-trail.set', trailId, active:true});
+    if(!selectors.activeTrailIds().has(trailId)) {
+      stateActions.setTrailActive(trailId, true);
     }
     drawTracks();
     if(addEscapeState.layer) addEscapeState.layer.clearLayers();
@@ -3256,7 +1755,7 @@ export function startStudioRuntime(
   }
 
   function segmentEnter() {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) {
       showToast('请先设置主轨迹', 'error');
       return;
@@ -3357,7 +1856,7 @@ export function startStudioRuntime(
 
 
   function segmentStats(startIdx, endIdx) {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track) return null;
     const stats = computeSegmentStatsForTrack(main.track, startIdx, endIdx);
     if(!stats) return null;
@@ -3434,7 +1933,7 @@ export function startStudioRuntime(
   function redrawSegmentLayer() {
     if(!segmentState.layer) return;
     segmentState.layer.clearLayers();
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main) return;
     const tk = main.track;
     const pts = segmentState.points;
@@ -3640,7 +2139,7 @@ export function startStudioRuntime(
   function renderElevationChartNow() {
     if(!elevCanvas) return;
     // v1.20.0：无选中分组时不绘制
-    const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) {
       if(elevationCanvasRenderer) elevationCanvasRenderer.clear({
         width:elevCanvas.offsetWidth || 340,
@@ -3860,12 +2359,12 @@ export function startStudioRuntime(
   async function _doSave() { return storageController.flush(); }
 
   async function loadFromStorage() {
-    const restored = await storageController.load(state.activeGroup);
+    const restored = await storageController.load(selectors.activeGroup());
     if(!restored) return false;
     try {
-      DATA.trails = restored.trails;
+      const restoredTrails = restored.trails;
       // 兼容旧数据：缺 descent_m 则现场补算
-      DATA.trails.forEach(tr => {
+      restoredTrails.forEach(tr => {
         const segmentedMetrics = tr.track?.length && tr.track_breaks?.length
           ? computeSegmentedTrackMetrics(tr.track, tr.track_breaks, 10)
           : null;
@@ -3879,14 +2378,14 @@ export function startStudioRuntime(
           tr._descCum = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(tr.track.map(p => p[2] || 0), 10);
         }
         // 兼容旧数据：escape_routes 为空则从 waypoints + track 重新推算（v1.12.3：默认关闭，仅 state.autoGenerateEscape=true 时启用）
-        if(state.autoGenerateEscape && (!tr.escape_routes || tr.escape_routes.length === 0) && tr.waypoints && tr.track && tr.track.length) {
+        if(selectors.autoGenerateEscape() && (!tr.escape_routes || tr.escape_routes.length === 0) && tr.waypoints && tr.track && tr.track.length) {
           const fakePts = tr.track.map(p => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
-          const others = DATA.trails.filter(t => t.id !== tr.id);
+          const others = restoredTrails.filter(t => t.id !== tr.id);
           tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
         }
       });
-      dispatchState({
-        type:'workspace.restore',
+      projectActions.replaceTrails(restoredTrails, 'storage.restore');
+      stateActions.restoreWorkspace({
         activeTrails:restored.activeTrails,
         activeGroup:restored.activeGroup,
         primaryByGroup:restored.primaryByGroup,
@@ -3947,7 +2446,7 @@ export function startStudioRuntime(
     getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
     commitArchive:() => applyChange({fit:false}),
     resetArchiveView:() => {
-      setMapMode(state.mode);
+      setMapMode(selectors.mode());
       return resetView({restoreActive:false});
     },
     persistHistory:saveToStorage,
@@ -3977,11 +2476,7 @@ export function startStudioRuntime(
       beforeRestore:() => {
         if(interactionManager.current.kind !== 'idle') interactionManager.cancel('project-restore');
       },
-      afterRestore:() => {
-        if(_showTrackEl) _showTrackEl.checked = state.showTrack;
-        if(_showLabelEl) _showLabelEl.checked = state.showLabel;
-        if(_showHighPointEl) _showHighPointEl.checked = state.showHighPoint;
-      },
+      afterRestore:() => syncDisplayControls(),
       close:_closeAddModal,
     })
     : null;
@@ -4010,12 +2505,12 @@ export function startStudioRuntime(
   }
 
   async function clearAllTrails() {
-    if(!DATA.trails.length) return;
+    if(!projectSelectors.trails().length) return;
     const confirmed = await studioDialogs.confirm({
       title:currentLang === 'zh' ? '清空项目' : 'Clear project',
       message:currentLang === 'zh'
-        ? `确定清除全部 ${DATA.trails.length} 条轨迹？可通过“编辑 → 撤销”恢复。`
-        : `Clear all ${DATA.trails.length} trails? You can restore them with Edit → Undo.`,
+        ? `确定清除全部 ${projectSelectors.trails().length} 条轨迹？可通过“编辑 → 撤销”恢复。`
+        : `Clear all ${projectSelectors.trails().length} trails? You can restore them with Edit → Undo.`,
       danger:true,
       confirmLabel:currentLang === 'zh' ? '全部清除' : 'Clear all',
       cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
@@ -4031,7 +2526,7 @@ export function startStudioRuntime(
   }
   /* ============ Export Offline ============ */
   async function exportOffline() {
-    if(!DATA.trails.length) { showToast('没有轨迹可导出', 'error'); return; }
+    if(!projectSelectors.trails().length) { showToast('没有轨迹可导出', 'error'); return; }
     // v1.14.1：点击式选择菜单（附着在导出按钮下方），不用 confirm 阻塞对话框
     showExportMenu();
   }
@@ -4063,15 +2558,15 @@ export function startStudioRuntime(
       color:var(--text, #222);
     `;
 
-    const activeCount = DATA.trails.filter(t => isTrailActive(t)).length;
+    const activeCount = projectSelectors.trails().filter(t => isTrailActive(t)).length;
     const items = [
       {
         icon: '📦',
         label: t('export.kmlZip'),
-        desc: state.activeGroup
+        desc: selectors.activeGroup()
           ? (currentLang === 'zh'
-            ? `当前组「${state.activeGroup}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
-            : `${activeCount} active trails in “${state.activeGroup}” · ready for cross-device import`)
+            ? `当前组「${selectors.activeGroup()}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
+            : `${activeCount} active trails in “${selectors.activeGroup()}” · ready for cross-device import`)
           : (currentLang === 'zh' ? '未选中任何分组 · 请先切换到一个分组' : 'No group selected · select a group first'),
         disabled: activeCount === 0,
         handler: () => { popup.remove(); exportGroupKML(); },
@@ -4167,9 +2662,9 @@ export function startStudioRuntime(
 
   function rebuildAll(opts={}) {
     // 主轨迹兜底（v1.20.0：无选中分组时不做兜底，保留 null；否则先在当前分组挑，找不到再跨分组）
-    if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
-      const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
-      dispatchState({type:'primary-trail.set', trailId:(inGroup[0] || DATA.trails[0]).id});
+    if(selectors.activeGroup() != null && !selectors.primaryTrailId() && projectSelectors.trails().length) {
+      const inGroup = selectors.trailsInActiveGroup(projectSelectors.trails());
+      stateActions.setPrimaryTrail((inGroup[0] || projectSelectors.trails()[0]).id);
     }
     revalidateRuntimeInteractionOwner();
     if(typeof clearDaySegmentPreview === 'function') clearDaySegmentPreview({silent:true});
@@ -4182,9 +2677,9 @@ export function startStudioRuntime(
       | HTM_APP.RENDER_DIRTY.CHART,
     );
     // 自动定位（仅 fit=true 时）
-    if(opts.fit && DATA.trails.length) {
+    if(opts.fit && projectSelectors.trails().length) {
       const allLatLngs = [];
-      DATA.trails.forEach(t => t.track.forEach(p => allLatLngs.push([p[0], p[1]])));
+      projectSelectors.trails().forEach(t => t.track.forEach(p => allLatLngs.push([p[0], p[1]])));
       if(allLatLngs.length) {
         fitWorkspaceBounds(L.latLngBounds(allLatLngs), {padding:[40,40]}, {source:'rebuild'});
       }
@@ -4192,348 +2687,16 @@ export function startStudioRuntime(
   }
 
 
-  function findNearestIdx(pts, lat, lng) {
-    let bestI = 0, bestD = Infinity;
-    for(let i=0; i<pts.length; i++) {
-      const d = haversine(lat, lng, pts[i].lat, pts[i].lng);
-      if(d < bestD) { bestD = d; bestI = i; }
-    }
-    return bestI;
-  }
+  const TAG_RULES_JS = HTM_APP.KML_WAYPOINT_RULES;
+  kmlProjectBuilder = HTM_APP.createKmlProjectBuilder({
+    readTrails:projectSelectors.trails,
+    readAutoGenerateEscape:selectors.autoGenerateEscape,
+  });
+  const {
+    extractKmlParseModelInput, parseKml, processTrack, buildEscapeRoutes,
+    buildDayMeta, generateNextTrailId, parseAndProcessKml,
+  } = kmlProjectBuilder;
 
-  const TAG_RULES_JS = [
-    ['start', ['开始徒步','起点','出发','起步'], '🚩', '#5eb3ff'],
-    ['end',   ['终点','结束','收队'], '🏁', '#5eb3ff'],
-    ['fork',  ['分叉','分岔','路口','走左边','走右边','切下去','右转','左转','岔路'], '⑫', '#ff8c42'],
-    ['camp',  ['营地','扎营','宿营','过夜'], '🏕', '#22c55e'],
-    ['pass',  ['垭口','口子'], '🏔', '#ef4444'],
-    ['warn',  ['Z字','陡','危险','注意','小心','高反','滚石','滑'], '⚠', '#dc2626'],
-    ['supply',['商店','补给','便宜','柠檬茶','咖啡','卖','夯达','小卖部','杂货'], '🏪', '#facc15'],
-    ['water', ['水源','打水','取水'], '💧', '#3b82f6'],
-    ['shelter',['避雨','避风','小木屋','木屋'], '🏠', '#a855f7'],
-    ['bridge',['过桥','过河','涉水'], '🌉', '#06b6d4'],
-    ['river', ['小溪','大河'], '🏞', '#0ea5e9'],
-    ['village',['村','寨','牧民','藏民','居民点'], '🏘', '#d97706'],
-    ['highpoint', [], '⛰', '#fbbf24'],
-  ];
-  function classifyTag(name) {
-    const tag = classifyWaypointTag(name);
-    return [tag, tagIcons[tag] || '📍', tagColors[tag] || '#aaa'];
-  }
-
-
-  function extractKmlParseModelInput(doc) {
-    const titleEl = doc.querySelector('Document > name') || doc.querySelector('name');
-    const title = titleEl ? titleEl.textContent.trim() : '';
-    const lineStringCoordinateTexts = Array.from(doc.querySelectorAll('LineString'))
-      .map(ls => {
-        const c = ls.querySelector('coordinates');
-        return c ? c.textContent : '';
-      });
-
-    const gxTracks = Array.from(doc.getElementsByTagNameNS('http://www.google.com/kml/ext/2.2', 'Track'))
-      .map(trk => ({
-        whens: Array.from(trk.getElementsByTagNameNS('http://www.opengis.net/kml/2.2', 'when')).map(w => w.textContent),
-        coords: Array.from(trk.getElementsByTagNameNS('http://www.google.com/kml/ext/2.2', 'coord')).map(c => c.textContent),
-      }));
-
-    // 标注点
-    const waypoints = [];
-    doc.querySelectorAll('Placemark').forEach(pm => {
-      const point = pm.querySelector('Point');
-      if(!point) return;
-      const c = point.querySelector('coordinates');
-      if(!c || !c.textContent) return;
-      const nameEl = pm.querySelector(':scope > name');
-      const descEl = pm.querySelector(':scope > description');
-      waypoints.push({
-        name: nameEl ? nameEl.textContent : undefined,
-        coordinateText: c.textContent,
-        description: descEl ? descEl.textContent : '',
-      });
-    });
-
-    const data = Array.from(doc.querySelectorAll('Data')).map(d => {
-      const v = d.querySelector('value');
-      return { name: d.getAttribute('name'), value: v ? v.textContent : '' };
-    });
-
-    return { title, lineStringCoordinateTexts, gxTracks, waypoints, data };
-  }
-
-  function parseKml(xmlText) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, 'application/xml');
-    if(doc.querySelector('parsererror')) throw new Error('XML 解析失败');
-    return buildKmlParseModel(extractKmlParseModelInput(doc));
-  }
-
-  function processTrack(pts, trackBreaks = []) {
-    const elevs = pts.map(p => p.elev);
-    const smoothE = smoothElev(elevs, 7);
-    // 分天：基于时间戳，没时间戳全归 1
-    const days = pts.map(p => {
-      if(!p.t) return null;
-      const m = p.t.match(/(\d{4}-\d{2}-\d{2})/);
-      return m ? m[1] : null;
-    });
-    const uniqDays = [...new Set(days.filter(d => d))];
-    uniqDays.sort();
-    const dayMap = {};
-    uniqDays.forEach((d, i) => { dayMap[d] = i+1; });
-    const dayOfIdx = days.map(d => dayMap[d] || 1);
-
-    const track = pts.map((p, i) => [
-      +p.lat.toFixed(6), +p.lng.toFixed(6),
-      Math.round(smoothE[i]), 0,
-      0, dayOfIdx[i],
-    ]);
-    const metrics = computeSegmentedTrackMetrics(track, trackBreaks, 10);
-    track.forEach((point, index) => {
-      point[3] = +(metrics.cumulativeDistanceM[index] / 1000).toFixed(2);
-      point[4] = Math.round(metrics.cumulativeAscentM[index]);
-    });
-    return track;
-  }
-
-
-  function buildEscapeRoutes(wps, pts, otherTrails) {
-    // pts 是原始 trackPoints（有 lat/lng/elev 字段）
-    // otherTrails: 可选，DATA.trails 中除本轨迹外的其他轨迹数组
-    const cumD = [0];
-    for(let i=1; i<pts.length; i++) {
-      cumD.push(cumD[i-1] + haversine(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng));
-    }
-
-    // 所有营地
-    const camps = wps.filter(w => w.tag === 'camp');
-    // 本轨迹下撤目标：village / start / end / supply
-    const exits = wps.filter(w => ['village','start','end','supply'].includes(w.tag));
-
-    // ── 跨轨迹下撤目标 ──
-    // 策略：在其他轨迹中找与本轨迹交叉/接近的点（≤500m），作为额外下撤锚点
-    const crossAnchors = []; // {lat, lng, elev, label, trailId, trailName, tag}
-    if(otherTrails && otherTrails.length) {
-      for(const ot of otherTrails) {
-        if(!ot.track || !ot.track.length) continue;
-        // 先用 start/end/supply/village/camp waypoints（最有意义的节点）
-        const otWps = (ot.waypoints || []).filter(w =>
-          ['start','end','supply','village','camp'].includes(w.tag)
-        );
-        for(const ow of otWps) {
-          // 找本轨迹上离它最近的点
-          let bestI = 0, bestD = Infinity;
-          for(let i = 0; i < pts.length; i++) {
-            const d = haversine(ow.lat, ow.lng, pts[i].lat, pts[i].lng);
-            if(d < bestD) { bestD = d; bestI = i; }
-          }
-          if(bestD <= 500) { // 500m 以内视为可接驳
-            crossAnchors.push({
-              lat: pts[bestI].lat, lng: pts[bestI].lng,
-              elev: pts[bestI].elev || 0,
-              label: `${ow.label || ow.name}（${ot.name}）`,
-              tag: ow.tag,
-              trailId: ot.id,
-              trailName: ot.name,
-              gps_idx: bestI,
-              _crossDist: Math.round(bestD),
-            });
-          }
-        }
-        // 如果没有 waypoints，退而求其次：取其他轨迹 track 的起/终点
-        if(otWps.length === 0) {
-          for(const rawPt of [ot.track[0], ot.track[ot.track.length-1]]) {
-            if(!rawPt) continue;
-            let bestI = 0, bestD = Infinity;
-            for(let i = 0; i < pts.length; i++) {
-              const d = haversine(rawPt[0], rawPt[1], pts[i].lat, pts[i].lng);
-              if(d < bestD) { bestD = d; bestI = i; }
-            }
-            if(bestD <= 500) {
-              crossAnchors.push({
-                lat: pts[bestI].lat, lng: pts[bestI].lng,
-                elev: pts[bestI].elev || 0,
-                label: `${ot.name} 轨迹接入点`,
-                tag: 'start',
-                trailId: ot.id,
-                trailName: ot.name,
-                gps_idx: bestI,
-                _crossDist: Math.round(bestD),
-              });
-            }
-          }
-        }
-      }
-    }
-
-    if(camps.length === 0 || (exits.length === 0 && crossAnchors.length === 0)) return [];
-
-    // 确保 gps_idx
-    function ensureIdx(wp) {
-      if(wp.gps_idx != null) return wp.gps_idx;
-      let best = 0, bestD = Infinity;
-      for(let i=0; i<pts.length; i++) {
-        const d = haversine(wp.lat, wp.lng, pts[i].lat, pts[i].lng);
-        if(d < bestD) { bestD = d; best = i; }
-      }
-      wp.gps_idx = best;
-      return best;
-    }
-
-    const routes = [];
-    const seen = new Set();
-
-    // 合并本轨迹 exits + 跨轨迹 anchors
-    const allExits = [
-      ...exits.map(e => ({...e, _cross: false})),
-      ...crossAnchors.map(a => ({...a, _cross: true})),
-    ];
-
-    for(const camp of camps) {
-      const campIdx = ensureIdx(camp);
-      // 找最近的下撤点（轨迹里程差最小）
-      let bestExit = null, bestKmDiff = Infinity;
-      for(const ex of allExits) {
-        const exIdx = ensureIdx(ex);
-        if(exIdx === campIdx) continue;
-        const diff = Math.abs(cumD[campIdx] - cumD[exIdx]);
-        if(diff < bestKmDiff) { bestKmDiff = diff; bestExit = ex; }
-      }
-      if(!bestExit) continue;
-
-      const key = `${campIdx}-${bestExit.gps_idx}`;
-      if(seen.has(key)) continue;
-      seen.add(key);
-
-      const i_from = campIdx, i_to = bestExit.gps_idx;
-      const lo = Math.min(i_from, i_to), hi = Math.max(i_from, i_to);
-      const seg = pts.slice(lo, hi+1);
-      const line = [];
-      for(let i=0; i<seg.length; i+= Math.max(1, Math.floor(seg.length/200))) {
-        line.push([+seg[i].lat.toFixed(6), +seg[i].lng.toFixed(6)]);
-      }
-      if(line.length < 2) continue;
-
-      const km = +(bestKmDiff / 1000).toFixed(1);
-      const drop = Math.round(pts[i_from].elev - pts[i_to].elev);
-      const direction = i_from > i_to ? '原路返回（反向）' : '继续前进';
-
-      let desc, crossInfo;
-      if(bestExit._cross) {
-        const crossDist = bestExit._crossDist;
-        crossInfo = `接驳至《${bestExit.trailName}》轨迹（距接驳点 ${crossDist}m 内），沿主轨迹行进约 ${km}km，落差 ${Math.abs(drop)}m。`;
-        desc = `${direction}，${crossInfo}`;
-      } else {
-        desc = `${direction}，沿主轨迹 GPS 路线。约 ${km}km，落差 ${Math.abs(drop)}m（${drop > 0 ? '下降' : drop < 0 ? '上升' : '平路'}）。`;
-      }
-
-      routes.push({
-        id: `escape-${camp.id || campIdx}`,
-        name: `从 ${camp.label || camp.name} 下撤至 ${bestExit.label || bestExit.name}`,
-        desc,
-        distance_km: km,
-        drop_m: drop,
-        day: Number(camp.day) || Number(pts[campIdx].day) || undefined,
-        direction: i_from > i_to ? 'reverse' : 'forward',
-        line,
-        _anchor: bestExit._cross ? { trailId: bestExit.trailId, trailName: bestExit.trailName } : null,
-      });
-    }
-    return routes;
-  }
-
-
-  /** 按天数把 GPS 点分组，生成每日元信息（距离/爬升/最高海拔/营地/关键标注点） */
-  function buildDayMeta(trackPoints, track, enrichedWps, cumD) {
-    const days = {};
-    for(let i=0; i<trackPoints.length; i++) {
-      const d = track[i][5];
-      if(!days[d]) days[d] = { indexes: [] };
-      days[d].indexes.push(i);
-    }
-    return Object.keys(days).map(Number).sort((a,b)=>a-b).map(d => {
-      const idxs = days[d].indexes;
-      const i_s = idxs[0], i_e = idxs[idxs.length-1];
-      const km = (cumD[i_e] - cumD[i_s]) / 1000;
-      const segElevs = trackPoints.slice(i_s, i_e+1).map(p => p.elev);
-      const asc = accumulatorAscent(segElevs, 10).slice(-1)[0];
-      const desc = accumulatorDescent(segElevs, 10).slice(-1)[0];
-      const maxE = Math.max(...segElevs);
-      const minE = Math.min(...segElevs);
-      const dayWps = enrichedWps.filter(w => w.gps_idx >= i_s && w.gps_idx <= i_e);
-      const camps = dayWps.filter(w => w.tag === 'camp');
-      const camp = camps[camps.length-1];
-      const keyWps = dayWps.filter(w => ['start','camp','pass','village','supply','end'].includes(w.tag));
-      return {
-        d, date: '',
-        km: +km.toFixed(1),
-        asc: Math.round(asc),
-        desc: Math.round(desc),
-        max: Math.round(maxE),
-        min: Math.round(minE),
-        camp: camp ? camp.label : '未标注',
-        camp_elev: Math.round(track[i_e][2] || 0),
-        seg: keyWps.length ? keyWps.slice(0,5).map(w => w.label).join(' → ') : `D${d}行程`,
-        i_start: i_s, i_end: i_e,
-      };
-    });
-  }
-
-
-  /** 生成下一个可用的自增 ID（1, 2, 3...）。用户可后续手动改成任意字符串 */
-  function generateNextTrailId() {
-    let nextSeq = 1;
-    for(const ex of DATA.trails) {
-      const n = parseInt(ex.id, 10);
-      if(!isNaN(n) && String(n) === String(ex.id) && n >= nextSeq) nextSeq = n + 1;
-    }
-    while(DATA.trails.some(ex => ex.id === String(nextSeq))) nextSeq++;
-    return String(nextSeq);
-  }
-
-  function parseAndProcessKml(xmlText, filename) {
-    const { title, trackPoints, waypoints, trackBreaks } = parseKml(xmlText);
-    if(trackPoints.length === 0) return null;
-
-    const track = processTrack(trackPoints, trackBreaks);
-    const enrichedWps = enrichWaypoints(waypoints, trackPoints)
-      .filter(w => w.name)
-      .map(w => {
-        const point = track[w.gps_idx] || [];
-        return {
-          ...w,
-          km:Number.parseFloat(Number(point[3] || 0).toFixed(1)),
-          day:Number(point[5]) || 1,
-        };
-      });
-    const escapeRoutes = state.autoGenerateEscape
-      ? buildEscapeRoutes(enrichedWps, trackPoints, DATA.trails)
-      : [];
-
-    const segmentedMetrics = computeSegmentedTrackMetrics(track, trackBreaks, 10);
-    const cumD = segmentedMetrics.cumulativeDistanceM;
-    const dayMeta = buildDayMeta(trackPoints, track, enrichedWps, cumD);
-    return {
-      id: generateNextTrailId(),
-      name: title,
-      source: '',
-      color: '#f97316',
-      days: dayMeta.length,
-      stats: segmentedMetrics.stats,
-      day_meta: dayMeta,
-      track,
-      track_breaks:trackBreaks,
-      _descCum: segmentedMetrics.cumulativeDescentM,
-      waypoints: enrichedWps,
-      escape_routes: escapeRoutes,
-      calc_method: {
-        distance: 'haversine球面公式累加',
-        ascent: '累加器法 thr=10m',
-        elev_smooth: '滑动平均 win=7',
-        wp_match: '真实坐标投影到最近GPS点',
-      },
-    };
-  }
   /* ============ Boot ============ */
 
   function schedulePostRestoreReset() {
@@ -4560,29 +2723,29 @@ export function startStudioRuntime(
   // 启动时如果没内嵌数据，尝试从 IndexedDB 恢复（async）
   async function _boot() {
     let restored = false;
-    if(DATA.trails.length === 0 && !window.__exportedMap) {
+    if(projectSelectors.trails().length === 0) {
       const ok = await loadFromStorage();
       if(ok) {
-        showToast(`✓ 从浏览器恢复 ${DATA.trails.length} 条轨迹`);
+        showToast(`✓ 从浏览器恢复 ${projectSelectors.trails().length} 条轨迹`);
         restored = true;
       }
     }
     // 防御性兜底：保证 activeTrails 至少包含全部已加载轨迹
-    if(DATA.trails.length && (!state.activeTrails || state.activeTrails.size === 0)) {
-      dispatchState({type:'active-trails.replace', trailIds:DATA.trails.map(t => t.id)});
+    if(projectSelectors.trails().length && selectors.activeTrailIds().size === 0) {
+      stateActions.replaceActiveTrails(projectSelectors.trails().map(t => t.id));
     }
     // 每次打开工作台都进入一个有效轨迹组；缓存中的“无分组”仅保留在当前会话。
-    if(DATA.trails.length && (state.activeGroup == null
-        || !DATA.trails.some(trail => trailGroup(trail) === state.activeGroup))) {
-      dispatchState({type:'group.set-active', group:trailGroup(DATA.trails[0])});
+    if(projectSelectors.trails().length && (selectors.activeGroup() == null
+        || !projectSelectors.trails().some(trail => trailGroup(trail) === selectors.activeGroup()))) {
+      stateActions.setActiveGroup(trailGroup(projectSelectors.trails()[0]));
     }
     // 兜底主轨迹
-    // v1.21.0：兜底选当前组内的第一条（而不是 DATA.trails[0]，可能不在当前组）
-    if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
-      const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
-      dispatchState({type:'primary-trail.set', trailId:(inGroup[0] || DATA.trails[0]).id});
+    // v1.21.0：兜底选当前组内的第一条（而不是 projectSelectors.trails()[0]，可能不在当前组）
+    if(selectors.activeGroup() != null && !selectors.primaryTrailId() && projectSelectors.trails().length) {
+      const inGroup = selectors.trailsInActiveGroup(projectSelectors.trails());
+      stateActions.setPrimaryTrail((inGroup[0] || projectSelectors.trails()[0]).id);
     }
-    dispatchState({type:'mode.set', mode:'elev'});
+    stateActions.setMode('elev');
     document.querySelectorAll('[data-mode]').forEach(control => {
       const active = control.dataset.mode === 'elev';
       control.classList.toggle('on', active);
@@ -4593,14 +2756,13 @@ export function startStudioRuntime(
     rebuildAll({fit: !restored});
     // 若处于标注点模式，确保面板显示
     const _wpPanel = document.getElementById('waypoint-mode-tags');
-    if(_wpPanel) _wpPanel.style.display = state.mode === 'waypoint' ? 'block' : 'none';
+    if(_wpPanel) _wpPanel.style.display = selectors.mode() === 'waypoint' ? 'block' : 'none';
     // v1.31.0：从 IndexedDB 恢复的场景，rebuildAll 里的 fit 可能被后续绑定/UI 覆盖，
     //         这里显式再做一次 resetView，保证视野贴到主轨迹上
     const resetPerformed = restored ? await schedulePostRestoreReset() : false;
     commandRegistry.notifyChanged();
     return {restored, resetPerformed};
   }
-  window.__HTM_BOOT_READY__ = _boot();
   applyI18n();
   const appTitle = document.getElementById('app-title');
   if(appTitle) {
@@ -4615,209 +2777,88 @@ export function startStudioRuntime(
   const storageBtn = document.getElementById('storage-btn');
   if(storageBtn) storageBtn.addEventListener('click', showStorageInfo);
 
-  /**
-   * "复位"：把地图视野归一到当前组的主轨迹（或所有 active 轨迹的 bounds）。
-   * v1.22.0 抽出，供复位按钮 / 导入 / 切换分组共用。
-   * @param {Object} [opts]
-   * @param {boolean} [opts.restoreActive=false] 是否把 activeTrails 补齐为所有 trail（复位按钮用）
-   * @param {boolean} [opts.gesture=false] 是否按当前与目标缩放级差执行平滑复位
-   */
-  function cachedTrailBounds(trail) {
-    const track = trail && trail.track;
-    if(!track || !track.length) return null;
-    const revision = runtimeTrailRevision(trail);
-    const cached = trailBoundsCache.get(trail);
-    if(cached && cached.track === track && cached.revision === revision) return cached.bounds;
-
-    const bounds = L.latLngBounds([]);
-    for(const point of track) {
-      if(Number.isFinite(point[0]) && Number.isFinite(point[1])) bounds.extend([point[0], point[1]]);
-    }
-    if(!bounds.isValid()) return null;
-    trailBoundsCache.set(trail, {track, revision, bounds});
-    return bounds;
-  }
-
-  function resetView(opts = {}) {
-    const resetEpoch = ++workspaceResetEpoch;
-    renderRuntimeStats.fit.lastResetEpoch = resetEpoch;
-    if(map && typeof map.stop === 'function') map.stop();
-    let stateChanged = false;
-    if(opts.restoreActive && (!state.activeTrails || state.activeTrails.size === 0)) {
-      dispatchState({type:'active-trails.replace', trailIds:DATA.trails.map(t => t.id)});
-      stateChanged = true;
-    }
-    // 兜底主轨迹（当前组内）
-    if(state.activeGroup != null && !state.primaryTrailId && DATA.trails.length) {
-      const inGroup = DATA.trails.filter(t => trailGroup(t) === state.activeGroup);
-      dispatchState({type:'primary-trail.set', trailId:(inGroup[0] || DATA.trails[0]).id});
-      stateChanged = true;
-    }
-    if(stateChanged) {
-      invalidateRender(
-        HTM_APP.RENDER_DIRTY.TRACKS
-        | HTM_APP.RENDER_DIRTY.MARKERS
-        | HTM_APP.RENDER_DIRTY.SIDEBAR
-        | HTM_APP.RENDER_DIRTY.LEGEND
-        | HTM_APP.RENDER_DIRTY.CHART,
-      );
-    }
-
-    // v1.24.0：测距模式下，若已选中段（A+B），复位到该段
-    if(typeof measureState !== 'undefined' && measureState.active && measureState.ptA && measureState.ptB) {
-      const main = DATA.trails.find(t => t.id === state.primaryTrailId);
-      if(main && main.track) {
-        const i1 = Math.min(measureState.ptA.idx, measureState.ptB.idx);
-        const i2 = Math.max(measureState.ptA.idx, measureState.ptB.idx);
-        const segLL = buildTrackLatLngs(main.track, i1, i2, 1600);
-        if(segLL.length >= 2) {
-          const fitPromise = fitWorkspaceBounds(
-            L.latLngBounds(segLL),
-            {padding:[60,60]},
-            {source:'reset-measure', resetEpoch, gesture:Boolean(opts.gesture)},
-          );
-          if(stateChanged) saveToStorage();
-          return fitPromise;
-        }
-      }
-    }
-
-    // 计算 fit 目标：优先主轨迹，其次当前组所有 active 轨迹
-    const main = state.activeGroup == null ? null : DATA.trails.find(t => t.id === state.primaryTrailId);
-    if(main && main.track && main.track.length) {
-      const bounds = cachedTrailBounds(main);
-      if(!bounds) return Promise.resolve(false);
-      const fitPromise = fitWorkspaceBounds(
-        bounds,
-        {padding:[40,40]},
-        {source:'reset-primary', resetEpoch, gesture:Boolean(opts.gesture)},
-      );
-      if(stateChanged) saveToStorage();
-      return fitPromise;
-    } else {
-      const bounds = L.latLngBounds([]);
-      DATA.trails.forEach(t => {
-        const trailBounds = isTrailActive(t) ? cachedTrailBounds(t) : null;
-        if(trailBounds) bounds.extend(trailBounds);
-      });
-      if(bounds.isValid()) {
-        const fitPromise = fitWorkspaceBounds(
-          bounds,
-          {padding:[40,40]},
-          {source:'reset-active', resetEpoch, gesture:Boolean(opts.gesture)},
-        );
-        if(stateChanged) saveToStorage();
-        return fitPromise;
-      }
-    }
-    if(stateChanged) saveToStorage();
-    return Promise.resolve(false);
-  }
-
-  function finishWorkspaceFit(epoch, applied) {
-    if(!pendingWorkspaceFit || pendingWorkspaceFit.epoch !== epoch) return;
-    const pending = pendingWorkspaceFit;
-    pendingWorkspaceFit = null;
-    if(applied) renderRuntimeStats.fit.applied += 1;
-    pending.resolve(applied);
-  }
-
-  function executeWorkspaceFit(context) {
-    const request = context.request;
-    if(!request) return;
-    const isCurrent = () => context.isCurrent()
-      && (request.resetEpoch == null || request.resetEpoch === workspaceResetEpoch);
-    if(!isCurrent()) {
-      finishWorkspaceFit(context.epoch, false);
-      return;
-    }
-    const applyFit = () => {
-      if(request.closeOverlay) map.invalidateSize({pan:false, animate:false});
-      const targetZoom = map.getBoundsZoom(request.bounds, false, L.point(80, 80));
-      const transition = HTM_CORE.planResetTransition({
-        gesture:request.gesture,
-        currentZoom:map.getZoom(),
-        targetZoom,
-        reducedMotion:prefersReducedMotion,
-      });
-      const fitOptions = {...request.options, ...transition};
-      map.fitBounds(request.bounds, fitOptions);
-    };
-    if(!request.closeOverlay) {
-      applyFit();
-      finishWorkspaceFit(context.epoch, true);
-      return;
-    }
-    setTimeout(() => {
-      if(!isCurrent()) {
-        finishWorkspaceFit(context.epoch, false);
-        return;
-      }
-      applyFit();
-      finishWorkspaceFit(context.epoch, true);
-    }, 120);
-  }
-
-  function fitWorkspaceBounds(bounds, options = {}, meta = {}) {
-    if(!bounds || !map) return Promise.resolve(false);
-    const sidebar = document.getElementById('sidebar');
-    const sidebarCollapsed = !sidebar || sidebar.classList.contains('collapsed');
-    const closeOverlay = HTM_APP.shouldCloseSidebarForFit(window.innerWidth, sidebarCollapsed);
-    if(closeOverlay && typeof toggleSidebar === 'function') toggleSidebar(false);
-
-    if(pendingWorkspaceFit) {
-      renderRuntimeStats.fit.superseded += 1;
-      pendingWorkspaceFit.resolve(false);
-      pendingWorkspaceFit = null;
-    }
-    let resolveFit;
-    const promise = new Promise(resolve => { resolveFit = resolve; });
-    const epoch = renderScheduler.requestFit({
-      bounds,
-      options,
-      closeOverlay,
-      gesture:Boolean(meta.gesture),
-      resetEpoch:meta.resetEpoch ?? null,
-      source:meta.source || 'workspace',
-    });
-    if(epoch == null) {
-      resolveFit(false);
-      return promise;
-    }
-    pendingWorkspaceFit = {epoch, resolve:resolveFit};
-    renderRuntimeStats.fit.requested += 1;
-    renderRuntimeStats.fit.lastEpoch = epoch;
-    return promise;
-  }
-
-  // Sidebar collapse
-  const _sidebar = document.getElementById('sidebar');
-  const _sbClose = document.getElementById('sidebar-close');
+  // Sidebar collapse remains a UI concern; map fitting consumes it through callbacks.
+  const _sidebar = document.getElementById("sidebar");
+  const _sbClose = document.getElementById("sidebar-close");
   function toggleSidebar(open) {
-    if(open === undefined) open = _sidebar.classList.contains('collapsed');
-    if(open) {
-      _sidebar.classList.remove('collapsed');
-    } else {
-      _sidebar.classList.add('collapsed');
-    }
-    // 触发地图重排
+    if(open === undefined) open = _sidebar.classList.contains("collapsed");
+    _sidebar.classList.toggle("collapsed", !open);
     setTimeout(() => {
-      if(typeof map !== 'undefined' && map) map.invalidateSize();
-      if(typeof refreshElevBar === 'function') refreshElevBar();
+      map?.invalidateSize();
+      refreshElevBar?.();
     }, 280);
-    // 主轨迹小卡：侧栏收起时显示
-    const mini = document.getElementById('primary-mini');
-    if(mini) {
-      if(_sidebar.classList.contains('collapsed')) {
-        const hasPrimary = typeof buildPrimaryMini === 'function' ? buildPrimaryMini() : false;
-        mini.style.display = hasPrimary ? 'block' : 'none';
-        if(hasPrimary && typeof schedulePrimaryMiniPositionApply === 'function') schedulePrimaryMiniPositionApply(mini);
-      } else {
-        mini.style.display = 'none';
-      }
-    }
+    const mini = document.getElementById("primary-mini");
+    if(!mini) return;
+    if(_sidebar.classList.contains("collapsed")) {
+      const hasPrimary = buildPrimaryMini?.() || false;
+      mini.style.display = hasPrimary ? "block" : "none";
+      if(hasPrimary) schedulePrimaryMiniPositionApply?.(mini);
+    } else mini.style.display = "none";
   }
-  if(_sbClose) _sbClose.addEventListener('click', () => toggleSidebar(false));
+  if(_sbClose) _sbClose.addEventListener("click", () => toggleSidebar(false));
+
+  workspaceController = HTM_APP.createWorkspaceController({
+    trails:() => projectSelectors.trails(),
+    selectors,
+    stateActions,
+    getMeasureState:() => measureState,
+    trailRevision:runtimeTrailRevision,
+    leaflet:L,
+    map,
+    requestFit:request => renderScheduler.requestFit(request),
+    invalidateWorkspace:() => invalidateRender(
+      HTM_APP.RENDER_DIRTY.TRACKS | HTM_APP.RENDER_DIRTY.MARKERS
+      | HTM_APP.RENDER_DIRTY.SIDEBAR | HTM_APP.RENDER_DIRTY.LEGEND
+      | HTM_APP.RENDER_DIRTY.CHART,
+    ),
+    persist:saveToStorage,
+    renderStats:renderRuntimeStats,
+    shouldCloseSidebar:() => HTM_APP.shouldCloseSidebarForFit(
+      window.innerWidth,
+      !_sidebar || _sidebar.classList.contains("collapsed"),
+    ),
+    closeSidebar:() => toggleSidebar(false),
+    prefersReducedMotion,
+  });
+  const cachedTrailBounds = trail => workspaceController.cachedTrailBounds(trail);
+  const resetView = options => workspaceController.resetView(options);
+  const fitWorkspaceBounds = (bounds, options = {}, meta = {}) =>
+    workspaceController.fitBounds(bounds, options, meta);
+
+  const sidebarRuntime = HTM_APP.createSidebarRuntime({
+    document, window, DAY_ITINERARY_WAYPOINT_TAGS, HTM_APP, HTM_CORE, L,
+    STUDIO_COMMANDS, TAG_RULES_JS, applyChange, baseLayers,
+    beginRuntimeInteraction, cancelRuntimeInteraction, clearEscape, commandRegistry,
+    createFloatingPanelPositionController, createWorkbenchIcon,
+    getCurrentLang:() => currentLang, dayPalette, deleteTrail, t,
+    stateActions, selectors, projectActions, projectSelectors, dispatchStudioCommand, downloadTrailKML, drawTracks, drawWaypoints,
+    escapeController, escapeUiText, fitWorkspaceBounds,
+    getCurrentBase:() => currentBase,
+    setCurrentBase:value => { currentBase = value; },
+    getGroups, hideMeasureElevReadout, interactionManager, isTrailActive, map,
+    markTrailRevision, measureMarker, measureState, recordProjectEdit, refreshElevBar,
+    requestSegmentExit, reverseTrail, runtimeContext, sanitizeExternalHttpUrl,
+    sanitizeHexColor, saveToStorage, setMeasureElevHint, showEscape, showToast,
+    studioDialogs, switchGroup, tagColors, toggleSidebar, toggleTrailActive,
+    toggleTrailBatch, toggleTrailExpanded, trailController, trailGroup,
+    waypointIconMarkup, wpMarkers,
+  });
+  const {
+    renderPrimaryCard, primaryMiniController, clampPrimaryMiniPosition,
+    applyPrimaryMiniPosition, schedulePrimaryMiniPositionApply, savePrimaryMiniPosition,
+    bindPrimaryMiniDrag, buildPrimaryMini, floatingPanelController,
+    initFloatingPanelPositions, updateModeTagTitle, buildTrailThumbnail,
+    renderGroupTabs, renderBatchToolbar, moveBatchToGroup, trailCardHeaderHtml,
+    trailCardExpandedHtml, isDetailButtonTarget, handleTrailCardClick,
+    editTrailSource, editTrailName, editTrailId, confirmDeleteTrail,
+    handleTrailDetailClick, handleTrailGroupChange, renderTrailCard, buildTrailList,
+    buildFilterGrid, dayPreviewController, dayPreviewState, clearDaySegmentPreview,
+    handleDayPreviewInteractionEvent, showDaySegmentPreview, buildDaysTab,
+    selectedNearbyWaypointRefs, appendNearbyWaypointPicker, appendEscapeTools,
+    applyEscapeFilters, appendEscapeRoutesForDay, buildLegend, activateSidebarTab,
+    setMapMode, enterInteractionRenderMode, buildWaypointModeTagGrid, syncDisplayControls,
+  } = sidebarRuntime;
+
   const waypointController = HTM_APP.createWaypointController(runtimeContext, {
     iconForTag:waypointIcon,
     markRevision:markTrailRevision,
@@ -4834,7 +2875,7 @@ export function startStudioRuntime(
   }
 
   function findWaypointAnchorOnPrimary(latlng, requireNear = false) {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) return null;
     const hit = nearestTrackIdxOnPrimary(latlng.lat, latlng.lng);
     if(hit) return hit;
@@ -5039,7 +3080,7 @@ export function startStudioRuntime(
   }
 
   function enterAddWaypointMode(opts = {}) {
-    const main = DATA.trails.find(t => t.id === state.primaryTrailId);
+    const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) {
       showToast('请先设置主轨迹', 'error');
       return null;
@@ -5088,7 +3129,7 @@ export function startStudioRuntime(
     map.getContainer().addEventListener('touchmove', () => { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }, {passive: true});
   }
   function hasPrimaryTrail() {
-    const trail = DATA.trails.find(item => item.id === state.primaryTrailId);
+    const trail = selectors.primaryTrail(projectSelectors.trails());
     return Boolean(trail && trail.track && trail.track.length);
   }
 
@@ -5563,7 +3604,7 @@ export function startStudioRuntime(
   }
 
   async function enterStitchWorkbench(trails) {
-    const ownerTrail = DATA.trails.find(trail => trail.id === state.primaryTrailId) || trails[0];
+    const ownerTrail = selectors.primaryTrail(projectSelectors.trails()) || trails[0];
     if(interactionManager.current.kind !== 'idle') interactionManager.cancel('switch-stitch');
     stitchState.parts = trails.map(createStitchDraftPart);
     stitchState.selectedPartId = stitchState.parts[0]?.id || null;
@@ -5631,7 +3672,7 @@ export function startStudioRuntime(
   async function stitchTrailsCommand() {
     if(stitchState.active) return true;
     if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-stitch')) return false;
-    if(DATA.trails.length < 2) {
+    if(projectSelectors.trails().length < 2) {
       await studioDialogs.info({
         title:currentLang === 'zh' ? '无法拼接轨迹' : 'Cannot stitch trails',
         message:currentLang === 'zh' ? '至少需要两条已有轨迹。' : 'At least two existing trails are required.',
@@ -5647,7 +3688,7 @@ export function startStudioRuntime(
       render(context) {
         const list = document.createElement('div');
         list.className = 'stitch-trail-list stitch-source-list';
-        for(const trail of DATA.trails) {
+        for(const trail of projectSelectors.trails()) {
           const row = document.createElement('label');
           row.className = 'stitch-trail-row stitch-source-row';
           row.dataset.trailId = trail.id;
@@ -5693,7 +3734,7 @@ export function startStudioRuntime(
       },
     });
     if(!requested) return false;
-    const trails = requested.trailIds.map(id => DATA.trails.find(trail => trail.id === id)).filter(Boolean);
+    const trails = requested.trailIds.map(id => projectSelectors.trails().find(trail => trail.id === id)).filter(Boolean);
     return trails.length >= 2 && enterStitchWorkbench(trails);
   }
 
@@ -5707,14 +3748,14 @@ export function startStudioRuntime(
   document.getElementById('stitch-commit')?.addEventListener('click', () => void commitStitchWorkbench());
 
   async function reversePrimaryTrailCommand() {
-    if(!state.primaryTrailId) {
+    if(!selectors.primaryTrailId()) {
       await studioDialogs.info({
         title:currentLang === 'zh' ? '无法反向' : 'Cannot reverse',
         message:t('reverse.noPrimary') || '无主轨迹',
       });
       return false;
     }
-    reverseTrail(state.primaryTrailId);
+    reverseTrail(selectors.primaryTrailId());
     return true;
   }
 
@@ -5770,7 +3811,7 @@ export function startStudioRuntime(
 
   function registerRuntimeCommands() {
     const register = (id, execute, options = {}) => commandRegistry.register({id, execute, ...options});
-    const hasTrails = () => DATA.trails.length > 0;
+    const hasTrails = () => projectSelectors.trails().length > 0;
     const disposers = [
       register(STUDIO_COMMANDS.FILE_IMPORT, () => addModal.classList.add('open')),
       register(STUDIO_COMMANDS.FILE_EXPORT, exportOffline, {enabled:hasTrails}),
@@ -5782,7 +3823,7 @@ export function startStudioRuntime(
         enabled:() => projectHistoryController.canRedo,
       }),
       register(STUDIO_COMMANDS.TRAIL_REVERSE, reversePrimaryTrailCommand, {enabled:hasPrimaryTrail}),
-      register(STUDIO_COMMANDS.TRAIL_STITCH, stitchTrailsCommand, {enabled:() => DATA.trails.length >= 2}),
+      register(STUDIO_COMMANDS.TRAIL_STITCH, stitchTrailsCommand, {enabled:() => projectSelectors.trails().length >= 2}),
       register(STUDIO_COMMANDS.MEASURE_TOGGLE, toggleMeasureCommand, {
         enabled:hasPrimaryTrail,
         checked:() => interactionManager.current.kind === 'measure',
@@ -5809,24 +3850,23 @@ export function startStudioRuntime(
       register(STUDIO_COMMANDS.APP_RENAME, renameApplicationCommand),
       register(STUDIO_COMMANDS.INTERACTION_CANCEL, cancelActiveCommand),
       register(STUDIO_COMMANDS.MODE_ELEVATION, () => setMapMode('elev'), {
-        checked:() => state.mode === 'elev',
+        checked:() => selectors.mode() === 'elev',
       }),
       register(STUDIO_COMMANDS.MODE_WAYPOINT, () => setMapMode('waypoint'), {
-        checked:() => state.mode === 'waypoint',
+        checked:() => selectors.mode() === 'waypoint',
       }),
       register(STUDIO_COMMANDS.WORKSPACE_GROUPS, () => activateSidebarTab('groups')),
       register(STUDIO_COMMANDS.WORKSPACE_TRAILS, () => activateSidebarTab('trails')),
       register(STUDIO_COMMANDS.WORKSPACE_ITINERARY, () => activateSidebarTab('days')),
-      register(STUDIO_COMMANDS.WORKSPACE_WAYPOINTS, () => {
-        activateSidebarTab('trails');
-        setMapMode('waypoint');
-      }),
     ];
-    window.__HTM_RUNTIME_COMMAND_DISPOSERS__ = disposers;
     commandRegistry.notifyChanged();
+    return disposers;
   }
 
-  registerRuntimeCommands();
+  const runtimeCommandDisposers = registerRuntimeCommands();
+
+  const bootPromise = _boot();
+  if(studioTestMode) window.__HTM_BOOT_READY__ = bootPromise;
 
   initFloatingPanelPositions();
   invalidateRender(
@@ -5839,366 +3879,60 @@ export function startStudioRuntime(
   );
 
 
-  if(new URL(window.location.href).searchParams.has('studio-test')) {
-    const runtimeInspector = {};
-    Object.defineProperties(runtimeInspector, {
-      "APP_VERSION": {enumerable:true, get:() => APP_VERSION},
-      "DATA": {enumerable:true, get:() => DATA},
-      "DATA_KEY": {enumerable:true, get:() => DATA_KEY},
-      "DB_NAME": {enumerable:true, get:() => DB_NAME},
-      "HTM_APP": {enumerable:true, get:() => HTM_APP},
-      "HTM_CORE": {enumerable:true, get:() => HTM_CORE},
-      "L": {enumerable:true, get:() => L},
-      "PALETTE_LOCAL": {enumerable:true, get:() => PALETTE_LOCAL},
-      "PRIMARY_MINI_POS_KEY": {enumerable:true, get:() => PRIMARY_MINI_POS_KEY},
-      "STORE_NAME": {enumerable:true, get:() => STORE_NAME},
-      "STUDIO_COMMANDS": {enumerable:true, get:() => STUDIO_COMMANDS},
-      "TAG_RULES_JS": {enumerable:true, get:() => TAG_RULES_JS},
-      "_boot": {enumerable:true, get:() => _boot},
-      "_closeAddModal": {enumerable:true, get:() => _closeAddModal},
-      "_doSave": {enumerable:true, get:() => _doSave},
-      "_elevBarData": {enumerable:true, get:() => _elevBarData},
-      "_miniEl": {enumerable:true, get:() => _miniEl},
-      "_sbClose": {enumerable:true, get:() => _sbClose},
-      "_sbToggle": {enumerable:true, get:() => _sbToggle},
-      "_showHighPointEl": {enumerable:true, get:() => _showHighPointEl},
-      "_showLabelEl": {enumerable:true, get:() => _showLabelEl},
-      "_showTrackEl": {enumerable:true, get:() => _showTrackEl},
-      "_sidebar": {enumerable:true, get:() => _sidebar},
-      "_toolbarEl": {enumerable:true, get:() => _toolbarEl},
-      "accumulatorAscent": {enumerable:true, get:() => accumulatorAscent},
-      "accumulatorDescent": {enumerable:true, get:() => accumulatorDescent},
-      "activateSidebarTab": {enumerable:true, get:() => activateSidebarTab},
-      "addBtn": {enumerable:true, get:() => addBtn},
-      "addCancel": {enumerable:true, get:() => addCancel},
-      "addEscapeCommit": {enumerable:true, get:() => addEscapeCommit},
-      "addEscapeCompute": {enumerable:true, get:() => addEscapeCompute},
-      "addEscapeEnter": {enumerable:true, get:() => addEscapeEnter},
-      "addEscapeExit": {enumerable:true, get:() => addEscapeExit},
-      "addEscapeReset": {enumerable:true, get:() => addEscapeReset},
-      "addEscapeState": {enumerable:true, get:() => addEscapeState},
-      "addManualWaypointAt": {enumerable:true, get:() => addManualWaypointAt},
-      "addMeasureEndpointMarker": {enumerable:true, get:() => addMeasureEndpointMarker},
-      "addModal": {enumerable:true, get:() => addModal},
-      "addStatus": {enumerable:true, get:() => addStatus},
-      "addWaypointState": {enumerable:true, get:() => addWaypointState},
-      "addWpMarker": {enumerable:true, get:() => addWpMarker},
-      "appStateStore": {enumerable:true, get:() => appStateStore},
-      "appTitle": {enumerable:true, get:() => appTitle},
-      "applyChange": {enumerable:true, get:() => applyChange},
-      "applyI18n": {enumerable:true, get:() => applyI18n},
-      "applyMeasureEndpointHit": {enumerable:true, get:() => applyMeasureEndpointHit},
-      "applyMeasureEndpointState": {enumerable:true, get:() => applyMeasureEndpointState},
-      "applyPrimaryMiniPosition": {enumerable:true, get:() => applyPrimaryMiniPosition},
-      "baseLayers": {enumerable:true, get:() => baseLayers},
-      "beginRuntimeInteraction": {enumerable:true, get:() => beginRuntimeInteraction},
-      "bindKmlImportRowEvents": {enumerable:true, get:() => bindKmlImportRowEvents},
-      "bindMeasureEndpointDrag": {enumerable:true, get:() => bindMeasureEndpointDrag},
-      "bindPrimaryMiniDrag": {enumerable:true, get:() => bindPrimaryMiniDrag},
-      "browserFileAdapter": {enumerable:true, get:() => browserFileAdapter},
-      "buildDayMeta": {enumerable:true, get:() => buildDayMeta},
-      "buildDayPreviewRenderModel": {enumerable:true, get:() => buildDayPreviewRenderModel},
-      "buildDaysTab": {enumerable:true, get:() => buildDaysTab},
-      "buildEscapeRoutes": {enumerable:true, get:() => buildEscapeRoutes},
-      "buildFilterGrid": {enumerable:true, get:() => buildFilterGrid},
-      "renderPrimaryCard": {enumerable:true, get:() => renderPrimaryCard},
-      "buildKmlParseModel": {enumerable:true, get:() => buildKmlParseModel},
-      "buildLegend": {enumerable:true, get:() => buildLegend},
-      "buildMeasureSegmentRenderModel": {enumerable:true, get:() => buildMeasureSegmentRenderModel},
-      "buildPrimaryMini": {enumerable:true, get:() => buildPrimaryMini},
-      "buildSegmentLayerModel": {enumerable:true, get:() => buildSegmentLayerModel},
-      "buildStorageDeleteOperation": {enumerable:true, get:() => buildStorageDeleteOperation},
-      "buildStorageReadOperation": {enumerable:true, get:() => buildStorageReadOperation},
-      "buildStorageWriteOperation": {enumerable:true, get:() => buildStorageWriteOperation},
-      "buildTrackLatLngs": {enumerable:true, get:() => buildTrackLatLngs},
-      "buildTrailList": {enumerable:true, get:() => buildTrailList},
-      "buildTrailThumbnail": {enumerable:true, get:() => buildTrailThumbnail},
-      "buildWaypointModeTagGrid": {enumerable:true, get:() => buildWaypointModeTagGrid},
-      "cancelActiveCommand": {enumerable:true, get:() => cancelActiveCommand},
-      "cancelRuntimeInteraction": {enumerable:true, get:() => cancelRuntimeInteraction},
-      "clampPrimaryMiniPosition": {enumerable:true, get:() => clampPrimaryMiniPosition},
-      "clampTrackIndex": {enumerable:true, get:() => clampTrackIndex},
-      "classifyTag": {enumerable:true, get:() => classifyTag},
-      "clearAllTrails": {enumerable:true, get:() => clearAllTrails},
-      "clearDaySegmentPreview": {enumerable:true, get:() => clearDaySegmentPreview},
-      "clearEscape": {enumerable:true, get:() => clearEscape},
-      "clearMeasureLayer": {enumerable:true, get:() => clearMeasureLayer},
-      "clearStorage": {enumerable:true, get:() => clearStorage},
-      "closeLightbox": {enumerable:true, get:() => closeLightbox},
-      "collectWaypointMarkerModels": {enumerable:true, get:() => collectWaypointMarkerModels},
-      "commandRegistry": {enumerable:true, get:() => commandRegistry},
-      "computeCumulativeDistance": {enumerable:true, get:() => computeCumulativeDistance},
-      "computeMeasureStats": {enumerable:true, get:() => computeMeasureStats},
-      "computeMeasureStatsFromCache": {enumerable:true, get:() => computeMeasureStatsFromCache},
-      "computeSegmentStatsForTrack": {enumerable:true, get:() => computeSegmentStatsForTrack},
-      "computeTrailStats": {enumerable:true, get:() => computeTrailStats},
-      "confirmDeleteTrail": {enumerable:true, get:() => confirmDeleteTrail},
-      "createPrimaryTrackDragSnapper": {enumerable:true, get:() => createPrimaryTrackDragSnapper},
-      "currentBase": {enumerable:true, get:() => currentBase},
-      "currentLang": {enumerable:true, get:() => currentLang},
-      "dayPalette": {enumerable:true, get:() => dayPalette},
-      "dayPreviewController": {enumerable:true, get:() => dayPreviewController},
-      "dayPreviewState": {enumerable:true, get:() => dayPreviewState},
-      "deleteTrail": {enumerable:true, get:() => deleteTrail},
-      "dispatchRuntimeInteraction": {enumerable:true, get:() => dispatchRuntimeInteraction},
-      "dispatchState": {enumerable:true, get:() => dispatchState},
-      "dispatchStudioCommand": {enumerable:true, get:() => dispatchStudioCommand},
-      "dispatchTransientWaypointTap": {enumerable:true, get:() => dispatchTransientWaypointTap},
-      "downloadTrailKML": {enumerable:true, get:() => downloadTrailKML},
-      "drawElevBar": {enumerable:true, get:() => drawElevBar},
-      "drawHighPoints": {enumerable:true, get:() => drawHighPoints},
-      "drawTracks": {enumerable:true, get:() => drawTracks},
-      "drawWaypoints": {enumerable:true, get:() => drawWaypoints},
-      "editTrailId": {enumerable:true, get:() => editTrailId},
-      "editTrailSource": {enumerable:true, get:() => editTrailSource},
-      "elevCanvas": {enumerable:true, get:() => elevCanvas},
-      "elevCrosshair": {enumerable:true, get:() => elevCrosshair},
-      "elevCtx": {enumerable:true, get:() => elevCtx},
-      "elevLabel": {enumerable:true, get:() => elevLabel},
-      "elevRatioColor": {enumerable:true, get:() => elevRatioColor},
-      "elevTip": {enumerable:true, get:() => elevTip},
-      "elevationCanvasRenderer": {enumerable:true, get:() => elevationCanvasRenderer},
-      "enrichWaypoints": {enumerable:true, get:() => enrichWaypoints},
-      "ensurePrimaryForActiveGroup": {enumerable:true, get:() => ensurePrimaryForActiveGroup},
-      "ensureUniqueTrailId": {enumerable:true, get:() => ensureUniqueTrailId},
-      "enterAddWaypointMode": {enumerable:true, get:() => enterAddWaypointMode},
-      "enterInteractionRenderMode": {enumerable:true, get:() => enterInteractionRenderMode},
-      "escapeController": {enumerable:true, get:() => escapeController},
-      "escapeLayer": {enumerable:true, get:() => escapeLayer},
-      "executeWorkspaceFit": {enumerable:true, get:() => executeWorkspaceFit},
-      "exitAddWaypointMode": {enumerable:true, get:() => exitAddWaypointMode},
-      "expandZipFiles": {enumerable:true, get:() => expandZipFiles},
-      "exportGroupKML": {enumerable:true, get:() => exportGroupKML},
-      "exportItineraryMD": {enumerable:true, get:() => exportItineraryMD},
-      "exportOffline": {enumerable:true, get:() => exportOffline},
-      "extractImageUrl": {enumerable:true, get:() => extractImageUrl},
-      "extractKmlParseModelInput": {enumerable:true, get:() => extractKmlParseModelInput},
-      "fflate": {enumerable:true, get:() => fflate},
-      "fileArchiveAdapter": {enumerable:true, get:() => fileArchiveAdapter},
-      "fileExportController": {enumerable:true, get:() => fileExportController},
-      "fileImportController": {enumerable:true, get:() => fileImportController},
-      "findDuplicateTrail": {enumerable:true, get:() => findDuplicateTrail},
-      "findNearestIdx": {enumerable:true, get:() => findNearestIdx},
-      "findWaypointAnchorOnPrimary": {enumerable:true, get:() => findWaypointAnchorOnPrimary},
-      "finishWorkspaceFit": {enumerable:true, get:() => finishWorkspaceFit},
-      "fitWorkspaceBounds": {enumerable:true, get:() => fitWorkspaceBounds},
-      "floatingPanelController": {enumerable:true, get:() => floatingPanelController},
-      "generateNextTrailId": {enumerable:true, get:() => generateNextTrailId},
-      "getGroups": {enumerable:true, get:() => getGroups},
-      "getMeasureStatsCache": {enumerable:true, get:() => getMeasureStatsCache},
-      "handleDayPreviewInteractionEvent": {enumerable:true, get:() => handleDayPreviewInteractionEvent},
-      "handleEscapeInteractionEvent": {enumerable:true, get:() => handleEscapeInteractionEvent},
-      "handleFileExportEvent": {enumerable:true, get:() => handleFileExportEvent},
-      "handleFileImportEvent": {enumerable:true, get:() => handleFileImportEvent},
-      "handleFiles": {enumerable:true, get:() => handleFiles},
-      "handleMeasureInteractionEvent": {enumerable:true, get:() => handleMeasureInteractionEvent},
-      "handleMeasureTap": {enumerable:true, get:() => handleMeasureTap},
-      "handleSegmentInteractionEvent": {enumerable:true, get:() => handleSegmentInteractionEvent},
-      "handleSegmentTap": {enumerable:true, get:() => handleSegmentTap},
-      "handleStorageControllerEvent": {enumerable:true, get:() => handleStorageControllerEvent},
-      "handleTrailCardClick": {enumerable:true, get:() => handleTrailCardClick},
-      "handleTrailDetailClick": {enumerable:true, get:() => handleTrailDetailClick},
-      "handleTrailGroupChange": {enumerable:true, get:() => handleTrailGroupChange},
-      "handleWaypointInteractionEvent": {enumerable:true, get:() => handleWaypointInteractionEvent},
-      "hasPrimaryTrail": {enumerable:true, get:() => hasPrimaryTrail},
-      "haversine": {enumerable:true, get:() => haversine},
-      "hideMeasureElevReadout": {enumerable:true, get:() => hideMeasureElevReadout},
-      "hideTooltip": {enumerable:true, get:() => hideTooltip},
-      "hideWpPhoto": {enumerable:true, get:() => hideWpPhoto},
-      "highPointLayer": {enumerable:true, get:() => highPointLayer},
-      "importSingleKml": {enumerable:true, get:() => importSingleKml},
-      "initFloatingPanelPositions": {enumerable:true, get:() => initFloatingPanelPositions},
-      "interactionManager": {enumerable:true, get:() => interactionManager},
-      "invalidateRender": {enumerable:true, get:() => invalidateRender},
-      "isDetailButtonTarget": {enumerable:true, get:() => isDetailButtonTarget},
-      "isRuntimeInteractionCurrent": {enumerable:true, get:() => isRuntimeInteractionCurrent},
-      "isTrailActive": {enumerable:true, get:() => isTrailActive},
-      "kmlCoordsToTrackPoints": {enumerable:true, get:() => kmlCoordsToTrackPoints},
-      "kmlDrop": {enumerable:true, get:() => kmlDrop},
-      "kmlFile": {enumerable:true, get:() => kmlFile},
-      "kmlList": {enumerable:true, get:() => kmlList},
-      "langBtn": {enumerable:true, get:() => langBtn},
-      "lastNonDayMode": {enumerable:true, get:() => lastNonDayMode},
-      "lbApply": {enumerable:true, get:() => lbApply},
-      "lbMouseDown": {enumerable:true, get:() => lbMouseDown},
-      "lbReset": {enumerable:true, get:() => lbReset},
-      "lbState": {enumerable:true, get:() => lbState},
-      "lbTouchCenter": {enumerable:true, get:() => lbTouchCenter},
-      "lbTouchDist": {enumerable:true, get:() => lbTouchDist},
-      "leafletMarkerRenderer": {enumerable:true, get:() => leafletMarkerRenderer},
-      "leafletTrackRenderer": {enumerable:true, get:() => leafletTrackRenderer},
-      "lightboxCap": {enumerable:true, get:() => lightboxCap},
-      "lightboxEl": {enumerable:true, get:() => lightboxEl},
-      "lightboxImg": {enumerable:true, get:() => lightboxImg},
-      "loadFromStorage": {enumerable:true, get:() => loadFromStorage},
-      "map": {enumerable:true, get:() => map},
-      "mapRenderController": {enumerable:true, get:() => mapRenderController},
-      "markTrailRevision": {enumerable:true, get:() => markTrailRevision},
-      "markerRenderController": {enumerable:true, get:() => markerRenderController},
-      "measureCloseBtn": {enumerable:true, get:() => measureCloseBtn},
-      "measureCompute": {enumerable:true, get:() => measureCompute},
-      "measureController": {enumerable:true, get:() => measureController},
-      "measureEnter": {enumerable:true, get:() => measureEnter},
-      "measureExit": {enumerable:true, get:() => measureExit},
-      "measureExitBtn": {enumerable:true, get:() => measureExitBtn},
-      "measureMarker": {enumerable:true, get:() => measureMarker},
-      "measurePointFromHit": {enumerable:true, get:() => measurePointFromHit},
-      "measureRangeMaxElev": {enumerable:true, get:() => measureRangeMaxElev},
-      "measureRangeMinElev": {enumerable:true, get:() => measureRangeMinElev},
-      "measureReset": {enumerable:true, get:() => measureReset},
-      "measureResetBtn": {enumerable:true, get:() => measureResetBtn},
-      "measureReverse": {enumerable:true, get:() => measureReverse},
-      "measureReverseBtn": {enumerable:true, get:() => measureReverseBtn},
-      "measureState": {enumerable:true, get:() => measureState},
-      "measureStatsCache": {enumerable:true, get:() => measureStatsCache},
-      "measureTrackCache": {enumerable:true, get:() => measureTrackCache},
-      "moveBatchToGroup": {enumerable:true, get:() => moveBatchToGroup},
-      "moveSegmentBoundary": {enumerable:true, get:() => moveSegmentBoundary},
-      "nearestTrackIdx": {enumerable:true, get:() => nearestTrackIdx},
-      "nearestTrackIdxNearPrimary": {enumerable:true, get:() => nearestTrackIdxNearPrimary},
-      "nearestTrackIdxOnPrimary": {enumerable:true, get:() => nearestTrackIdxOnPrimary},
-      "networkLayer": {enumerable:true, get:() => networkLayer},
-      "nextWaypointId": {enumerable:true, get:() => nextWaypointId},
-      "normalizeActiveTrailIds": {enumerable:true, get:() => normalizeActiveTrailIds},
-      "normalizeIndexedDbStorageConfig": {enumerable:true, get:() => normalizeIndexedDbStorageConfig},
-      "normalizeKmlTitle": {enumerable:true, get:() => normalizeKmlTitle},
-      "normalizePrimaryByGroup": {enumerable:true, get:() => normalizePrimaryByGroup},
-      "normalizeTrackIndexRange": {enumerable:true, get:() => normalizeTrackIndexRange},
-      "openDB": {enumerable:true, get:() => openDB},
-      "openLightbox": {enumerable:true, get:() => openLightbox},
-      "parseAndProcessKml": {enumerable:true, get:() => parseAndProcessKml},
-      "parseCoordStr": {enumerable:true, get:() => parseCoordStr},
-      "parseGxCoordText": {enumerable:true, get:() => parseGxCoordText},
-      "parseKml": {enumerable:true, get:() => parseKml},
-      "pendingWorkspaceFit": {enumerable:true, get:() => pendingWorkspaceFit},
-      "pinWpCard": {enumerable:true, get:() => pinWpCard},
-      "pointFromTrackIndex": {enumerable:true, get:() => pointFromTrackIndex},
-      "postImportFinalize": {enumerable:true, get:() => postImportFinalize},
-      "primaryTrailIdForGroup": {enumerable:true, get:() => primaryTrailIdForGroup},
-      "primaryMiniController": {enumerable:true, get:() => primaryMiniController},
-      "processTrack": {enumerable:true, get:() => processTrack},
-      "projectArchiveController": {enumerable:true, get:() => projectArchiveController},
-      "projectHistoryController": {enumerable:true, get:() => projectHistoryController},
-      "queueMeasureLiveUpdate": {enumerable:true, get:() => queueMeasureLiveUpdate},
-      "rebuildAll": {enumerable:true, get:() => rebuildAll},
-      "recordRenderPhase": {enumerable:true, get:() => recordRenderPhase},
-      "redrawSegmentLayer": {enumerable:true, get:() => redrawSegmentLayer},
-      "refreshElevBar": {enumerable:true, get:() => refreshElevBar},
-      "registerRuntimeCommands": {enumerable:true, get:() => registerRuntimeCommands},
-      "removeTrailFromPrimaryByGroup": {enumerable:true, get:() => removeTrailFromPrimaryByGroup},
-      "renameApplicationCommand": {enumerable:true, get:() => renameApplicationCommand},
-      "renderBatchToolbar": {enumerable:true, get:() => renderBatchToolbar},
-      "renderDaysNow": {enumerable:true, get:() => renderDaysNow},
-      "renderElevationChartNow": {enumerable:true, get:() => renderElevationChartNow},
-      "renderGroupTabs": {enumerable:true, get:() => renderGroupTabs},
-      "renderKmlImportRow": {enumerable:true, get:() => renderKmlImportRow},
-      "renderLegendNow": {enumerable:true, get:() => renderLegendNow},
-      "renderMeasureSegmentLine": {enumerable:true, get:() => renderMeasureSegmentLine},
-      "renderRuntimeStats": {enumerable:true, get:() => renderRuntimeStats},
-      "renderScheduler": {enumerable:true, get:() => renderScheduler},
-      "renderSegmentList": {enumerable:true, get:() => renderSegmentList},
-      "renderSidebarNow": {enumerable:true, get:() => renderSidebarNow},
-      "renderTracksNow": {enumerable:true, get:() => renderTracksNow},
-      "renderTrailCard": {enumerable:true, get:() => renderTrailCard},
-      "renderWaypointsNow": {enumerable:true, get:() => renderWaypointsNow},
-      "resetMeasureElevReadout": {enumerable:true, get:() => resetMeasureElevReadout},
-      "resetView": {enumerable:true, get:() => resetView},
-      "restoreProjectFile": {enumerable:true, get:() => restoreProjectFile},
-      "restoreStorageSnapshot": {enumerable:true, get:() => restoreStorageSnapshot},
-      "revalidateRuntimeInteractionOwner": {enumerable:true, get:() => revalidateRuntimeInteractionOwner},
-      "reverseMeasureEndpoints": {enumerable:true, get:() => reverseMeasureEndpoints},
-      "reversePrimaryTrailCommand": {enumerable:true, get:() => reversePrimaryTrailCommand},
-      "reverseTrail": {enumerable:true, get:() => reverseTrail},
-      "runtimeContext": {enumerable:true, get:() => runtimeContext},
-      "runtimeInteractionOwner": {enumerable:true, get:() => runtimeInteractionOwner},
-      "runtimeInteractionOwnerIsCurrent": {enumerable:true, get:() => runtimeInteractionOwnerIsCurrent},
-      "runtimeTrailRevision": {enumerable:true, get:() => runtimeTrailRevision},
-      "runtimeTrailRevisions": {enumerable:true, get:() => runtimeTrailRevisions},
-      "sandboxWarningShown": {enumerable:true, get:() => sandboxWarningShown},
-      "savePrimaryMiniPosition": {enumerable:true, get:() => savePrimaryMiniPosition},
-      "saveToStorage": {enumerable:true, get:() => saveToStorage},
-      "schedulePostRestoreReset": {enumerable:true, get:() => schedulePostRestoreReset},
-      "schedulePrimaryMiniPositionApply": {enumerable:true, get:() => schedulePrimaryMiniPositionApply},
-      "scheduleRuntimeInteractionFrame": {enumerable:true, get:() => scheduleRuntimeInteractionFrame},
-      "segmentApply": {enumerable:true, get:() => segmentApply},
-      "segmentApplyBtn": {enumerable:true, get:() => segmentApplyBtn},
-      "segmentRestore": {enumerable:true, get:() => segmentRestore},
-      "segmentRestoreBtn": {enumerable:true, get:() => segmentRestoreBtn},
-      "segmentCloseBtn": {enumerable:true, get:() => segmentCloseBtn},
-      "segmentController": {enumerable:true, get:() => segmentController},
-      "segmentDeleteDay": {enumerable:true, get:() => segmentDeleteDay},
-      "segmentEnter": {enumerable:true, get:() => segmentEnter},
-      "segmentExit": {enumerable:true, get:() => segmentExit},
-      "segmentExitBtn": {enumerable:true, get:() => segmentExitBtn},
-      "segmentInsertPoint": {enumerable:true, get:() => segmentInsertPoint},
-      "requestSegmentExit": {enumerable:true, get:() => requestSegmentExit},
-      "segmentState": {enumerable:true, get:() => segmentState},
-      "segmentStats": {enumerable:true, get:() => segmentStats},
-      "segmentUndo": {enumerable:true, get:() => segmentUndo},
-      "segmentUndoBtn": {enumerable:true, get:() => segmentUndoBtn},
-      "serializeStorageSnapshot": {enumerable:true, get:() => serializeStorageSnapshot},
-      "setLang": {enumerable:true, get:() => setLang},
-      "setMapMode": {enumerable:true, get:() => setMapMode},
-      "setMeasureElevHint": {enumerable:true, get:() => setMeasureElevHint},
-      "setRuntimeInteractionPhase": {enumerable:true, get:() => setRuntimeInteractionPhase},
-      "shortLabel": {enumerable:true, get:() => shortLabel},
-      "showChangelog": {enumerable:true, get:() => showChangelog},
-      "showDaySegmentPreview": {enumerable:true, get:() => showDaySegmentPreview},
-      "showEscape": {enumerable:true, get:() => showEscape},
-      "showExportMenu": {enumerable:true, get:() => showExportMenu},
-      "showHelp": {enumerable:true, get:() => showHelp},
-      "showMeasureElevReadout": {enumerable:true, get:() => showMeasureElevReadout},
-      "showStorageInfo": {enumerable:true, get:() => showStorageInfo},
-      "showToast": {enumerable:true, get:() => showToast},
-      "showTooltip": {enumerable:true, get:() => showTooltip},
-      "sidebarTabCommands": {enumerable:true, get:() => sidebarTabCommands},
-      "smoothElev": {enumerable:true, get:() => smoothElev},
-      "state": {enumerable:true, get:() => state},
-      "stitchState": {enumerable:true, get:() => stitchState},
-      "stitchLayer": {enumerable:true, get:() => stitchLayer},
-      "renderStitchWorkbench": {enumerable:true, get:() => renderStitchWorkbench},
-      "commitStitchWorkbench": {enumerable:true, get:() => commitStitchWorkbench},
-      "requestStitchExit": {enumerable:true, get:() => requestStitchExit},
-      "storageBtn": {enumerable:true, get:() => storageBtn},
-      "storageController": {enumerable:true, get:() => storageController},
-      "storageTrailGroup": {enumerable:true, get:() => storageTrailGroup},
-      "studioDialogs": {enumerable:true, get:() => studioDialogs},
-      "switchGroup": {enumerable:true, get:() => switchGroup},
-      "t": {enumerable:true, get:() => t},
-      "tagColors": {enumerable:true, get:() => tagColors},
-      "tagIcons": {enumerable:true, get:() => tagIcons},
-      "tagLabels": {enumerable:true, get:() => tagLabels},
-      "toggleEscapeCommand": {enumerable:true, get:() => toggleEscapeCommand},
-      "toggleMeasureCommand": {enumerable:true, get:() => toggleMeasureCommand},
-      "toggleSegmentCommand": {enumerable:true, get:() => toggleSegmentCommand},
-      "toggleSetItem": {enumerable:true, get:() => toggleSetItem},
-      "toggleSidebar": {enumerable:true, get:() => toggleSidebar},
-      "toggleTrailActive": {enumerable:true, get:() => toggleTrailActive},
-      "toggleTrailBatch": {enumerable:true, get:() => toggleTrailBatch},
-      "toggleTrailExpanded": {enumerable:true, get:() => toggleTrailExpanded},
-      "toggleWaypointCommand": {enumerable:true, get:() => toggleWaypointCommand},
-      "tooltipEl": {enumerable:true, get:() => tooltipEl},
-      "trackLayer": {enumerable:true, get:() => trackLayer},
-      "trailCardExpandedHtml": {enumerable:true, get:() => trailCardExpandedHtml},
-      "trailCardHeaderHtml": {enumerable:true, get:() => trailCardHeaderHtml},
-      "trailContentHash": {enumerable:true, get:() => trailContentHash},
-      "trailController": {enumerable:true, get:() => trailController},
-      "trailGroup": {enumerable:true, get:() => trailGroup},
-      "updateElevBadges": {enumerable:true, get:() => updateElevBadges},
-      "updateMeasureReadout": {enumerable:true, get:() => updateMeasureReadout},
-      "updateModeTagTitle": {enumerable:true, get:() => updateModeTagTitle},
-      "updateSegmentUI": {enumerable:true, get:() => updateSegmentUI},
-      "waypointController": {enumerable:true, get:() => waypointController},
-      "waypointIcon": {enumerable:true, get:() => waypointIcon},
-      "waypointIconMarkup": {enumerable:true, get:() => waypointIconMarkup},
-      "window": {enumerable:true, get:() => window},
-      "workspaceResetEpoch": {enumerable:true, get:() => workspaceResetEpoch},
-      "wpLayer": {enumerable:true, get:() => wpLayer},
-      "wpMarkers": {enumerable:true, get:() => wpMarkers},
-      "wpPhotoEl": {enumerable:true, get:() => wpPhotoEl},
+  if(studioTestMode) {
+    window.__HTM_RUNTIME_INSPECTOR__ = HTM_APP.createReadonlyRuntimeInspector({
+      "APP_VERSION":() => APP_VERSION, "DATA":() => projectSelectors.snapshot(), "HTM_APP":() => HTM_APP,
+      "HTM_CORE":() => HTM_CORE, "L":() => L, "_doSave":() => _doSave,
+      "_elevBarData":() => _elevBarData, "addEscapeCommit":() => addEscapeCommit, "addEscapeEnter":() => addEscapeEnter,
+      "addEscapeState":() => addEscapeState, "addManualWaypointAt":() => addManualWaypointAt, "addMeasureEndpointMarker":() => addMeasureEndpointMarker,
+      "addWaypointState":() => addWaypointState, "addWpMarker":() => addWpMarker, "applyChange":() => applyChange,
+      "applyMeasureEndpointHit":() => applyMeasureEndpointHit, "applyPrimaryMiniPosition":() => applyPrimaryMiniPosition, "bindKmlImportRowEvents":() => bindKmlImportRowEvents,
+      "bindMeasureEndpointDrag":() => bindMeasureEndpointDrag, "bindPrimaryMiniDrag":() => bindPrimaryMiniDrag, "buildDayMeta":() => buildDayMeta,
+      "buildDayPreviewRenderModel":() => buildDayPreviewRenderModel, "buildDaysTab":() => buildDaysTab, "buildFilterGrid":() => buildFilterGrid,
+      "renderPrimaryCard":() => renderPrimaryCard, "buildLegend":() => buildLegend, "buildMeasureSegmentRenderModel":() => buildMeasureSegmentRenderModel,
+      "buildSegmentLayerModel":() => buildSegmentLayerModel, "buildTrackLatLngs":() => buildTrackLatLngs, "buildTrailList":() => buildTrailList,
+      "clearDaySegmentPreview":() => clearDaySegmentPreview, "clearStorage":() => clearStorage, "computeCumulativeDistance":() => computeCumulativeDistance,
+      "computeMeasureStats":() => computeMeasureStats, "computeTrailStats":() => computeTrailStats, "createPrimaryTrackDragSnapper":() => createPrimaryTrackDragSnapper,
+      "dayPreviewController":() => dayPreviewController, "dayPreviewState":() => dayPreviewState, "deleteTrail":() => deleteTrail,
+      "dispatchRuntimeInteraction":() => dispatchRuntimeInteraction, "stateActions":() => stateActions, "drawElevBar":() => drawElevBar,
+      "drawTracks":() => drawTracks, "drawWaypoints":() => drawWaypoints, "elevCanvas":() => elevCanvas,
+      "elevRatioColor":() => elevRatioColor, "elevationCanvasRenderer":() => elevationCanvasRenderer, "ensureUniqueTrailId":() => ensureUniqueTrailId,
+      "enterAddWaypointMode":() => enterAddWaypointMode, "enterInteractionRenderMode":() => enterInteractionRenderMode, "escapeController":() => escapeController,
+      "exitAddWaypointMode":() => exitAddWaypointMode, "expandZipFiles":() => expandZipFiles, "fflate":() => fflate,
+      "fileExportController":() => fileExportController, "findDuplicateTrail":() => findDuplicateTrail, "fitWorkspaceBounds":() => fitWorkspaceBounds,
+      "floatingPanelController":() => floatingPanelController, "generateNextTrailId":() => generateNextTrailId, "getMeasureStatsCache":() => getMeasureStatsCache,
+      "handleFiles":() => handleFiles, "handleMeasureInteractionEvent":() => handleMeasureInteractionEvent, "handleTrailCardClick":() => handleTrailCardClick,
+      "handleTrailDetailClick":() => handleTrailDetailClick, "handleTrailGroupChange":() => handleTrailGroupChange, "haversine":() => haversine,
+      "hideMeasureElevReadout":() => hideMeasureElevReadout, "hideTooltip":() => hideTooltip, "importSingleKml":() => importSingleKml,
+      "initFloatingPanelPositions":() => initFloatingPanelPositions, "interactionManager":() => interactionManager, "isDetailButtonTarget":() => isDetailButtonTarget,
+      "isTrailActive":() => isTrailActive, "loadFromStorage":() => loadFromStorage, "map":() => map,
+      "markTrailRevision":() => markTrailRevision, "measureCompute":() => measureCompute, "measureController":() => measureController,
+      "measureEnter":() => measureEnter, "measureExit":() => measureExit, "measureMarker":() => measureMarker,
+      "measurePointFromHit":() => measurePointFromHit, "measureReverse":() => measureReverse, "measureState":() => measureState,
+      "moveBatchToGroup":() => moveBatchToGroup, "nearestTrackIdx":() => nearestTrackIdx, "nearestTrackIdxNearPrimary":() => nearestTrackIdxNearPrimary,
+      "openDB":() => openDB, "parseAndProcessKml":() => parseAndProcessKml, "pointFromTrackIndex":() => pointFromTrackIndex,
+      "postImportFinalize":() => postImportFinalize, "primaryMiniController":() => primaryMiniController, "projectArchiveController":() => projectArchiveController,
+      "projectHistoryController":() => projectHistoryController, "queueMeasureLiveUpdate":() => queueMeasureLiveUpdate, "rebuildAll":() => rebuildAll,
+      "redrawSegmentLayer":() => redrawSegmentLayer, "refreshElevBar":() => refreshElevBar, "renderBatchToolbar":() => renderBatchToolbar,
+      "renderGroupTabs":() => renderGroupTabs, "renderKmlImportRow":() => renderKmlImportRow, "renderMeasureSegmentLine":() => renderMeasureSegmentLine,
+      "renderRuntimeStats":() => renderRuntimeStats, "renderScheduler":() => renderScheduler, "runtimeCommandDisposers":() => runtimeCommandDisposers, "renderTrailCard":() => renderTrailCard, "resetMeasureElevReadout":() => resetMeasureElevReadout,
+      "resetView":() => resetView, "restoreProjectFile":() => restoreProjectFile, "revalidateRuntimeInteractionOwner":() => revalidateRuntimeInteractionOwner,
+      "saveToStorage":() => saveToStorage, "schedulePostRestoreReset":() => schedulePostRestoreReset, "schedulePrimaryMiniPositionApply":() => schedulePrimaryMiniPositionApply,
+      "segmentApply":() => segmentApply, "segmentRestore":() => segmentRestore, "segmentController":() => segmentController,
+      "segmentDeleteDay":() => segmentDeleteDay, "segmentEnter":() => segmentEnter, "segmentExit":() => segmentExit,
+      "segmentInsertPoint":() => segmentInsertPoint, "requestSegmentExit":() => requestSegmentExit, "segmentState":() => segmentState,
+      "setLang":() => setLang, "setMapMode":() => setMapMode, "setMeasureElevHint":() => setMeasureElevHint,
+      "showDaySegmentPreview":() => showDaySegmentPreview, "showExportMenu":() => showExportMenu, "showMeasureElevReadout":() => showMeasureElevReadout,
+      "showToast":() => showToast, "showTooltip":() => showTooltip, "state":() => selectors.snapshot(),
+      "stitchState":() => stitchState, "stitchLayer":() => stitchLayer, "requestStitchExit":() => requestStitchExit,
+      "switchGroup":() => switchGroup, "t":() => t,
+      "toggleSidebar":() => toggleSidebar, "toggleTrailActive":() => toggleTrailActive, "toggleTrailBatch":() => toggleTrailBatch,
+      "toggleTrailExpanded":() => toggleTrailExpanded, "trackLayer":() => trackLayer, "trailCardExpandedHtml":() => trailCardExpandedHtml,
+      "trailCardHeaderHtml":() => trailCardHeaderHtml, "trailController":() => trailController, "updateElevBadges":() => updateElevBadges,
+      "updateSegmentUI":() => updateSegmentUI, "waypointController":() => waypointController, "waypointIcon":() => waypointIcon,
+      "waypointIconMarkup":() => waypointIconMarkup, "window":() => window, "wpMarkers":() => wpMarkers,
     });
-    window.__HTM_RUNTIME_INSPECTOR__ = Object.freeze(runtimeInspector);
   }
 
-  return window.__HTM_BOOT_READY__;
+  return bootPromise;
 }

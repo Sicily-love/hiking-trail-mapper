@@ -3,6 +3,7 @@ const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const core = require('../../src/core/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -31,14 +32,8 @@ function trail(id = 'a', name = 'Main', group = 'A') {
 }
 
 function createHarness(trails, overrides = {}) {
-  const context = app.createRuntimeContext({
-    project:{title:'Export', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  const context = createTestRuntimeContext(app, {title:'Export', trails}, state);
   const effects = {downloads:[], saves:[], archives:[], charts:[], events:[]};
   const archive = overrides.archive || {
     available:true,
@@ -184,7 +179,7 @@ function createHarness(trails, overrides = {}) {
     const hidden = trail('b', 'Hidden', 'A');
     const other = trail('c', 'Other', 'B');
     const {context, controller, effects} = createHarness([first, hidden, other]);
-    context.state.dispatch({type:'active-trail.set', trailId:'b', active:false});
+    context.stateActions.setTrailActive('b', false);
     const result = await controller.exportGroupKml();
     assert.deepStrictEqual(result, {status:'exported', filename:'A_轨迹_2026-07-13.zip'});
     assert.strictEqual(effects.archives.length, 1);
@@ -212,7 +207,7 @@ function createHarness(trails, overrides = {}) {
   });
 
   await T('direct runtime keeps only DOM wrappers around typed file adapters', () => {
-    const source = read('src/app/runtime/studio.ts');
+    const source = [read('src/app/runtime/studio.ts'), read('src/ui/import/runtime-owner.ts')].join('\n');
     assert.match(source, /createFileArchiveAdapter/);
     assert.match(source, /createBrowserFileAdapter/);
     assert.match(source, /createFileExportController\(runtimeContext/);

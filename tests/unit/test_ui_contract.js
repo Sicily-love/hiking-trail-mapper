@@ -8,6 +8,8 @@ const studioCss = fs.readFileSync(path.join(root, 'src/styles/studio.css'), 'utf
 const ui = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const primaryMini = fs.readFileSync(path.join(root, 'src/ui/primary-mini.ts'), 'utf8');
 const { runtimeSource: runtime } = require('./runtime_source');
+const workspace = fs.readFileSync(path.join(root, 'src/features/map/workspace-controller.ts'), 'utf8');
+const sidebar = fs.readFileSync(path.join(root, 'src/ui/sidebar/runtime-owner.ts'), 'utf8');
 const visual = fs.readFileSync(path.join(root, 'tests/visual/capture_workbench.py'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'hiking-trail-mapper.html'), 'utf8');
 let passed = 0;
@@ -64,10 +66,10 @@ T('sidebar becomes a mobile bottom sheet', () => {
   assert.ok(css.includes('transform:translateY(calc(100% + 96px));'));
 });
 T('reset closes mobile sidebar before fitting trail bounds', () => {
-  assert.ok(runtime.includes("function fitWorkspaceBounds"));
+  assert.ok(runtime.includes('workspaceController.fitBounds'));
   assert.ok(runtime.includes("HTM_APP.shouldCloseSidebarForFit"));
   assert.ok(runtime.includes("toggleSidebar(false)"));
-  assert.ok(runtime.includes("map.invalidateSize({pan:false})"));
+  assert.ok(workspace.includes("dependencies.map.invalidateSize({pan:false, animate:false})"));
   assert.ok(visual.includes('mobileResetClosesSidebar'));
 });
 T('Day itinerary uses a timeline instead of nested cards', () => {
@@ -80,7 +82,7 @@ T('keyboard focus and reduced-motion states are explicit', () => {
   assert.ok(css.includes('@media (prefers-reduced-motion:reduce)'));
 });
 T('empty primary mini card still cannot cover commands', () => {
-  assert.ok(runtime.includes("mini.style.display = hasPrimary ? 'block' : 'none'"));
+  assert.ok(sidebar.includes('primaryMiniController.render()'));
   assert.ok(primaryMini.includes("element.style.display = 'none';"));
   assert.ok(primaryMini.includes('element.replaceChildren();'));
 });

@@ -9,6 +9,30 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.2.5',
+    date: '2026-07-22',
+    items: {
+      zh: ['新增 ProjectStore、ProjectActions 与 ProjectSelectors，项目、轨迹和持久业务数据统一经过带 revision 的 typed 写入边界。', '收紧 RuntimeContext 与生产 runtime：typed feature、缓存恢复、侧栏和导入 owner 不再直接接触 raw project/store，启动层只负责 actions、selectors 与浏览器副作用装配。'],
+      en: ['Add ProjectStore, ProjectActions, and ProjectSelectors so project, trail, and durable business data share one revisioned typed write boundary.', 'Tighten RuntimeContext and the production runtime: typed features, cache restore, sidebar, and import owners no longer access raw projects or stores; startup now only assembles actions, selectors, and browser effects.'],
+    },
+  },
+  {
+    version: 'v2.2.4',
+    date: '2026-07-22',
+    items: {
+      zh: ['移除左侧活动栏中与顶部标注点模式重复的标注点入口，保留轨迹组、轨迹和行程三项导航。', '收起侧栏后的主轨迹浮动摘要改为显示里程、爬升和下降，并补充单位、方向符号与中英文描述。'],
+      en: ['Remove the Waypoints activity that duplicated the top Waypoint mode switch, leaving Trail Groups, Trails, and Itinerary as the three sidebar destinations.', 'Show distance, ascent, and descent in the collapsed primary-trail summary with units, direction symbols, and bilingual labels.'],
+    },
+  },
+  {
+    version: 'v2.2.3',
+    date: '2026-07-22',
+    items: {
+      zh: ['将 studio runtime 从约 6200 行压缩到约 3950 行，拆出 KML 构建、地图复位、侧栏/行程与导入 UI owner。', '应用状态读写统一收口到 typed actions 与 selectors，生产环境移除剩余业务 globals，并更新模块化测试路径。'],
+      en: ['Reduce the Studio runtime from roughly 6,200 to roughly 3,950 lines by extracting KML building, workspace reset, sidebar/itinerary, and import UI owners.', 'Route application-state reads and writes through typed actions and selectors, remove remaining production business globals, and update modular test ownership.'],
+    },
+  },
+  {
     version: 'v2.2.2',
     date: '2026-07-22',
     items: {

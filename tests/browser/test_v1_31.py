@@ -14,7 +14,13 @@ EXPECTED_VERSION = re.search(
     r"STUDIO_VERSION = '(v\d+\.\d+\.\d+)'",
     (ROOT / "src/app/version.ts").read_text(encoding="utf-8"),
 ).group(1)
-RUNTIME_SOURCE = (ROOT / "src/app/runtime/studio.ts").read_text(encoding="utf-8")
+RUNTIME_SOURCE_FILES = [
+    ROOT / "src/app/runtime/studio.ts",
+    ROOT / "src/ui/sidebar/runtime-owner.ts",
+    ROOT / "src/ui/import/runtime-owner.ts",
+    ROOT / "src/features/map/workspace-controller.ts",
+]
+RUNTIME_SOURCE = "\n".join(path.read_text(encoding="utf-8") for path in RUNTIME_SOURCE_FILES)
 
 def source_has(*snippets):
     return all(snippet in RUNTIME_SOURCE for snippet in snippets)
@@ -168,8 +174,8 @@ try:
     check("Edit/编辑菜单可由真实鼠标点击展开",
           evalj("document.querySelector('[data-menu=\"edit\"]')?.getAttribute('aria-expanded') === 'true' && !document.getElementById('workbench-menu-edit')?.hidden"))
     evalj("window.__OUTDOOR_ROUTE_STUDIO__.workbench.closeMenus()")
-    check("左侧轨迹组、轨迹、行程和标注点 4 个入口已渲染",
-          evalj("document.querySelectorAll('.studio-activity-button').length === 4 && document.querySelector('.studio-activity-button')?.dataset.activity === 'groups' && !document.querySelector('[data-activity=\"settings\"]')"))
+    check("左侧轨迹组、轨迹和行程 3 个入口已渲染，重复标注点入口已移除",
+          evalj("document.querySelectorAll('.studio-activity-button').length === 3 && document.querySelector('.studio-activity-button')?.dataset.activity === 'groups' && !document.querySelector('[data-activity=\"settings\"], [data-activity=\"waypoints\"]')"))
     check("Workbench 已移除右上角旧侧栏恢复按钮",
           evalj("!document.getElementById('sidebar-toggle')"))
     check("底部已收敛为无重复 Tab 的海拔分析区",
@@ -205,14 +211,14 @@ try:
           isinstance(language_flow, dict)
           and language_flow.get('zh', {}).get('menu') == ['编辑','规划']
           and language_flow.get('zh', {}).get('direct') == ['添加轨迹','测距','标注','导出','复位','帮助','语言']
-          and language_flow.get('zh', {}).get('activity') == ['轨迹组','轨迹','行程','标注点']
+          and language_flow.get('zh', {}).get('activity') == ['轨迹组','轨迹','行程']
           and language_flow.get('zh', {}).get('bottom') == []
           and language_flow.get('zh', {}).get('context') == '尚未加载轨迹', str(language_flow))
     check("Workbench 英文标签完整并可切回中文",
           isinstance(language_flow, dict)
           and language_flow.get('en', {}).get('menu') == ['Edit','Plan']
           and language_flow.get('en', {}).get('direct') == ['Add trail','Measure','Waypoint','Export','Reset','Help','Language']
-          and language_flow.get('en', {}).get('activity') == ['Trail Groups','Trails','Itinerary','Waypoints']
+          and language_flow.get('en', {}).get('activity') == ['Trail Groups','Trails','Itinerary']
           and language_flow.get('en', {}).get('bottom') == []
           and language_flow.get('en', {}).get('context') == 'No trail loaded'
           and language_flow.get('finalLang') == 'zh-CN', str(language_flow))
@@ -326,7 +332,7 @@ try:
                'trailCardHeaderHtml', 'trailCardExpandedHtml',
                'handleTrailCardClick', 'handleTrailDetailClick', 'handleTrailGroupChange',
                'isDetailButtonTarget', 'moveBatchToGroup',
-               'toggleSetItem', 'applyChange',
+               'applyChange',
                'toggleTrailActive', 'toggleTrailExpanded', 'toggleTrailBatch']:
         check(f"函数 {fn}", evalj(f"typeof {fn} === 'function'"))
 
@@ -440,7 +446,7 @@ try:
     check("测距拖动吸附优先局部近邻搜索",
           source_has('function createPrimaryTrackDragSnapper', 'nearestTrackIdxNearPrimary'))
     check("测距复位会重新补画 A/B 黄线",
-          source_has('function resetView', 'measureCompute', 'measureState.ptA', 'measureState.ptB'))
+          source_has('const resetView =', 'getMeasureState', 'measure.ptA', 'measure.ptB', 'buildTrackLatLngs'))
     check("分段高亮线使用抽样点",
           evalj("""
             (() => {
@@ -508,7 +514,7 @@ try:
     check("顶部缓存按钮已移除",
           evalj("!document.getElementById('storage-btn') && !document.getElementById('storage-text')"))
     check("测距/分段进入时自动切换到标注点模式",
-          source_has('function measureEnter', 'function segmentEnter', 'enterInteractionRenderMode', "type:'mode.set'"))
+          source_has('function measureEnter', 'function segmentEnter', "setMapMode('waypoint'", 'stateActions.setMode(mode)'))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
           source_has('function buildDaysTab', '最低海拔', 'showDaySegmentPreview', 'segmentController.apply', 'dayPreviewState.active'))
     check("地图按钮保持快速步进且双指缩放细化到四分之一级",
@@ -1236,7 +1242,7 @@ try:
             gps_idx:index,
           }));
         main.waypoints.push(...sidebarProbeWaypoints);
-        state.activeTrails.add(main.id);
+        stateActions.setTrailActive(main.id, true);
         buildFilterGrid();
         const expectedVectorIcons = {fork:'git-fork', warn:'triangle-alert', other:'map-pin'};
         const sidebarTagMetrics = ['fork','warn','other'].map(tag => {
@@ -1680,8 +1686,8 @@ try:
         const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
         if(!main || !main.track?.length) return {error:'missing-primary'};
 
-        state.showLabel = true;
-        main.waypoints.forEach(waypoint => state.visibleTags.add(waypoint.tag));
+        stateActions.setDisplay('showLabel', true);
+        main.waypoints.forEach(waypoint => stateActions.setVisibleTag(waypoint.tag, true));
         setMapMode('waypoint');
         // Drain delayed sidebar/map resize work from the previous interaction group before measuring coalescing.
         await new Promise(resolve => setTimeout(resolve, 350));
@@ -1720,7 +1726,7 @@ try:
           lat:anchor[0], lng:anchor[1], elev:anchor[2], km:anchor[3], gps_idx:anchorIndex,
           day:anchor[5] || null, photo:'',
         };
-        state.visibleTags.add('other');
+        stateActions.setVisibleTag('other', true);
         main.waypoints.push(testWaypoint);
         drawWaypoints();
         await waitFrames();

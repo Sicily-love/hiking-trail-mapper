@@ -831,6 +831,11 @@ html[data-workbench='2'] .primary-mini__stats b {
   line-height:1.2;
 }
 
+html[data-workbench='2'] .primary-mini__stats small {
+  font-size:8px;
+  font-weight:650;
+}
+
 html[data-workbench='2'] .primary-mini__stats span {
   margin-top:2px;
   color:var(--studio-muted);

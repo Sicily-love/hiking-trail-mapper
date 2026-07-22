@@ -45,7 +45,6 @@ export const STUDIO_COMMANDS = Object.freeze({
   WORKSPACE_GROUPS: 'workspace.groups',
   WORKSPACE_TRAILS: 'workspace.trails',
   WORKSPACE_ITINERARY: 'workspace.itinerary',
-  WORKSPACE_WAYPOINTS: 'workspace.waypoints',
 } as const);
 
 export type StudioCommandId = typeof STUDIO_COMMANDS[keyof typeof STUDIO_COMMANDS];

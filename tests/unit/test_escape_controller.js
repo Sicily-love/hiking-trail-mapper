@@ -3,6 +3,7 @@ const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const core = require('../../src/core/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -29,14 +30,8 @@ const anchor = (trail, index) => ({
 });
 
 function createHarness(trails) {
-  const context = app.createRuntimeContext({
-    project:{title:'Escape', trails},
-    state:app.createAppStateStore({trails}),
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const state = app.createAppStateStore({trails});
+  const context = createTestRuntimeContext(app, {title:'Escape', trails}, state);
   const effects = {revisions:0};
   const controller = app.createEscapeController(context, {
     createRouteId:() => 'manual-test',
@@ -114,7 +109,7 @@ T('snaps only to the selected reference trail in the active group and enforces t
   const otherGroup = {id:'c', name:'Other', group:'B', track:track(32)};
   const {context, controller} = createHarness([first, hidden, otherGroup]);
   assert.strictEqual(controller.enter('a'), true);
-  context.state.dispatch({type:'active-trail.set', trailId:'b', active:false});
+  context.stateActions.setTrailActive('b', false);
   const hit = controller.nearestPoint(first.track[20][0], first.track[20][1]);
   assert.strictEqual(hit.trailId, 'a');
   assert.strictEqual(hit.trackIdx, 20);
@@ -124,7 +119,7 @@ T('snaps only to the selected reference trail in the active group and enforces t
   assert.strictEqual(hiddenHit.trackIdx, 30);
   assert.strictEqual(controller.setReferenceTrail('c'), false);
   assert.strictEqual(controller.nearestPoint(0, 0), null);
-  context.state.dispatch({type:'group.set-active', group:null});
+  context.stateActions.setActiveGroup(null);
   assert.strictEqual(controller.nearestPoint(first.track[20][0], first.track[20][1]), null);
 });
 
@@ -157,7 +152,7 @@ T('owns lifecycle, selection, preview, commit, and stale-primary rejection', () 
   controller.selectA(anchor(second, 20));
   controller.selectB(anchor(second, 200));
   controller.compute();
-  context.state.dispatch({type:'primary-trail.set', trailId:'b'});
+  context.stateActions.setPrimaryTrail('b');
   assert.strictEqual(controller.commit('stale'), null);
   assert.strictEqual(effects.revisions, 1);
   controller.exit();
@@ -173,18 +168,18 @@ T('selects display routes and deletes only manual routes', () => {
   const trail = {id:'a', name:'Main', track:track(), escape_routes:[manual, generated]};
   const {context, controller, effects} = createHarness([trail]);
   assert.strictEqual(controller.selectDisplayedRoute('a', 'manual'), manual);
-  assert.strictEqual(context.state.snapshot().activeEscape, 'manual');
+  assert.strictEqual(context.stateSelectors.activeEscape(), 'manual');
   assert.strictEqual(controller.deleteRoute('a', 'generated'), false);
   assert.strictEqual(controller.deleteRoute('a', 'manual'), true);
   assert.deepStrictEqual(trail.escape_routes, [generated]);
-  assert.strictEqual(context.state.snapshot().activeEscape, null);
+  assert.strictEqual(context.stateSelectors.activeEscape(), null);
   assert.strictEqual(effects.revisions, 1);
   controller.clearDisplayedRoute();
   assert.strictEqual(controller.selectDisplayedRoute('a', 'missing'), null);
 });
 
 T('direct runtime retains escape effects but delegates business state and writes', () => {
-  const source = read('src/app/runtime/studio.ts');
+  const source = [read('src/app/runtime/studio.ts'), read('src/ui/sidebar/runtime-owner.ts')].join('\n');
   const directBusinessWrite = /addEscapeState\.(?:active|trailId|referenceTrailId|ptA|ptB|_pending)\s*(?:=|\+\+)/;
   assert.match(source, /createEscapeController\(runtimeContext/);
   assert.match(source, /const addEscapeState = escapeController\.state/);

@@ -154,7 +154,7 @@ try:
     check("state.activeGroup 默认值", evalj("typeof state.activeGroup === 'string'"))
 
     # 清空 IndexedDB + trails，保证从零开始。使用应用 API 等待事务完成，避免挂起的 deleteDatabase 在后续重载时误删新缓存。
-    evalj("(async () => { await clearStorage(); DATA.trails = []; dispatchState({type:'workspace.clear'}); rebuildAll({fit:false}); })()")
+    evalj("(async () => { await clearStorage(); DATA.trails = []; stateActions.clearWorkspace(); rebuildAll({fit:false}); })()")
     time.sleep(0.5)
 
     # ═══════════════════════════════════════════════════════════════
@@ -191,7 +191,7 @@ try:
     print("\n▸ E3 · 导入 KML.zip")
     r = evalj(f"""
       (async () => {{
-        DATA.trails = []; state.activeTrails = new Set(); state.primaryTrailId = null;
+        DATA.trails = []; stateActions.clearWorkspace();
         const bin = atob('{zip_b64}');
         const arr = new Uint8Array(bin.length);
         for(let i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -247,7 +247,7 @@ try:
     first_id = evalj("DATA.trails[0].id")
     second_id = evalj("DATA.trails[1].id")
     check("切换 primary 到第二条", evalj(f"""
-      (() => {{ state.primaryTrailId = '{second_id}'; applyChange(); return state.primaryTrailId === '{second_id}'; }})()
+      (() => {{ stateActions.setPrimaryTrail('{second_id}'); applyChange(); return state.primaryTrailId === '{second_id}'; }})()
     """))
 
     # ═══════════════════════════════════════════════════════════════
@@ -256,7 +256,7 @@ try:
     print("\n▸ E6 · 批量选择 + 移动分组")
     r = evalj(f"""
       (() => {{
-        state.batchSelected = new Set();
+        stateActions.replaceBatch([]);
         toggleTrailBatch('{first_id}');
         toggleTrailBatch('{second_id}');
         return state.batchSelected.size;
@@ -307,10 +307,10 @@ try:
       (() => {{
         const before = DATA.trails.length;
         DATA.trails = DATA.trails.filter(t => t.id !== '{second_id}');
-        state.activeTrails.delete('{second_id}');
+        stateActions.setTrailActive('{second_id}', false);
         // 手动模拟：如果主轨迹被删了，自动 fallback
         if(state.primaryTrailId === '{second_id}' && DATA.trails.length) {{
-          state.primaryTrailId = DATA.trails[0].id;
+          stateActions.setPrimaryTrail(DATA.trails[0].id);
         }}
         applyChange();
         return {{
@@ -334,10 +334,10 @@ try:
         .every(tag => state.visibleTags.has(tag))
     """))
     # 切到 waypoint 模式
-    evalj("state.mode = 'waypoint'; applyChange();")
+    evalj("stateActions.setMode('waypoint'); applyChange();")
     check("mode 切到 waypoint", evalj("state.mode === 'waypoint'"))
     # 切回 day
-    evalj("state.mode = 'day'; applyChange();")
+    evalj("stateActions.setMode('day'); applyChange();")
 
     # ═══════════════════════════════════════════════════════════════
     # E10 — 分天 tab 切换 + elev bar 重绘
@@ -483,9 +483,7 @@ try:
       (async () => {{
         try {{
           DATA.trails = [];
-          state.activeTrails = new Set();
-          state.primaryTrailId = null;
-          state.activeGroup = '甲组';
+          stateActions.restoreWorkspace({{activeTrails:[], activeGroup:'甲组', primaryByGroup:{{}}}});
           // 加两条不同内容的 trail
           const bin = atob('{kml_b64}');
           const arr = new Uint8Array(bin.length);
@@ -497,8 +495,7 @@ try:
             (m, lng, lat) => `${{(+lng+0.002).toFixed(6)}},${{(+lat+0.002).toFixed(6)}},`), '乙.kml');
           t2.id = 'b1'; t2.group = '乙组';
           DATA.trails.push(t1, t2);
-          state.activeTrails = new Set(['a1', 'b1']);
-          state.primaryTrailId = 'a1';
+          stateActions.restoreWorkspace({{activeTrails:['a1', 'b1'], activeGroup:'甲组', primaryByGroup:{{'甲组':'a1'}}}});
           applyChange({{fit: false}});
           return {{ok: true, count: DATA.trails.length, group: state.activeGroup, primary: state.primaryTrailId}};
         }} catch(e) {{ return {{ok: false, err: e.message}}; }}
@@ -539,8 +536,7 @@ try:
     persist = evalj("""
       (async () => {
         try {
-          state.activeGroup = null;
-          state.primaryTrailId = null;
+          stateActions.setActiveGroup(null);
           await _doSave();
           // 用 openDB 内部的复用连接读，避免多次 open 竞争
           const db = await openDB();
@@ -569,9 +565,7 @@ try:
       (async () => {{
         try {{
           DATA.trails = [];
-          state.primaryByGroup = {{}};
-          state.activeTrails = new Set();
-          state.activeGroup = 'A组';
+          stateActions.restoreWorkspace({{activeTrails:[], activeGroup:'A组', primaryByGroup:{{}}}});
           const bin = atob('{kml_b64}');
           const arr = new Uint8Array(bin.length);
           for(let i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -584,9 +578,11 @@ try:
             (m,lng,lat)=>`${{(+lng+0.003).toFixed(6)}},${{(+lat+0.003).toFixed(6)}},`), 'b1.kml');
           t3.id = 'B1'; t3.group = 'B组';
           DATA.trails.push(t1, t2, t3);
-          state.activeTrails = new Set(['A1', 'A2', 'B1']);
-          state.primaryByGroup['A组'] = 'A1';
-          state.primaryByGroup['B组'] = 'B1';
+          stateActions.restoreWorkspace({{
+            activeTrails:['A1', 'A2', 'B1'],
+            activeGroup:'A组',
+            primaryByGroup:{{'A组':'A1', 'B组':'B1'}},
+          }});
           applyChange();
           return {{ok: true}};
         }} catch(e) {{ return {{ok: false, err: e.message}}; }}
@@ -613,7 +609,7 @@ try:
     check("主轨迹卡排在第一位", r.get("firstIsPrimary") == True)
 
     # 场景 2：在 A 组切换主轨迹为 A2
-    evalj("state.primaryTrailId = 'A2'; applyChange()")
+    evalj("stateActions.setPrimaryTrail('A2'); applyChange()")
     check("A 组主轨迹切到 A2", evalj("state.primaryByGroup['A组'] === 'A2'"))
     check("B 组的记忆不变", evalj("state.primaryByGroup['B组'] === 'B1'"))
 
@@ -632,7 +628,7 @@ try:
           evalj("state.primaryTrailId === 'A2'"))
 
     # 场景 5：把 B1 移到 A 组，B 组的记忆应清空
-    evalj("state.primaryTrailId = 'A2'; state.activeGroup='A组';")
+    evalj("stateActions.setActiveGroup('A组'); stateActions.setPrimaryTrail('A2');")
     r = evalj("""
       (() => {
         const tr = DATA.trails.find(t => t.id === 'B1');
@@ -683,7 +679,7 @@ try:
         };
         DATA.title = 'Temporary';
         DATA.trails.splice(0, DATA.trails.length);
-        dispatchState({type:'workspace.clear'});
+        stateActions.clearWorkspace();
         const result = projectArchiveController.restore(parsed.archive);
         await new Promise(resolve => setTimeout(resolve, 500));
         return {

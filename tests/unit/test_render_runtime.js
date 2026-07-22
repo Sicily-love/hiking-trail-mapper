@@ -101,27 +101,30 @@ test('waypoint runtime delegates keyed Marker ownership to the Leaflet adapter',
 });
 
 test('FIT is last-request-wins and reset is epoch guarded', () => {
-  const reset = functionSource('resetView', 'finishWorkspaceFit');
-  const execute = functionSource('executeWorkspaceFit', 'fitWorkspaceBounds');
-  const fit = functionSource('fitWorkspaceBounds');
-  assert.ok(reset.includes('++workspaceResetEpoch'));
-  assert.ok(reset.includes('map.stop()'));
-  assert.ok(execute.includes('request.resetEpoch === workspaceResetEpoch'));
-  assert.ok(fit.includes('renderScheduler.requestFit'));
-  assert.ok(fit.includes('pendingWorkspaceFit.resolve(false)'));
-  assert.ok(reset.includes('gesture:Boolean(opts.gesture)'));
+  const workspace = read('src/features/map/workspace-controller.ts');
+  const reset = workspace.slice(workspace.indexOf('const resetView ='));
+  const execute = workspace.slice(workspace.indexOf('const executeFit ='), workspace.indexOf('const resetView ='));
+  const fit = workspace.slice(workspace.indexOf('const fitBounds ='), workspace.indexOf('const finishFit ='));
+  assert.ok(reset.includes('++resetEpoch'));
+  assert.ok(reset.includes('dependencies.map.stop?.()'));
+  assert.ok(execute.includes('request.resetEpoch === resetEpoch'));
+  assert.ok(fit.includes('dependencies.requestFit'));
+  assert.ok(fit.includes('pending.resolve(false)'));
+  assert.ok(reset.includes('gesture:Boolean(options.gesture)'));
   assert.strictEqual(execute.includes('map.flyToBounds'), false);
-  assert.ok(execute.includes('HTM_CORE.planResetTransition'));
-  assert.ok(execute.includes('reducedMotion:prefersReducedMotion'));
+  assert.ok(execute.includes('planResetTransition'));
+  assert.ok(execute.includes('reducedMotion:dependencies.prefersReducedMotion'));
   assert.ok(execute.includes('request.closeOverlay'));
   assert.ok(execute.includes('targetZoom'));
-  assert.strictEqual((execute.match(/applyFit\(\)/g) || []).length, 2);
+  assert.strictEqual((execute.match(/apply\(\)/g) || []).length, 2);
   assert.ok(reset.includes('if(stateChanged)'));
-  assert.ok(reset.includes('cachedTrailBounds(main)'));
+  assert.ok(reset.includes('cachedTrailBounds(primary)'));
   assert.strictEqual(reset.includes('main.track.map'), false);
   assert.strictEqual(reset.includes('measureCompute()'), false);
+  assert.ok(reset.includes('dependencies.stateActions'));
+  assert.ok(runtime.includes('workspaceController?.executeFit(context)'));
   assert.ok(runtime.includes('resetView({restoreActive:true, gesture:true})'));
-  assert.strictEqual((runtime.match(/map\.fitBounds\(/g) || []).length, 1);
+  assert.strictEqual((workspace.match(/map\.fitBounds\(/g) || []).length, 1);
 });
 
 test('cache restore waits for the guarded final reset', () => {

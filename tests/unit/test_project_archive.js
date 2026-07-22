@@ -2,6 +2,7 @@ const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const core = require('../../src/core/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -130,14 +131,11 @@ function stateInput(overrides = {}) {
   await T('controller exports and atomically restores project plus workspace', async () => {
     const original = trail('old', 'Old');
     const store = app.createAppStateStore({trails:[original]});
-    const context = app.createRuntimeContext({
-      project:{title:'Old project', trails:[original], calc_method:{}},
-      state:store,
-      commands:new app.CommandRegistry(),
-      interactions:app.createStudioInteractionManager(),
-      renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-      dialogs:{confirm:async () => true},
-    });
+    const context = createTestRuntimeContext(
+      app,
+      {title:'Old project', trails:[original], calc_method:{}},
+      store,
+    );
     const effects = {saves:[], commits:0, resets:0, events:[]};
     const controller = app.createProjectArchiveController(context, {
       files:{
@@ -163,33 +161,30 @@ function stateInput(overrides = {}) {
       state:stateInput(),
       appVersion:'v2.1.0',
     });
-    const oldArray = context.project.trails;
+    const oldArray = context.projectSelectors.trails();
     const result = controller.restore(incoming);
     assert.strictEqual(result.trailCount, 1);
-    assert.strictEqual(context.project.trails, oldArray);
-    assert.strictEqual(context.project.trails[0].id, 'main');
-    assert.strictEqual(context.project.title, 'Restored');
+    assert.strictEqual(context.projectSelectors.trails(), oldArray);
+    assert.strictEqual(context.projectSelectors.trails()[0].id, 'main');
+    assert.strictEqual(context.projectSelectors.title(), 'Restored');
     assert.strictEqual(store.snapshot().activeGroup, 'A');
     assert.strictEqual(store.snapshot().mode, 'waypoint');
     assert.strictEqual(effects.commits, 1);
     assert.strictEqual(effects.resets, 1);
     assert.strictEqual(controller.canRecover, true);
     assert.strictEqual(controller.recoverLast().status, 'restored');
-    assert.strictEqual(context.project.title, 'Old project');
+    assert.strictEqual(context.projectSelectors.title(), 'Old project');
     assert.strictEqual(effects.commits, 2);
   });
 
   await T('restore failure rolls back to its automatic recovery point', () => {
     const original = trail('old', 'Old');
     const store = app.createAppStateStore({trails:[original]});
-    const context = app.createRuntimeContext({
-      project:{title:'Safe', trails:[original], calc_method:{}},
-      state:store,
-      commands:new app.CommandRegistry(),
-      interactions:app.createStudioInteractionManager(),
-      renderer:new app.RenderScheduler({raf:() => 1, caf:() => {}}),
-      dialogs:{confirm:async () => true},
-    });
+    const context = createTestRuntimeContext(
+      app,
+      {title:'Safe', trails:[original], calc_method:{}},
+      store,
+    );
     let commits = 0;
     const controller = app.createProjectArchiveController(context, {
       files:{download() {}, saveText:async () => 'download'},
@@ -207,20 +202,22 @@ function stateInput(overrides = {}) {
     const result = controller.restore(incoming);
     assert.strictEqual(result.status, 'failed');
     assert.strictEqual(result.rolledBack, true);
-    assert.strictEqual(context.project.title, 'Safe');
-    assert.strictEqual(context.project.trails[0].id, 'old');
+    assert.strictEqual(context.projectSelectors.title(), 'Safe');
+    assert.strictEqual(context.projectSelectors.trails()[0].id, 'old');
   });
 
   await T('runtime delegates archive data and writes to the typed controller', () => {
     const source = read('src/app/runtime/studio.ts');
+    const sidebar = read('src/ui/sidebar/runtime-owner.ts');
     const projectRuntime = read('src/features/project/runtime.ts');
+    const projectRestoreUi = read('src/ui/import/project-restore.ts');
     assert.match(source, /createProjectRuntimeController\(runtimeContext/);
     assert.match(projectRuntime, /createProjectArchiveController\(context/);
-    assert.match(projectRuntime, /archive\.parse/);
-    assert.match(projectRuntime, /archive\.restore/);
+    assert.match(projectRestoreUi, /archive\.parse/);
+    assert.match(projectRestoreUi, /archive\.restore/);
     assert.match(source, /projectArchiveController\.exportProject/);
-    assert.match(source, /legendMinElevation/);
-    assert.doesNotMatch(source, /<span>\$\{minE\}m<\/span>/);
+    assert.match(sidebar, /legendMinElevation/);
+    assert.doesNotMatch(sidebar, /<span>\$\{minE\}m<\/span>/);
     assert.doesNotMatch(source, /JSON\.parse\([^\n]*projectFile/);
   });
 

@@ -11,6 +11,7 @@ import {
   type ProjectArchiveTrail,
 } from '../../core/projectArchive.ts';
 import { sanitizeExportFilename } from '../../core/export.ts';
+import type {ProjectMutationReason} from '../../app/project-store.ts';
 
 export type ProjectArchiveEvent =
   | {type:'project-archive.exported'; filename: string; trailCount: number}
@@ -40,13 +41,11 @@ export interface ProjectArchiveController<TTrail extends ProjectArchiveTrail> {
 export function applyProjectArchive<TTrail extends ProjectArchiveTrail>(
   context: RuntimeContext<TTrail>,
   archive: ProjectArchive<TTrail>,
+  reason: ProjectMutationReason = 'archive.restore',
 ): void {
-  context.project.title = archive.project.title;
-  context.project.calc_method = archive.project.calc_method;
-  context.project.trails.splice(0, context.project.trails.length, ...archive.project.trails);
+  context.projectActions.replaceProject(archive.project, reason);
   const workspace = archive.workspace;
-  context.state.dispatch({
-    type:'workspace.restore',
+  context.stateActions.restoreWorkspace({
     activeTrails:workspace.activeTrails,
     activeGroup:workspace.activeGroup,
     primaryByGroup:workspace.primaryByGroup,
@@ -73,8 +72,8 @@ export function createProjectArchiveController<TTrail extends ProjectArchiveTrai
   let recoveryPoint: ProjectArchive<TTrail> | null = null;
 
   const capture = (): ProjectArchive<TTrail> => createProjectArchive({
-    project:context.project,
-    state:context.state.snapshot(),
+    project:context.projectSelectors.snapshot(),
+    state:context.stateSelectors.snapshot(),
     appVersion:dependencies.appVersion,
     exportedAt:now().toISOString(),
   }) as ProjectArchive<TTrail>;
@@ -83,12 +82,12 @@ export function createProjectArchiveController<TTrail extends ProjectArchiveTrai
     try {
       const date = now();
       const archive = createProjectArchive({
-        project:context.project,
-        state:context.state.snapshot(),
+        project:context.projectSelectors.snapshot(),
+        state:context.stateSelectors.snapshot(),
         appVersion:dependencies.appVersion,
         exportedAt:date.toISOString(),
       });
-      const filename = `${sanitizeExportFilename(context.project.title, 'outdoor-route-project')}_${date.toISOString().slice(0, 10)}${PROJECT_ARCHIVE_EXTENSION}`;
+      const filename = `${sanitizeExportFilename(context.projectSelectors.title(), 'outdoor-route-project')}_${date.toISOString().slice(0, 10)}${PROJECT_ARCHIVE_EXTENSION}`;
       await dependencies.files.saveText(
         serializeProjectArchive(archive),
         filename,

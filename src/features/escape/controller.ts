@@ -70,7 +70,7 @@ export function createEscapeController(
   const createRouteId = dependencies.createRouteId || (() => `manual-escape-${Date.now()}`);
   const state = createEscapeInteractionState();
   const findTrail = (trailId: string | null): EscapeTrail | null =>
-    context.project.trails.find(trail => trail.id === trailId) || null;
+    context.projectSelectors.trailById(trailId);
 
   const reset = (): void => {
     state.ptA = null;
@@ -80,7 +80,7 @@ export function createEscapeController(
 
   const enter = (trailId: string): boolean => {
     const trail = findTrail(trailId);
-    if(!trail?.track.length || context.state.snapshot().primaryTrailId !== trailId) return false;
+    if(!trail?.track.length || context.stateSelectors.primaryTrailId() !== trailId) return false;
     state.active = true;
     state.trailId = trailId;
     state.referenceTrailId = trailId;
@@ -91,7 +91,7 @@ export function createEscapeController(
   const setReferenceTrail = (trailId: string): boolean => {
     if(!state.active) return false;
     const trail = findTrail(trailId);
-    const appState = context.state.snapshot();
+    const appState = context.stateSelectors.snapshot();
     if(!trail?.track.length || appState.activeGroup == null || (trail.group || '默认') !== appState.activeGroup) {
       return false;
     }
@@ -108,11 +108,11 @@ export function createEscapeController(
   };
 
   const nearestPoint = (lat: number, lng: number, maxDistanceM = 2000): EscapeAnchorPoint | null => {
-    const appState = context.state.snapshot();
+    const appState = context.stateSelectors.snapshot();
     if(appState.activeGroup == null) return null;
     let best: EscapeAnchorPoint | null = null;
     let bestDistance = Infinity;
-    for(const trail of context.project.trails) {
+    for(const trail of context.projectSelectors.trails()) {
       if(trail.id !== state.referenceTrailId || (trail.group || '默认') !== appState.activeGroup) continue;
       for(let index = 0; index < trail.track.length; index += 1) {
         const point = trail.track[index];
@@ -182,7 +182,7 @@ export function createEscapeController(
 
   const commit = (name: string): EscapeRoute | null => {
     const trail = findTrail(state.trailId);
-    if(!trail || context.state.snapshot().primaryTrailId !== trail.id || !state._pending) return null;
+    if(!trail || context.stateSelectors.primaryTrailId() !== trail.id || !state._pending) return null;
     const cleanName = name.trim();
     const route: EscapeRoute = {...state._pending};
     if(cleanName) {
@@ -192,10 +192,13 @@ export function createEscapeController(
       route.name = cleanName;
       route.desc = `手动标注 · ${direction} · 依据轨迹《${anchorName}》，沿轨迹约 ${route.distance_km}km，落差 ${Math.abs(route.drop_m)}m（${terrain}）。`;
     }
-    trail.escape_routes = (trail.escape_routes || []).filter(candidate => candidate.id !== route.id);
-    trail.escape_routes.push(route);
+    const updated = context.projectActions.mutateTrail(trail.id, 'escape.commit', candidate => {
+      candidate.escape_routes = (candidate.escape_routes || []).filter(item => item.id !== route.id);
+      candidate.escape_routes.push(route);
+    });
+    if(!updated) return null;
     state._pending = route;
-    dependencies.markRevision(trail);
+    dependencies.markRevision(updated);
     return route;
   };
 
@@ -204,25 +207,28 @@ export function createEscapeController(
     if(!trail?.escape_routes) return false;
     const route = trail.escape_routes.find(candidate => candidate.id === routeId);
     if(!route?._manual) return false;
-    trail.escape_routes = trail.escape_routes.filter(candidate => candidate.id !== routeId);
-    if(context.state.snapshot().activeEscape === routeId) {
-      context.state.dispatch({type:'escape.set-active', escapeId:null});
+    const updated = context.projectActions.mutateTrail(trailId, 'escape.delete', candidate => {
+      candidate.escape_routes = (candidate.escape_routes || []).filter(item => item.id !== routeId);
+    });
+    if(!updated) return false;
+    if(context.stateSelectors.activeEscape() === routeId) {
+      context.stateActions.setActiveEscape(null);
     }
-    dependencies.markRevision(trail);
+    dependencies.markRevision(updated);
     return true;
   };
 
   const selectDisplayedRoute = (trailId: string, routeId: string): EscapeRoute | null => {
-    context.state.dispatch({type:'escape.set-active', escapeId:null});
+    context.stateActions.setActiveEscape(null);
     const trail = findTrail(trailId);
     const route = trail?.escape_routes?.find(candidate => candidate.id === routeId) || null;
     if(!route) return null;
-    context.state.dispatch({type:'escape.set-active', escapeId:routeId});
+    context.stateActions.setActiveEscape(routeId);
     return route;
   };
 
   const clearDisplayedRoute = (): void => {
-    context.state.dispatch({type:'escape.set-active', escapeId:null});
+    context.stateActions.setActiveEscape(null);
   };
 
   return Object.freeze({

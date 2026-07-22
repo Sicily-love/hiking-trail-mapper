@@ -21,7 +21,7 @@ export type StorageControllerEvent<TTrail extends StorageTrailLike = StorageTrai
   | {type:'storage.failed'; operation: 'load' | 'clear'; error: unknown}
   | {type:'storage.snapshot'; snapshot: RestoredStorageState<TTrail>};
 
-export interface StorageControllerDependencies<TTrail extends StorageTrailLike> {
+export interface StorageControllerDependencies<TTrail extends StorageTrailLike & {id: string}> {
   openDatabase: () => Promise<IDBDatabase>;
   execute: <T>(db: IDBDatabase, operation: IndexedDbStorageOperation<T>) => Promise<T | undefined>;
   onEvent?: (event: StorageControllerEvent<TTrail>) => void;
@@ -32,7 +32,7 @@ export interface StorageControllerDependencies<TTrail extends StorageTrailLike> 
   dataKey?: string;
 }
 
-export interface StorageController<TTrail extends StorageTrailLike> {
+export interface StorageController<TTrail extends StorageTrailLike & {id: string}> {
   readonly available: boolean;
   open: () => Promise<IDBDatabase>;
   scheduleSave: () => void;
@@ -49,7 +49,7 @@ function isQuotaError(error: unknown): boolean {
 }
 
 /** Owns IndexedDB lifecycle and snapshot persistence without DOM dependencies. */
-export function createStorageController<TTrail extends StorageTrailLike>(
+export function createStorageController<TTrail extends StorageTrailLike & {id: string}>(
   context: RuntimeContext<TTrail>,
   dependencies: StorageControllerDependencies<TTrail>,
 ): StorageController<TTrail> {
@@ -84,13 +84,14 @@ export function createStorageController<TTrail extends StorageTrailLike>(
     }
     try {
       const db = await open();
-      const operation = buildStorageWriteOperation(context.project.trails, context.state.snapshot(), config);
+      const trails = context.projectSelectors.trails();
+      const operation = buildStorageWriteOperation([...trails], context.stateSelectors.snapshot(), config);
       await dependencies.execute(db, operation);
-      emit({type:'storage.saved', trailCount:context.project.trails.length});
+      emit({type:'storage.saved', trailCount:trails.length});
       return true;
     } catch(error) {
       if(isQuotaError(error)) {
-        emit({type:'storage.quota-exceeded', trailCount:context.project.trails.length, error});
+        emit({type:'storage.quota-exceeded', trailCount:context.projectSelectors.trailCount(), error});
       } else if(available) {
         available = false;
         emit({type:'storage.unavailable', error});

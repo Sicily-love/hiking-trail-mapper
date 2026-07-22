@@ -3,6 +3,7 @@ const assert = require('assert');
 const app = require('../../src/app/index.ts');
 const core = require('../../src/core/index.ts');
 const { read } = require('./runtime_source.js');
+const {createTestRuntimeContext} = require('./runtime_context_harness.js');
 
 let passed = 0;
 let failed = 0;
@@ -15,14 +16,7 @@ function createHarness(trails) {
   const state = app.createAppStateStore({trails});
   const project = {title:'Test', trails, calc_method:{}};
   const effects = {persist:0, render:[], clear:0, revision:0, messages:[]};
-  const context = app.createRuntimeContext({
-    project,
-    state,
-    commands:new app.CommandRegistry(),
-    interactions:app.createStudioInteractionManager(),
-    renderer:new app.RenderScheduler({raf:callback => { callback(0); return 1; }, caf:() => {}}),
-    dialogs:{confirm:async () => true},
-  });
+  const context = createTestRuntimeContext(app, project, state);
   const controller = app.createTrailController(context, {
     haversine:core.haversine,
     accumulatorAscent:core.accumulatorAscent,
@@ -42,8 +36,8 @@ function createHarness(trails) {
   await T('RuntimeContext is frozen and validates service ownership', () => {
     const harness = createHarness([]);
     assert.strictEqual(Object.isFrozen(harness.context), true);
-    assert.strictEqual(harness.context.project, harness.project);
-    assert.throws(() => app.createRuntimeContext({project:{trails:[]}}), /AppStateStore/);
+    assert.deepStrictEqual(harness.context.projectSelectors.snapshot(), harness.project);
+    assert.throws(() => app.createRuntimeContext({project:{trails:[]}}), /ProjectActions/);
   });
 
   await T('reverses geometry, day ids, statistics, and waypoint attachment once', () => {
@@ -135,7 +129,7 @@ function createHarness(trails) {
   });
 
   await T('direct runtime keeps trail mutation behind the typed controller', () => {
-    const source = read('src/app/runtime/studio.ts');
+    const source = [read('src/app/runtime/studio.ts'), read('src/ui/sidebar/runtime-owner.ts')].join('\n');
     assert.match(source, /createTrailController\(runtimeContext/);
     assert.match(source, /trailController\.deleteTrail/);
     assert.match(source, /trailController\.renameTrail/);
