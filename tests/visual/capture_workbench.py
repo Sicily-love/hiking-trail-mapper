@@ -191,10 +191,15 @@ try:
             const zoomRect = zoomNode?.getBoundingClientRect();
             const zoom = zoomRect ? {left:zoomRect.left, top:zoomRect.top, right:zoomRect.right, bottom:zoomRect.bottom, width:zoomRect.width, height:zoomRect.height} : null;
             const elevation = rect('elev-bar');
+            const map = rect('map');
+            const primaryMini = rect('primary-mini');
             const overlaps = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+            const inside = (inner, outer) => !!inner && !!outer
+              && inner.left >= outer.left && inner.right <= outer.right
+              && inner.top >= outer.top && inner.bottom <= outer.bottom;
             return {
               viewport:{width:innerWidth,height:innerHeight},
-              toolbar, zoom, sidebar:rect('sidebar'), elevation,
+              toolbar, zoom, sidebar:rect('sidebar'), elevation, primaryMini,
               toolbarElevationOverlap:overlaps(toolbar, elevation),
               toolbarZoomOverlap:overlaps(toolbar, zoom),
               toolbarOutOfViewport:!toolbar || toolbar.left < 0 || toolbar.right > innerWidth || toolbar.top < 0 || toolbar.bottom > innerHeight,
@@ -203,6 +208,8 @@ try:
               buttonOverflow:buttons.some(button => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight),
               appRuntime:!!HTM_APP,
               mobileResetClosesSidebar:innerWidth > 760 || document.getElementById('sidebar')?.classList.contains('collapsed'),
+              primaryMiniCompact:innerWidth > 760 || (!!primaryMini && primaryMini.width <= 224 && primaryMini.height <= 90),
+              primaryMiniInsideMap:innerWidth > 760 || inside(primaryMini, map),
             };
           })()
         """)
@@ -604,7 +611,7 @@ try:
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
     time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"]]
+    invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"] or not item["primaryMiniCompact"] or not item["primaryMiniInsideMap"]]
     elevation_collapse_valid = all([
         elevation_collapse_state.get("collapsed"),
         elevation_collapse_state.get("expanded") == "false",

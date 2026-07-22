@@ -84,6 +84,15 @@ T('empty primary mini card still cannot cover commands', () => {
   assert.ok(primaryMini.includes("element.style.display = 'none';"));
   assert.ok(primaryMini.includes('element.replaceChildren();'));
 });
+T('collapsed primary trail summary uses a compact class-based Workbench surface', () => {
+  assert.ok(studioCss.includes("html[data-workbench='2'] #primary-mini"));
+  assert.ok(studioCss.includes('width:218px;'));
+  assert.ok(studioCss.includes('.primary-mini__eyebrow'));
+  assert.ok(studioCss.includes('.primary-mini__name'));
+  assert.ok(studioCss.includes('.primary-mini__stats'));
+  assert.ok(studioCss.includes('grid-template-columns:repeat(3,minmax(0,1fr));'));
+  assert.strictEqual(primaryMini.includes('style='), false);
+});
 T('visual fixtures cover real Day, measurement, and segmentation states', () => {
   assert.ok(visual.includes('workbench-trail-groups.png'));
   assert.ok(visual.includes('workbench-day-cards.png'));
@@ -91,6 +100,7 @@ T('visual fixtures cover real Day, measurement, and segmentation states', () => 
   assert.ok(visual.includes('workbench-segment.png'));
   assert.ok(visual.includes('workbench-elevation-collapsed.png'));
   assert.ok(visual.includes('toolbarZoomOverlap'));
+  assert.ok(visual.includes('primaryMiniCompact'));
 });
 
 console.log('\n══════════════════════════════════════════════════');

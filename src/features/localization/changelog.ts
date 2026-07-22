@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.2.2',
+    date: '2026-07-22',
+    items: {
+      zh: ['稳定 v2.2 工作台体验：拆分地图检查、图片查看与主轨迹摘要控制器，压缩移动端浮动摘要，并增加响应式边界回归。'],
+      en: ['Stabilize the v2.2 Workbench: extract map inspection, image lightbox, and primary-summary controllers; compact the mobile summary; and add responsive boundary regression coverage.'],
+    },
+  },
+  {
     version: 'v2.2.1',
     date: '2026-07-22',
     items: {
