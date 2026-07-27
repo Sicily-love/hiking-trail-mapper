@@ -62,11 +62,15 @@ test('browser capabilities have one explicit module owner', () => {
   const sidebar = read('src/ui/sidebar/runtime-owner.ts');
   const importer = read('src/ui/import/runtime-owner.ts');
   const workspace = read('src/features/map/workspace-controller.ts');
+  const interaction = read('src/app/runtime/interaction-owner.ts');
   for(const functionName of [
     'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar',
-    'setLang', 'beginRuntimeInteraction', 'measureEnter', 'addEscapeEnter',
+    'setLang', 'measureEnter', 'addEscapeEnter',
     'segmentEnter', 'addManualWaypointAt',
   ]) assert.strictEqual((runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
+  assert.strictEqual((interaction.match(/export function createRuntimeInteractionOwner</g) || []).length, 1);
+  assert.match(runtimeSource, /const beginRuntimeInteraction = interactionRuntime\.begin/);
+  assert.strictEqual(runtimeSource.includes('function beginRuntimeInteraction('), false);
   for(const functionName of ['buildTrailList', 'showDaySegmentPreview']) {
     assert.strictEqual((sidebar.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
     assert.strictEqual(runtimeSource.includes(`function ${functionName}(`), false, functionName);

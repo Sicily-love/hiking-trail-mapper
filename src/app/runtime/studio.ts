@@ -12,6 +12,7 @@ import { createFloatingPanelPositionController } from '../../ui/floating-panel.t
 import { createToastController } from '../../ui/toast.ts';
 import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
+import { createRuntimeInteractionOwner } from './interaction-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
 export interface StudioBootResult {
@@ -198,93 +199,30 @@ export function startStudioRuntime(
   const projectSelectors:any = HTM_APP.createProjectSelectors(() => projectStore.snapshot());
   appStateStore.subscribe(() => commandRegistry.notifyChanged());
   const interactionManager = HTM_APP.createStudioInteractionManager();
-  const runtimeTrailRevisions = new WeakMap();
-
-  function runtimeTrailRevision(trail: any) {
-    return trail ? (runtimeTrailRevisions.get(trail) || 0) : 0;
-  }
-
-  function markTrailRevision(trail: any) {
-    if(!trail) return 0;
-    const revision = runtimeTrailRevision(trail) + 1;
-    runtimeTrailRevisions.set(trail, revision);
-    return revision;
-  }
-
-  function runtimeInteractionOwner(trail: any) {
-    return trail ? {trailId: String(trail.id), revision: runtimeTrailRevision(trail)} : null;
-  }
-
-  function beginRuntimeInteraction(kind: any, phase: any, trail: any, options: any = {}) {
-    if(kind !== 'segment' && interactionManager.current.kind === 'segment' && segmentController.isDirty()) {
-      showToast(currentLang === 'zh' ? '请先应用或退出当前分段修改' : 'Apply or discard the current segment changes first', 'info');
-      return null;
-    }
-    const owner = runtimeInteractionOwner(trail);
-    if(!owner) return null;
-    const session = interactionManager.activate(kind, {
-      phase,
-      owner,
-      onEvent(event: any, session: any) {
-        if(typeof options.onEvent === 'function') options.onEvent(event, session);
-      },
-      onCancel(reason: any, session: any) {
-        try {
-          if(typeof options.onCancel === 'function') {
-            options.onCancel({fromManager:true, reason, session});
-          }
-        } finally {
-          commandRegistry.notifyChanged();
-        }
-      },
-    });
-    commandRegistry.notifyChanged();
-    return session;
-  }
-
-  function cancelRuntimeInteraction(kind: any, reason: any = 'cancelled') {
-    if(interactionManager.current.kind !== kind) return false;
-    return interactionManager.cancel(reason);
-  }
-
-  function isRuntimeInteractionCurrent(kind: any, trailId: any = null) {
-    const current:any = interactionManager.current;
-    return current.kind === kind
-      && current.isCurrent()
-      && runtimeInteractionOwnerIsCurrent(current)
-      && (trailId == null || current.owner.trailId === String(trailId));
-  }
-
-  function setRuntimeInteractionPhase(kind: any, phase: any) {
-    if(interactionManager.current.kind !== kind || !revalidateRuntimeInteractionOwner()) return false;
-    return (interactionManager.current as any).setPhase(phase);
-  }
-
-  function scheduleRuntimeInteractionFrame(kind: any, callback: any) {
-    const current:any = interactionManager.current;
-    if(current.kind !== kind || !revalidateRuntimeInteractionOwner()) return null;
-    return current.frame(() => callback(current));
-  }
-
-  function runtimeInteractionOwnerIsCurrent(session: any = interactionManager.current) {
-    if(!session || session.kind === 'idle') return true;
-    const trail = projectSelectors.trails().find((item: any) => String(item.id) === session.owner.trailId);
-    if(!trail || String(selectors.primaryTrailId()) !== session.owner.trailId) return false;
-    return HTM_APP.sameInteractionOwner(session.owner, runtimeInteractionOwner(trail));
-  }
-
-  function revalidateRuntimeInteractionOwner() {
-    const current:any = interactionManager.current;
-    if(current.kind === 'idle' || runtimeInteractionOwnerIsCurrent(current)) return true;
-    interactionManager.cancel('owner-invalid', {sessionId: current.sessionId});
-    return false;
-  }
-
-  function dispatchRuntimeInteraction(kind: any, event: any) {
-    const current:any = interactionManager.current;
-    if(current.kind !== kind || !revalidateRuntimeInteractionOwner()) return false;
-    return current.dispatch(event);
-  }
+  const interactionRuntime = createRuntimeInteractionOwner({
+    manager:interactionManager,
+    findTrail:(trailId: string) => projectSelectors.trailById(trailId),
+    primaryTrailId:() => selectors.primaryTrailId(),
+    sameOwner:HTM_APP.sameInteractionOwner,
+    notifyBlocked:() => showToast(
+      currentLang === 'zh'
+        ? '请先应用或退出当前分段修改'
+        : 'Apply or discard the current segment changes first',
+      'info',
+    ),
+    notifyCommands:() => commandRegistry.notifyChanged(),
+  });
+  const runtimeTrailRevision = interactionRuntime.trailRevision;
+  const markTrailRevision = interactionRuntime.markTrailRevision;
+  const runtimeInteractionOwner = interactionRuntime.interactionOwner;
+  const beginRuntimeInteraction = interactionRuntime.begin;
+  const cancelRuntimeInteraction = interactionRuntime.cancel;
+  const isRuntimeInteractionCurrent = interactionRuntime.isCurrent;
+  const setRuntimeInteractionPhase = interactionRuntime.setPhase;
+  const scheduleRuntimeInteractionFrame = interactionRuntime.scheduleFrame;
+  const runtimeInteractionOwnerIsCurrent = interactionRuntime.ownerIsCurrent;
+  const revalidateRuntimeInteractionOwner = interactionRuntime.revalidate;
+  const dispatchRuntimeInteraction = interactionRuntime.dispatch;
 
   const renderRuntimeStats:any = {
     frames: 0,
@@ -1682,6 +1620,7 @@ export function startStudioRuntime(
   const segmentController:any = HTM_APP.createSegmentController(runtimeContext, {
     markRevision:markTrailRevision,
   });
+  interactionRuntime.setSegmentDirtyReader(() => segmentController.isDirty());
   const segmentState:any = segmentController.state;
 
   function handleSegmentTap(event: any, session: any) {
@@ -2087,6 +2026,7 @@ export function startStudioRuntime(
   // 监听地图点击：测距模式下选点（fallback：如果 fast-tap 没触发，click 兜底）
   map.on('click', (e: any) => {
     const kind = interactionManager.current.kind;
+    if(kind === 'idle') return;
     if(!['measure', 'segment', 'waypoint', 'escape'].includes(kind)) return;
     dispatchRuntimeInteraction(kind, {type:'tap', source:'leaflet', latlng:e.latlng});
   });
@@ -2525,6 +2465,7 @@ export function startStudioRuntime(
       stateActions.setPrimaryTrail((inGroup[0] || projectSelectors.trails()[0]).id);
     }
     stateActions.setMode('elev');
+    updateModeTagTitle();
     document.querySelectorAll('[data-mode]').forEach((control: any) => {
       const active = control.dataset.mode === 'elev';
       control.classList.toggle('on', active);

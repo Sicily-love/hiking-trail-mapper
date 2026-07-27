@@ -345,6 +345,15 @@ test('Studio palette includes required semantic colors', () => {
   assert.ok(css.includes('--studio-canvas:'));
 });
 
+test('controlled polish keeps project metrics readable and states explicit', () => {
+  assert.ok(css.includes('grid-template-columns:repeat(3,minmax(0,1fr))'));
+  assert.ok(css.includes(".studio-command[aria-disabled='true']"));
+  assert.ok(css.includes('#sidebar .filter-chip.on'));
+  assert.ok(css.includes('#sidebar .day-preview-target:hover'));
+  assert.ok(runtimeSource.includes('stateActions.setMode'));
+  assert.ok(runtimeSource.includes('updateModeTagTitle();'));
+});
+
 test('toast feedback is semantic, high contrast, and avoids the bottom dock', () => {
   assert.ok(runtimeSource.includes('createToastController'));
   assert.ok(runtimeSource.includes('return toastController.show('));

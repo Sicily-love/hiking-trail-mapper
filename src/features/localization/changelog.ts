@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.2.7',
+    date: '2026-07-28',
+    items: {
+      zh: ['将轨迹修订、交互 owner 校验、阶段切换与会话调度迁入独立 typed runtime owner，主 runtime 收口到约 3110 行。', '修正启动时侧栏模式标题未同步的问题，并优化主轨迹统计、禁用操作、标注筛选和 Day 预览的状态反馈。'],
+      en: ['Move trail revisions, interaction-owner validation, phase changes, and session scheduling into a dedicated typed runtime owner, reducing the main runtime to roughly 3,110 lines.', 'Synchronize the sidebar mode title during startup and refine project metrics, disabled actions, waypoint filters, and Day-preview feedback.'],
+    },
+  },
+  {
     version: 'v2.2.6',
     date: '2026-07-22',
     items: {

@@ -16,6 +16,7 @@ EXPECTED_VERSION = re.search(
 ).group(1)
 RUNTIME_SOURCE_FILES = [
     ROOT / "src/app/runtime/studio.ts",
+    ROOT / "src/app/runtime/interaction-owner.ts",
     ROOT / "src/ui/sidebar/runtime-owner.ts",
     ROOT / "src/ui/import/runtime-owner.ts",
     ROOT / "src/features/map/workspace-controller.ts",
@@ -206,6 +207,8 @@ try:
           str(sidebar_collapse_flow))
     check("Workbench 已移除右上角旧侧栏恢复按钮",
           evalj("!document.getElementById('sidebar-toggle')"))
+    check("启动后的侧栏模式标题与海拔模式保持同步",
+          evalj("state.mode === 'elev' && document.getElementById('mode-tag-title')?.textContent === '海拔模式 · 标注筛选'"))
     check("底部已收敛为无重复 Tab 的海拔分析区",
           evalj("document.querySelectorAll('.studio-bottom-tab').length === 0 && !!document.querySelector('[data-analysis-panel=\"elevation\"] #elev-bar') && !!document.querySelector('[data-analysis-panel=\"elevation\"] #measure-panel')"))
     language_flow = evalj("""

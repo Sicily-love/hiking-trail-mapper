@@ -127,7 +127,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v2.2.6
+Version: v2.2.7
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.

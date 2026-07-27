@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const { read, runtimeSource } = require('./runtime_source');
 const runtime = [
   runtimeSource,
+  read('src/app/runtime/interaction-owner.ts'),
   read('src/ui/sidebar/runtime-owner.ts'),
   read('src/features/stitch/runtime-owner.ts'),
 ].join('\n');
@@ -92,9 +93,9 @@ test('scheduled drag work is session-owned', () => {
 });
 
 test('owner revisions are checked before dispatch and render work', () => {
-  assert.ok(runtime.includes('function revalidateRuntimeInteractionOwner()'));
-  assert.ok(runtime.includes('runtimeInteractionOwnerIsCurrent(current)'));
-  assert.ok(runtime.includes("interactionManager.cancel('owner-invalid'"));
+  assert.ok(runtime.includes('const revalidateRuntimeInteractionOwner = interactionRuntime.revalidate'));
+  assert.ok(runtime.includes('const ownerIsCurrent ='));
+  assert.ok(runtime.includes("dependencies.manager.cancel('owner-invalid'"));
   assert.ok(runtime.includes('segmentController.apply()'));
   assert.ok(segmentController.includes('dependencies.markRevision(updated)'));
   assert.ok(runtime.includes('markTrailRevision(trail)'));
