@@ -22,7 +22,8 @@ export type ProjectMutationReason =
   | 'itinerary.waypoints'
   | 'escape.generate'
   | 'escape.commit'
-  | 'escape.delete';
+  | 'escape.delete'
+  | 'test.fixture';
 
 type ProjectStateEventPayload =
   | {type:'project.replaced'; reason: ProjectMutationReason}

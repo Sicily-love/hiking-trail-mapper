@@ -139,7 +139,7 @@ try:
     sample_b64 = base64.b64encode(SAMPLE.read_bytes()).decode("ascii")
     trail_count = evaluate(f"""
       (async () => {{
-        DATA.trails = [];
+        testDriver.replaceTrails([]);
         stateActions.replaceActiveTrails([]);
         const bytes = Uint8Array.from(atob('{sample_b64}'), c => c.charCodeAt(0));
         const file = {{
@@ -477,7 +477,7 @@ try:
         fixture.name = 'Stitch range fixture';
         fixture.track.reverse();
         fixture.waypoints = [];
-        DATA.trails.push(fixture);
+        testDriver.addTrail(fixture);
         window.__visualStitchPromise = window.__OUTDOOR_ROUTE_STUDIO__.commands.dispatch('trail.stitch');
         return true;
       })()
@@ -534,7 +534,7 @@ try:
     evaluate("""
       (async () => {
         await requestStitchExit(true);
-        DATA.trails = DATA.trails.filter(trail => trail.id !== 'visual-stitch-fixture');
+        testDriver.removeTrail('visual-stitch-fixture');
       })()
     """)
     time.sleep(0.1)

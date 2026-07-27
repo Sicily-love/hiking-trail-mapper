@@ -34,6 +34,7 @@ Import routes:
 - Choose **Add trail** and select one or more `.kml` files.
 - You can also import `.zip` / `.kml.zip`; the app extracts KML files and skips macOS metadata.
 - Files can be dragged directly onto the workbench.
+- Newly added or stitched trails always enter the **Default** group and can be moved later from trail details.
 
 ## Core Capabilities
 
@@ -80,12 +81,12 @@ index.html
 - `index.html` contains only metadata, `#app`, and `/src/main.ts`; it contains no business implementation.
 - `src/app/bootstrap.ts` mounts the Workbench DOM, loads vendors through the Vite module graph, and explicitly starts the Studio runtime. Business code is no longer executed as an injected script string.
 - `src/core` owns DOM-free calculations, parsing, versioned project archives, transformations, and render models.
-- `src/app` and `src/features` own state and interaction orchestration. `AppStateStore` and `ProjectStore` separately own workspace and project data; writes use typed actions and reads use selectors. `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench, sidebar/import owners, and dialogs.
+- `src/app` and `src/features` own state and interaction orchestration. `AppStateStore` and `ProjectStore` separately own workspace and project data; writes use typed actions and reads use selectors. Trail stitching and elevation Canvas orchestration have dedicated feature owners. `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench, sidebar/import owners, and dialogs.
 - `InteractionManager` makes measure, segment, waypoint, escape, trail-stitch, and Day-preview sessions mutually exclusive.
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
 - `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, Undo/Redo, and keyboard shortcuts. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
 
-`v2.0.0` removed the classic startup bridge; this pass further reduces `studio.ts` from roughly 6,200 to roughly 3,940 lines. KML project building, reset/fit, sidebar and itinerary UI, and import UI now have explicit owners. The main runtime and typed features exchange data only through project/state actions and selectors. The inspector is available only under `?studio-test=1`; normal releases expose no business globals.
+`v2.0.0` removed the classic startup bridge; the main `studio.ts` is now down from roughly 6,200 to roughly 3,170 lines. KML project building, reset/fit, sidebar/itinerary, import, trail stitching, and elevation Canvas now have explicit owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime and typed features exchange data only through project/state actions and selectors. A deeply read-only inspector is available only under `?studio-test=1`, while fixture writes use a dedicated `testDriver`; normal releases expose no business globals.
 
 ## Development and Tests
 
@@ -126,7 +127,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v2.2.5
+Version: v2.2.6
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.

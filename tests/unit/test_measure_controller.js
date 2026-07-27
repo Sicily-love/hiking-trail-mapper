@@ -80,7 +80,7 @@ T('direct runtime delegates all measure session mutations to the controller', ()
   const map = measure;
   const directBusinessWrite = /measureState\.(?:active|trailId|ptA|ptB|_justDragged|_fastTapUntil|_computeSeq)\s*(?:=|\+\+)/;
   assert.match(measure, /createMeasureController\(\)/);
-  assert.match(measure, /const measureState = measureController\.state/);
+  assert.match(measure, /const measureState(?::any)? = measureController\.state/);
   assert.match(measure, /measureController\.enter/);
   assert.match(measure, /measureController\.updateEndpoint/);
   assert.match(measure, /measureController\.nextComputeSequence/);

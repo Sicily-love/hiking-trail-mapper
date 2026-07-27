@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.2.6',
+    date: '2026-07-22',
+    items: {
+      zh: ['测试 inspector 改为深只读视图，浏览器与视觉夹具统一通过专用 testDriver 和 typed project actions 写入。', '轨迹拼接与海拔 Canvas 编排迁入独立 owner，主 runtime 缩减到约 3170 行并移除全部 @ts-nocheck，严格 TypeScript 检查恢复全绿。', '优化工作台顶栏、活动栏、侧栏和底部分析面板的视觉层级与可读性。', '将侧栏收起键固定到所有活动页面共享的标题栏，并将新添加或拼接生成的轨迹统一归入“默认”轨迹组。'],
+      en: ['Make the test inspector deeply read-only and route browser and visual fixture writes through a dedicated testDriver backed by typed project actions.', 'Move trail stitching and elevation Canvas orchestration into dedicated owners, reduce the main runtime to roughly 3,170 lines, remove every @ts-nocheck, and restore strict TypeScript checks.', 'Refine Workbench hierarchy and legibility across the top bar, activity rail, sidebar, and bottom analysis dock.', 'Keep the sidebar collapse control in the shared heading for every activity and place newly added or stitched trails in the Default group.'],
+    },
+  },
+  {
     version: 'v2.2.5',
     date: '2026-07-22',
     items: {

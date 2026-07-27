@@ -34,7 +34,7 @@ src/
 │   ├── interaction-manager.ts    Map interaction sessions
 │   ├── render-scheduler.ts       Frame batching and last-fit wins
 │   ├── runtime-context.ts        Typed service context
-│   └── runtime/studio.ts         Startup glue and shared map orchestration (~3,950 lines)
+│   └── runtime/studio.ts         Startup glue and shared map orchestration (~3,170 lines)
 ├── core/                         DOM-free domain algorithms and render models
 ├── features/                     Vertical feature controllers and data
 ├── adapters/                     Leaflet, IndexedDB, file, and browser effects
@@ -59,7 +59,7 @@ src/
 
 ### Features and Adapters
 
-Trail, storage, file import/export, project archive/history runtime, waypoint, measure, segment, itinerary, escape, and localization each own typed controllers or data modules. `features/project/runtime.ts` composes archives and history feedback, while `ui/import/project-restore.ts` owns restore inputs, status text, and confirmation interaction. Adapters isolate browser capabilities:
+Trail, storage, file import/export, project archive/history runtime, waypoint, measure, segment, itinerary, escape, stitch, elevation, and localization each own typed controllers, owners, or data modules. `features/project/runtime.ts` composes archives and history feedback, while `ui/import/project-restore.ts` owns restore inputs, status text, and confirmation interaction. Adapters isolate browser capabilities:
 
 - Leaflet adapters consume track/marker render models and update layers by diff;
 - the elevation renderer consumes a Canvas context, dimensions, and a downsampled model;
@@ -70,9 +70,9 @@ Trail, storage, file import/export, project archive/history runtime, waypoint, m
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 3,940 lines. KML project building, reset/fit ownership, sidebar and itinerary DOM, and import DOM now live in `features/files/kml-project-builder.ts`, `features/map/workspace-controller.ts`, `ui/sidebar/runtime-owner.ts`, and `ui/import/runtime-owner.ts`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates the frozen test inspector.
+`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 3,170 lines. KML project building, reset/fit ownership, sidebar/itinerary DOM, import DOM, trail stitching, and elevation Canvas now have dedicated controllers or owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates a deeply read-only test inspector and a dedicated fixture driver.
 
-Real-browser tests receive a frozen, read-only inspector only when the URL includes `?studio-test=1`. Normal releases do not create it and do not expose `HikingTrailCore`, `HikingTrailApp`, command, or dialog classic globals.
+Real-browser tests receive a frozen, deeply read-only inspector only when the URL includes `?studio-test=1`; fixture changes enter `ProjectActions` through `testDriver`. Normal releases create neither test surface and do not expose `HikingTrailCore`, `HikingTrailApp`, command, or dialog classic globals.
 
 ## UI Architecture
 

@@ -416,6 +416,9 @@ export function upgradeWorkbenchLayout(
   let language: WorkbenchLanguage = document.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'zh';
   const cleanups: Array<() => void> = [];
   const sidebarTitle = prepareSidebarHeading(document, sidebar, document.getElementById('primary-card'));
+  const sidebarHeading = sidebarTitle?.closest<HTMLElement>('.sidebar-heading') ?? null;
+  const sidebarClose = document.getElementById('sidebar-close');
+  if(sidebarHeading && sidebarClose) sidebarHeading.appendChild(sidebarClose);
   const elevationToggle = prepareElevationToggle(document, elevationPanel, storage);
   cleanups.push(elevationToggle.destroy);
   const analysisDock = buildAnalysisDock(document, language);

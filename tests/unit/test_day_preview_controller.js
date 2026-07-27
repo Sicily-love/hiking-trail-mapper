@@ -85,7 +85,7 @@ T('direct runtime delegates Day selection state and uses core range helpers', ()
   const source = read('src/ui/sidebar/runtime-owner.ts');
   const directBusinessWrite = /dayPreviewState\.(?:active|trailId|day|iStart|iEnd)\s*(?:=(?!=)|\+\+)/;
   assert.match(source, /createDayPreviewController\(runtimeContext\)/);
-  assert.match(source, /const dayPreviewState = dayPreviewController\.state/);
+  assert.match(source, /const dayPreviewState(?::any)? = dayPreviewController\.state/);
   assert.match(source, /dayPreviewController\.prepare/);
   assert.match(source, /dayPreviewController\.activate/);
   assert.match(source, /dayPreviewController\.isActive/);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as HTM_CORE from '../../core/index.ts';
 import * as HTM_APP from '../index.ts';
 import { STUDIO_VERSION } from '../version.ts';
@@ -11,6 +10,9 @@ import {
 } from '../../ui/safe-content.ts';
 import { createFloatingPanelPositionController } from '../../ui/floating-panel.ts';
 import { createToastController } from '../../ui/toast.ts';
+import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
+import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
+import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
 export interface StudioBootResult {
   restored: boolean;
@@ -21,31 +23,35 @@ export interface StudioRuntimeDependencies {
   document: Document;
   commands: HTM_APP.CommandRegistry<void>;
   dialogs: HTM_APP.DialogController;
+  [name: string]: any;
 }
 
 /** Starts the browser runtime directly inside the Vite module graph. */
 export function startStudioRuntime(
   dependencies: StudioRuntimeDependencies,
 ): Promise<StudioBootResult> {
-  const { document } = dependencies;
-  const window = document.defaultView;
-  if(!window) throw new Error('Studio runtime requires a document with a window');
+  const document:any = dependencies.document;
+  const defaultView = document.defaultView as StudioBrowserWindow | null;
+  if(!defaultView) throw new Error('Studio runtime requires a document with a window');
+  const window:StudioBrowserWindow = defaultView;
   const studioTestMode = new URL(window.location.href).searchParams.has('studio-test');
-  const commandRegistry = dependencies.commands;
-  const studioDialogs = dependencies.dialogs;
+  const commandRegistry:any = dependencies.commands;
+  const studioDialogs:any = dependencies.dialogs;
   const STUDIO_COMMANDS = HTM_APP.STUDIO_COMMANDS;
   const L = window.L;
   const fflate = window.fflate;
   if(!L) throw new Error('Leaflet runtime is missing');
   if(!fflate) throw new Error('fflate runtime is missing');
 
-  const initialProject = {title:'徒步路线地图', trails:[], calc_method:{}};
+  const initialProject:HTM_APP.ProjectState<RuntimeTrail> = {
+    title:'徒步路线地图', trails:[], calc_method:{},
+  };
 
-  function dispatchStudioCommand(commandId) {
+  function dispatchStudioCommand(commandId: any) {
     try {
       const result = commandRegistry.dispatch(commandId);
       if(result && typeof result.then === 'function') {
-        result.catch(error => console.error(`Command failed: ${commandId}`, error));
+        result.catch((error: any) => console.error(`Command failed: ${commandId}`, error));
       }
       return result;
     } catch(error) {
@@ -106,10 +112,10 @@ export function startStudioRuntime(
     try { return HTM_APP.resolveLocalizationLanguage(localStorage.getItem('hiking_lang') || (navigator.language && navigator.language.startsWith('en') ? 'en' : 'zh')); }
     catch(e) { return 'zh'; }
   })();
-  function t(key) {
+  function t(key: any) {
     return HTM_APP.translateMessage(currentLang, key);
   }
-  function setLang(lang) {
+  function setLang(lang: any) {
     currentLang = HTM_APP.resolveLocalizationLanguage(lang);
     try { localStorage.setItem('hiking_lang', currentLang); } catch(e) {}
     if(typeof rebuildAll === 'function') rebuildAll({fit: false});
@@ -123,10 +129,10 @@ export function startStudioRuntime(
   function applyI18n() {
     document.documentElement.lang = currentLang === 'en' ? 'en' : 'zh-CN';
     document.title = t('app.title');
-    document.querySelectorAll('[data-i18n]').forEach(el => {
+    document.querySelectorAll('[data-i18n]').forEach((el: any) => {
       el.textContent = t(el.dataset.i18n);
     });
-    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    document.querySelectorAll('[data-i18n-title]').forEach((el: any) => {
       el.title = t(el.dataset.i18nTitle);
     });
     window.dispatchEvent(new CustomEvent('studio:language-changed', {
@@ -145,7 +151,7 @@ export function startStudioRuntime(
   }
   async function showStorageInfo() {
     const storageApi = navigator.storage;
-    let snapshot = {
+    let snapshot:any = {
       trailCount:projectSelectors.trails().length,
       estimateSupported:Boolean(storageApi && storageApi.estimate),
       persistSupported:Boolean(storageApi && storageApi.persist),
@@ -184,32 +190,32 @@ export function startStudioRuntime(
     }
   }
   /* ============ State ============ */
-  const appStateStore = HTM_APP.createAppStateStore(initialProject);
-  const selectors = HTM_APP.createAppStateSelectors(() => appStateStore.snapshot());
-  const stateActions = HTM_APP.createAppStateActions(appStateStore);
-  const projectStore = HTM_APP.createProjectStore(initialProject);
-  const projectActions = HTM_APP.createProjectActions(projectStore);
-  const projectSelectors = HTM_APP.createProjectSelectors(() => projectStore.snapshot());
+  const appStateStore:any = HTM_APP.createAppStateStore(initialProject);
+  const selectors:any = HTM_APP.createAppStateSelectors(() => appStateStore.snapshot());
+  const stateActions:any = HTM_APP.createAppStateActions(appStateStore);
+  const projectStore:any = HTM_APP.createProjectStore(initialProject);
+  const projectActions:any = HTM_APP.createProjectActions(projectStore);
+  const projectSelectors:any = HTM_APP.createProjectSelectors(() => projectStore.snapshot());
   appStateStore.subscribe(() => commandRegistry.notifyChanged());
   const interactionManager = HTM_APP.createStudioInteractionManager();
   const runtimeTrailRevisions = new WeakMap();
 
-  function runtimeTrailRevision(trail) {
+  function runtimeTrailRevision(trail: any) {
     return trail ? (runtimeTrailRevisions.get(trail) || 0) : 0;
   }
 
-  function markTrailRevision(trail) {
+  function markTrailRevision(trail: any) {
     if(!trail) return 0;
     const revision = runtimeTrailRevision(trail) + 1;
     runtimeTrailRevisions.set(trail, revision);
     return revision;
   }
 
-  function runtimeInteractionOwner(trail) {
+  function runtimeInteractionOwner(trail: any) {
     return trail ? {trailId: String(trail.id), revision: runtimeTrailRevision(trail)} : null;
   }
 
-  function beginRuntimeInteraction(kind, phase, trail, options = {}) {
+  function beginRuntimeInteraction(kind: any, phase: any, trail: any, options: any = {}) {
     if(kind !== 'segment' && interactionManager.current.kind === 'segment' && segmentController.isDirty()) {
       showToast(currentLang === 'zh' ? '请先应用或退出当前分段修改' : 'Apply or discard the current segment changes first', 'info');
       return null;
@@ -219,10 +225,10 @@ export function startStudioRuntime(
     const session = interactionManager.activate(kind, {
       phase,
       owner,
-      onEvent(event, session) {
+      onEvent(event: any, session: any) {
         if(typeof options.onEvent === 'function') options.onEvent(event, session);
       },
-      onCancel(reason, session) {
+      onCancel(reason: any, session: any) {
         try {
           if(typeof options.onCancel === 'function') {
             options.onCancel({fromManager:true, reason, session});
@@ -236,51 +242,51 @@ export function startStudioRuntime(
     return session;
   }
 
-  function cancelRuntimeInteraction(kind, reason = 'cancelled') {
+  function cancelRuntimeInteraction(kind: any, reason: any = 'cancelled') {
     if(interactionManager.current.kind !== kind) return false;
     return interactionManager.cancel(reason);
   }
 
-  function isRuntimeInteractionCurrent(kind, trailId = null) {
-    const current = interactionManager.current;
+  function isRuntimeInteractionCurrent(kind: any, trailId: any = null) {
+    const current:any = interactionManager.current;
     return current.kind === kind
       && current.isCurrent()
       && runtimeInteractionOwnerIsCurrent(current)
       && (trailId == null || current.owner.trailId === String(trailId));
   }
 
-  function setRuntimeInteractionPhase(kind, phase) {
+  function setRuntimeInteractionPhase(kind: any, phase: any) {
     if(interactionManager.current.kind !== kind || !revalidateRuntimeInteractionOwner()) return false;
-    return interactionManager.current.setPhase(phase);
+    return (interactionManager.current as any).setPhase(phase);
   }
 
-  function scheduleRuntimeInteractionFrame(kind, callback) {
-    const current = interactionManager.current;
+  function scheduleRuntimeInteractionFrame(kind: any, callback: any) {
+    const current:any = interactionManager.current;
     if(current.kind !== kind || !revalidateRuntimeInteractionOwner()) return null;
     return current.frame(() => callback(current));
   }
 
-  function runtimeInteractionOwnerIsCurrent(session = interactionManager.current) {
+  function runtimeInteractionOwnerIsCurrent(session: any = interactionManager.current) {
     if(!session || session.kind === 'idle') return true;
-    const trail = projectSelectors.trails().find(item => String(item.id) === session.owner.trailId);
+    const trail = projectSelectors.trails().find((item: any) => String(item.id) === session.owner.trailId);
     if(!trail || String(selectors.primaryTrailId()) !== session.owner.trailId) return false;
     return HTM_APP.sameInteractionOwner(session.owner, runtimeInteractionOwner(trail));
   }
 
   function revalidateRuntimeInteractionOwner() {
-    const current = interactionManager.current;
+    const current:any = interactionManager.current;
     if(current.kind === 'idle' || runtimeInteractionOwnerIsCurrent(current)) return true;
     interactionManager.cancel('owner-invalid', {sessionId: current.sessionId});
     return false;
   }
 
-  function dispatchRuntimeInteraction(kind, event) {
-    const current = interactionManager.current;
+  function dispatchRuntimeInteraction(kind: any, event: any) {
+    const current:any = interactionManager.current;
     if(current.kind !== kind || !revalidateRuntimeInteractionOwner()) return false;
     return current.dispatch(event);
   }
 
-  const renderRuntimeStats = {
+  const renderRuntimeStats:any = {
     frames: 0,
     lastTimestamp: null,
     lastMask: 0,
@@ -290,10 +296,10 @@ export function startStudioRuntime(
     markers: {add:0, update:0, remove:0, keep:0},
     fit: {requested:0, applied:0, superseded:0, lastEpoch:0, lastResetEpoch:0},
   };
-  let workspaceController = null;
-  let kmlProjectBuilder = null;
+  let workspaceController:any = null;
+  let kmlProjectBuilder:any = null;
 
-  function recordRenderPhase(context) {
+  function recordRenderPhase(context: any) {
     if(renderRuntimeStats.lastTimestamp !== context.timestamp) {
       renderRuntimeStats.frames += 1;
       renderRuntimeStats.lastTimestamp = context.timestamp;
@@ -304,16 +310,16 @@ export function startStudioRuntime(
 
   const renderScheduler = new HTM_APP.RenderScheduler({
     handlers: {
-      tracks(context) { recordRenderPhase(context); renderTracksNow(); },
-      markers(context) { recordRenderPhase(context); renderWaypointsNow(); },
-      sidebar(context) { recordRenderPhase(context); renderSidebarNow(); },
-      days(context) { recordRenderPhase(context); renderDaysNow(); },
-      legend(context) { recordRenderPhase(context); renderLegendNow(); },
-      chart(context) { recordRenderPhase(context); renderElevationChartNow(); },
-      fit(context) { recordRenderPhase(context); workspaceController?.executeFit(context); },
+      tracks(context: any) { recordRenderPhase(context); renderTracksNow(); },
+      markers(context: any) { recordRenderPhase(context); renderWaypointsNow(); },
+      sidebar(context: any) { recordRenderPhase(context); renderSidebarNow(); },
+      days(context: any) { recordRenderPhase(context); renderDaysNow(); },
+      legend(context: any) { recordRenderPhase(context); renderLegendNow(); },
+      chart(context: any) { recordRenderPhase(context); renderElevationChartNow(); },
+      fit(context: any) { recordRenderPhase(context); workspaceController?.executeFit(context); },
     },
   });
-  const runtimeContext = HTM_APP.createRuntimeContext({
+  const runtimeContext:any = HTM_APP.createRuntimeContext({
     projectActions,
     projectSelectors,
     stateActions,
@@ -328,7 +334,7 @@ export function startStudioRuntime(
     window.__HTM_RENDER_STATS__ = renderRuntimeStats;
   }
 
-  function invalidateRender(mask) {
+  function invalidateRender(mask: any) {
     renderScheduler.invalidate(mask);
   }
 
@@ -345,7 +351,7 @@ export function startStudioRuntime(
    * @param {boolean} [opts.fit=false] - 是否重置地图视野
    * @param {boolean} [opts.tracks=true] - 是否只重画 tracks/waypoints（跳过 rebuildAll）
    */
-  function applyChange(opts = {}) {
+  function applyChange(opts: any = {}) {
     const { save = true, fit = false, tracksOnly = false } = opts;
     if(tracksOnly) {
       if(typeof drawTracks === 'function') drawTracks();
@@ -361,12 +367,12 @@ export function startStudioRuntime(
    * 切换轨迹叠加态；如果主轨迹被隐藏，自动降级主轨迹到还叠加着的第一条
    * @param {string} trailId
    */
-  function toggleTrailActive(trailId) {
+  function toggleTrailActive(trailId: any) {
     stateActions.setTrailActive(trailId, !selectors.activeTrailIds().has(trailId));
     // v1.21.0：主轨迹兜底只在当前组内挑
     if(selectors.activeGroup() != null && !selectors.activeTrailIds().has(selectors.primaryTrailId())) {
-      const inGroupActive = [...selectors.activeTrailIds()].filter(id => {
-        const tr = projectSelectors.trails().find(t => t.id === id);
+      const inGroupActive = [...selectors.activeTrailIds()].filter((id: any) => {
+        const tr = projectSelectors.trails().find((t: any) => t.id === id);
         return tr && trailGroup(tr) === selectors.activeGroup();
       });
       stateActions.setPrimaryTrail(inGroupActive[0] || null);
@@ -374,10 +380,10 @@ export function startStudioRuntime(
   }
 
   /** 切换详情展开态 */
-  function toggleTrailExpanded(trailId) { stateActions.toggleExpanded(trailId); }
+  function toggleTrailExpanded(trailId: any) { stateActions.toggleExpanded(trailId); }
 
   /** 切换批量选中态 */
-  function toggleTrailBatch(trailId) { stateActions.toggleBatch(trailId); }
+  function toggleTrailBatch(trailId: any) { stateActions.toggleBatch(trailId); }
 
 
   /* v1.14.1：分组支持 ─────────────────────────────────────────────
@@ -386,14 +392,14 @@ export function startStudioRuntime(
      v1.20.0：允许 state.activeGroup = null（"无选中"状态），此时所有渲染归零。
      ─────────────────────────────────────────────────────────────── */
   const trailGroup = HTM_APP.trailGroupOf;
-  function isTrailActive(trail) {
+  function isTrailActive(trail: any) {
     return selectors.isTrailActive(trail);
   }
   function getGroups() {
     const seen = new Set();
     const groups = [];
-    if(projectSelectors.trails().some(t => trailGroup(t) === '默认')) { groups.push('默认'); seen.add('默认'); }
-    projectSelectors.trails().forEach(t => {
+    if(projectSelectors.trails().some((t: any) => trailGroup(t) === '默认')) { groups.push('默认'); seen.add('默认'); }
+    projectSelectors.trails().forEach((t: any) => {
       const g = trailGroup(t);
       if(!seen.has(g)) { seen.add(g); groups.push(g); }
     });
@@ -407,22 +413,22 @@ export function startStudioRuntime(
    *         自动挑组内第一条作为该组的新主轨迹。
    * @param {string|null} groupName 分组名，或 null 进入无选中状态
    */
-  function switchGroup(groupName) {
+  function switchGroup(groupName: any) {
     stateActions.setActiveGroup(groupName);
     if(groupName == null) {
       // 无选中状态：不动 primaryByGroup 记忆值，只是 getter 返回 null
       rebuildAll({ fit: false });
     } else {
       // 校验/回填该组的记忆值
-      const inGroup = projectSelectors.trails().filter(t => trailGroup(t) === groupName);
+      const inGroup = projectSelectors.trails().filter((t: any) => trailGroup(t) === groupName);
       const memorized = selectors.primaryForGroup(groupName);
-      if(!memorized || !inGroup.find(t => t.id === memorized)) {
+      if(!memorized || !inGroup.find((t: any) => t.id === memorized)) {
         // 记忆值失效或不存在 → 挑组内第一条
         stateActions.setGroupPrimary(groupName, inGroup[0] ? inGroup[0].id : null);
       }
       rebuildAll({ fit: false });
       // v1.22.0：切组时自动执行完整复位（比原来只是 fitBounds 更彻底：会重新算 primary + 重绘）
-      if(inGroup.length > 0 && typeof resetView === 'function') resetView();
+      if(inGroup.length > 0 && typeof resetView === 'function') resetView({});
     }
     saveToStorage();
   }
@@ -474,7 +480,7 @@ export function startStudioRuntime(
       const attr = map_el.querySelector('.leaflet-control-attribution:not(#version-tag-float)');
       if(attr) new MutationObserver(reposition).observe(attr, {childList:true, subtree:true, characterData:true});
       window.addEventListener('resize', reposition);
-      document.getElementById('version-tag-link').addEventListener('click', e => {
+      document.getElementById('version-tag-link').addEventListener('click', (e: any) => {
         e.preventDefault(); showChangelog();
       });
     }, 100);
@@ -488,8 +494,8 @@ export function startStudioRuntime(
     L.DomEvent.disableClickPropagation(_toolbarEl);
     L.DomEvent.disableScrollPropagation(_toolbarEl);
     // 进一步：每个按钮再单独阻止 dblclick（双击放大 = map 的 doubleClickZoom）
-    _toolbarEl.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('dblclick', e => { e.preventDefault(); e.stopPropagation(); });
+    _toolbarEl.querySelectorAll('button').forEach((btn: any) => {
+      btn.addEventListener('dblclick', (e: any) => { e.preventDefault(); e.stopPropagation(); });
     });
   }
   // 同时给 mini card 也加一层防护
@@ -510,15 +516,6 @@ export function startStudioRuntime(
   const highPointLayer = L.layerGroup().addTo(map);
   const escapeLayer = L.layerGroup().addTo(map);
   const networkLayer = L.layerGroup().addTo(map);
-  const stitchLayer = L.layerGroup().addTo(map);
-
-  const stitchPalette = ['#1E6F50','#D96C4A','#5577B8','#8A6BBE','#C45D83','#B7791F','#2B7A78','#9B4A3C'];
-  const stitchState = {
-    active:false,
-    parts:[],
-    selectedPartId:null,
-    dirty:false,
-  };
 
   /* ============ Color helpers ============ */
   // 天数分色：柔和但有区分度，适合卫星图与米色面板上的连续天数阅读
@@ -530,17 +527,17 @@ export function startStudioRuntime(
     leaflet:L,
     trackLayer,
     networkLayer,
-    requestFrame:callback => requestAnimationFrame(callback),
-    cancelFrame:handle => cancelAnimationFrame(handle),
+    requestFrame:(callback: any) => requestAnimationFrame(callback),
+    cancelFrame:(handle: any) => cancelAnimationFrame(handle),
     interactionBlocked:() => interactionManager.current.kind !== 'idle',
-    onHover:(event, model) => {
+    onHover:(event: any, model: any) => {
       const track = model.trail.track;
       const i = nearestTrackIdx(track, event.latlng.lat, event.latlng.lng);
-      showTooltip(event, track[i], track[Math.min(i + 1, track.length - 1)], model.trail);
+      showTooltip(event, track[i], track[Math.min(i + 1, track.length - 1)], model.trail, false);
     },
     onHoverEnd:() => hideTooltip(),
-    onInspectPoint:(event, model) => inspectTrackPoint(event, model.trail),
-    onSelectTrail:trailId => {
+    onInspectPoint:(event: any, model: any) => inspectTrackPoint(event, model.trail),
+    onSelectTrail:(trailId: any) => {
       stateActions.setPrimaryTrail(trailId);
       rebuildAll({fit:false});
       saveToStorage();
@@ -562,7 +559,7 @@ export function startStudioRuntime(
   }
 
   // 用于鼠标悬停时找最近轨迹点
-  function nearestTrackIdx(track, lat, lng) {
+  function nearestTrackIdx(track: any, lat: any, lng: any) {
     let best = 0, bestD = Infinity;
     for(let i=0; i<track.length; i+=Math.max(1, Math.floor(track.length/200))) {
       const dx = track[i][0] - lat, dy = track[i][1] - lng;
@@ -579,7 +576,7 @@ export function startStudioRuntime(
     return best;
   }
   /* ============ Waypoints ============ */
-  const tagColors = {
+  const tagColors:Record<string, string> = {
     start:'#5eb3ff', end:'#5eb3ff',
     fork:'#ff8c42',
     camp:'#22c55e',
@@ -593,7 +590,7 @@ export function startStudioRuntime(
     river:'#06b6d4',
     other:'#94a3b8',
   };
-  const tagIcons = {
+  const tagIcons:Record<string, string> = {
     start:'🚩',
     end:'🏁',
     fork:'⑫',
@@ -610,20 +607,20 @@ export function startStudioRuntime(
     other:'📍',
     view:'📍',
   };
-  function waypointIcon(wpOrTag) {
+  function waypointIcon(wpOrTag: any) {
     const tag = typeof wpOrTag === 'string' ? wpOrTag : (wpOrTag && wpOrTag.tag);
     return tagIcons[tag] || (wpOrTag && wpOrTag.icon) || '📍';
   }
-  const waypointVectorIconNames = {
+  const waypointVectorIconNames:Record<string, string> = {
     fork:'git-fork',
     warn:'triangle-alert',
     other:'map-pin',
   };
-  function waypointIconMarkup(wpOrTag, className = '') {
+  function waypointIconMarkup(wpOrTag: any, className: any = '') {
     const tag = typeof wpOrTag === 'string' ? wpOrTag : (wpOrTag && wpOrTag.tag);
     const vectorName = waypointVectorIconNames[tag];
     if(vectorName) {
-      return createWorkbenchIcon(document, vectorName, {
+      return createWorkbenchIcon(document, vectorName as any, {
         size:16,
         strokeWidth:2.2,
         className:`waypoint-symbol waypoint-symbol--${tag} ${className}`.trim(),
@@ -656,7 +653,7 @@ export function startStudioRuntime(
     waypointLayer:wpLayer,
     highPointLayer,
     waypointRegistry:wpMarkers,
-    onWaypointClick:(event, model) => pinWpCard(event, model.waypoint, model.trail),
+    onWaypointClick:(event: any, model: any) => pinWpCard(event, model.waypoint, model.trail),
   });
 
   function collectWaypointMarkerModels() {
@@ -680,7 +677,7 @@ export function startStudioRuntime(
       t('changelog.close'),
     ));
   }
-  function addWpMarker(trail, wp, isPrimary) {
+  function addWpMarker(trail: any, wp: any, isPrimary: any) {
         const color = tagColors[wp.tag] || '#aaa';
         const isWpMode = selectors.mode() === 'waypoint';
         const iconText = waypointIconMarkup(wp);
@@ -697,13 +694,13 @@ export function startStudioRuntime(
   const formatTrackPointCoordinates = HTM_APP.formatTrackPointCoordinates;
   const trackPointInspector = HTM_APP.createTrackPointInspectionController({
     renderer:HTM_APP.createLeafletTrackPointInspectionRenderer({leaflet:L, map}),
-    nearestIndex:(track, lat, lng) => nearestTrackIdx(track, lat, lng),
+    nearestIndex:(track: any, lat: any, lng: any) => nearestTrackIdx(track, lat, lng),
   });
 
   /* ============ Waypoint Photo Hover ============ */
   const wpPhotoEl = document.getElementById('wp-photo-tip');
   const escapeUiText = escapeHtmlText;
-  function pinWpCard(e, wp, trail) {
+  function pinWpCard(e: any, wp: any, trail: any) {
     // 点击标注点 → 固定显示卡片，卡片中图片可点击放大
     const photoSrc = sanitizeImageSource(wp.photo) || '';
     const iconMarkup = waypointIconMarkup(wp);
@@ -730,10 +727,10 @@ export function startStudioRuntime(
 
     // 关闭按钮
     const closeBtn = document.getElementById('pin-card-close');
-    if(closeBtn) closeBtn.addEventListener('click', ev => { ev.stopPropagation(); hideWpPhoto(); });
+    if(closeBtn) closeBtn.addEventListener('click', (ev: any) => { ev.stopPropagation(); hideWpPhoto(); });
     // 图片点击放大
     const imgEl = document.getElementById('pin-card-img');
-    if(imgEl) imgEl.addEventListener('click', ev => {
+    if(imgEl) imgEl.addEventListener('click', (ev: any) => {
       ev.stopPropagation();
       openLightbox(photoSrc, `${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`);
     });
@@ -752,12 +749,12 @@ export function startStudioRuntime(
     map.on('click', () => hideWpPhoto());
   }
 
-  function showTooltip(e, a, b, trail, heat) {
+  function showTooltip(e: any, a: any, b: any, trail: any, heat: any) {
     // a[4] = 累计爬升，通过 trail 反查累计下降
     let descVal = '-';
     if(trail && trail._descCum && a[3] !== undefined) {
       // 找最近索引的累计下降
-      const idx = trail.track ? trail.track.findIndex(p => p[3] >= a[3]) : -1;
+      const idx = trail.track ? trail.track.findIndex((p: any) => p[3] >= a[3]) : -1;
       if(idx >= 0 && trail._descCum[idx] !== undefined) descVal = Math.round(trail._descCum[idx]) + ' m';
     }
     let html = `
@@ -780,16 +777,16 @@ export function startStudioRuntime(
   }
   function hideTooltip() { tooltipEl.style.display = 'none'; }
 
-  function inspectTrackPoint(event, trail) {
+  function inspectTrackPoint(event: any, trail: any) {
     return trackPointInspector.inspect(event, trail);
   }
   /* ============ Escape ============ */
-  const escapeController = HTM_APP.createEscapeController(runtimeContext, {
+  const escapeController:any = HTM_APP.createEscapeController(runtimeContext, {
     markRevision:markTrailRevision,
   });
-  const addEscapeState = escapeController.state;
+  const addEscapeState:any = escapeController.state;
 
-  function showEscape(trailId, escapeId) {
+  function showEscape(trailId: any, escapeId: any) {
     escapeLayer.clearLayers();
     const r = escapeId ? escapeController.selectDisplayedRoute(trailId, escapeId) : null;
     if(!escapeId) escapeController.clearDisplayedRoute();
@@ -815,7 +812,7 @@ export function startStudioRuntime(
     escapeLayer.clearLayers();
     escapeController.clearDisplayedRoute();
     drawTracks();
-    document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.escape-item').forEach((el: any) => el.classList.remove('active'));
   }
   /* ============ Build sidebar ============ */
   // Sidebar, itinerary, filters, and map-mode DOM are owned by createSidebarRuntime.
@@ -824,10 +821,10 @@ export function startStudioRuntime(
 
   const importRuntime = HTM_APP.createImportRuntime({
     document, HTM_APP, fflate, runtimeContext, trailContentHash, applyChange,
-    resetView:options => workspaceController?.resetView(options),
+    resetView:(options: any) => workspaceController?.resetView(options),
     selectors, projectActions, projectSelectors,
-    buildEscapeRoutes:(...args) => kmlProjectBuilder.buildEscapeRoutes(...args),
-    parseAndProcessKml:(...args) => kmlProjectBuilder.parseAndProcessKml(...args),
+    buildEscapeRoutes:(...args: any[]) => kmlProjectBuilder.buildEscapeRoutes(...args),
+    parseAndProcessKml:(...args: any[]) => kmlProjectBuilder.parseAndProcessKml(...args),
     escapeUiText, t, studioDialogs, getCurrentLang:() => currentLang,
   });
   const {
@@ -845,15 +842,15 @@ export function startStudioRuntime(
   const lightboxController = HTM_APP.createImageLightboxController({
     document, viewport:window, container:lightboxEl, image:lightboxImg, caption:lightboxCap,
   });
-  const openLightbox = (src, caption) => lightboxController.open(src, caption);
+  const openLightbox = (src: any, caption: any) => lightboxController.open(src, caption);
   const closeLightbox = () => lightboxController.close();
   /* ============ 测距功能（主轨迹上选两点 → 爬升/下降/里程） ============ */
-  const measureController = HTM_APP.createMeasureController();
-  const measureState = measureController.state;
+  const measureController:any = HTM_APP.createMeasureController();
+  const measureState:any = measureController.state;
   const measureTrackCache = new WeakMap();
   const measureStatsCache = new WeakMap();
 
-  function nearestTrackIdxOnPrimary(lat, lng) {
+  function nearestTrackIdxOnPrimary(lat: any, lng: any) {
     const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) return null;
     const tk = main.track;
@@ -911,7 +908,7 @@ export function startStudioRuntime(
     return { idx: bestI, point: p, dist: distM, trail: main };
   }
 
-  function nearestTrackIdxNearPrimary(lat, lng, centerIdx, windowSize = 700) {
+  function nearestTrackIdxNearPrimary(lat: any, lng: any, centerIdx: any, windowSize: any = 700) {
     const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length || centerIdx == null || !isFinite(centerIdx)) {
       return nearestTrackIdxOnPrimary(lat, lng);
@@ -935,7 +932,7 @@ export function startStudioRuntime(
     return nearestTrackIdxOnPrimary(lat, lng);
   }
 
-  function nearestTrackIdxOnTrail(trail, lat, lng, centerIdx = null, windowSize = 1000) {
+  function nearestTrackIdxOnTrail(trail: any, lat: any, lng: any, centerIdx: any = null, windowSize: any = 1000) {
     const track = trail?.track || [];
     if(!track.length) return null;
     let lo = 0;
@@ -960,13 +957,13 @@ export function startStudioRuntime(
     return {idx:bestIndex, point, dist:haversine(lat, lng, point[0], point[1]), trail};
   }
 
-  function measurePointFromHit(hit) {
+  function measurePointFromHit(hit: any) {
     const p = hit.point;
     return { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
   }
 
 
-  function getMeasureStatsCache(main) {
+  function getMeasureStatsCache(main: any) {
     if(!main || !main.track || !main.track.length) return null;
     const tk = main.track;
     const sig = `${tk[0][0]},${tk[0][1]}|${tk[tk.length-1][0]},${tk[tk.length-1][1]}|${tk.length}`;
@@ -1008,7 +1005,7 @@ export function startStudioRuntime(
     return cache;
   }
 
-  function measureRangeMaxElev(cache, i1, i2) {
+  function measureRangeMaxElev(cache: any, i1: any, i2: any) {
     if(!cache) return 0;
     const { elevs, blockSize, maxBlocks } = cache;
     let maxE = -Infinity;
@@ -1029,7 +1026,7 @@ export function startStudioRuntime(
     return maxE;
   }
 
-  function measureRangeMinElev(cache, i1, i2) {
+  function measureRangeMinElev(cache: any, i1: any, i2: any) {
     if(!cache) return 0;
     const { elevs } = cache;
     let minE = Infinity;
@@ -1039,9 +1036,9 @@ export function startStudioRuntime(
     return minE;
   }
 
-  function computeMeasureStatsFromCache(cache, startIdx, endIdx) {
+  function computeMeasureStatsFromCache(cache: any, startIdx: any, endIdx: any) {
     if(!cache || !cache.elevs || !cache.elevs.length) return null;
-    const fakeTrack = { length: cache.elevs.length };
+    const fakeTrack:any = { length: cache.elevs.length };
     const range = normalizeTrackIndexRange(fakeTrack, startIdx, endIdx);
     if(!range) return null;
     const { iStart, iEnd, reversed } = range;
@@ -1058,8 +1055,8 @@ export function startStudioRuntime(
     };
   }
 
-  function computeMeasureStats(a, b) {
-    const main = projectSelectors.trails().find(t => t.id === (measureState.trailId || selectors.primaryTrailId()));
+  function computeMeasureStats(a: any, b: any) {
+    const main = projectSelectors.trails().find((t: any) => t.id === (measureState.trailId || selectors.primaryTrailId()));
     if(!main || !main.track || !a || !b) return null;
     const cache = getMeasureStatsCache(main);
     if(!cache) return null;
@@ -1067,18 +1064,18 @@ export function startStudioRuntime(
   }
 
 
-  function createPrimaryTrackDragSnapper(marker, opts = {}) {
-    let latestLatLng = null;
+  function createPrimaryTrackDragSnapper(marker: any, opts: any = {}) {
+    let latestLatLng:any = null;
     let frameId = 0;
-    let frameTask = null;
+    let frameTask:any = null;
     const raf = typeof requestAnimationFrame === 'function'
       ? requestAnimationFrame
-      : (cb) => setTimeout(cb, 16);
+      : (cb: any) => setTimeout(cb, 16);
     const cancelRaf = typeof cancelAnimationFrame === 'function'
       ? cancelAnimationFrame
       : clearTimeout;
 
-    function resolveLatLng(ll) {
+    function resolveLatLng(ll: any) {
       const centerIdx = typeof opts.getCenterIdx === 'function' ? opts.getCenterIdx() : null;
       if(opts.trail) {
         const searchCenter = opts.globalSearch ? null : centerIdx;
@@ -1105,7 +1102,7 @@ export function startStudioRuntime(
     }
 
     return {
-      schedule(ev) {
+      schedule(ev: any) {
         latestLatLng = ev.target.getLatLng();
         if(frameId || frameTask) return;
         if(typeof opts.scheduleFrame === 'function') frameTask = opts.scheduleFrame(flush);
@@ -1122,7 +1119,7 @@ export function startStudioRuntime(
     };
   }
 
-  function handleMeasureTap(event, session) {
+  function handleMeasureTap(event: any, session: any) {
     if(measureState._justDragged) return;
     const latlng = event.latlng;
     const isFast = event.source === 'fast';
@@ -1142,7 +1139,7 @@ export function startStudioRuntime(
       tempMarker.addTo(measureState.layer);
     }
 
-    const commitHit = hit => {
+    const commitHit = (hit: any) => {
       if(!session.isCurrent()) return;
       if(!hit) {
         tempMarker?.remove();
@@ -1172,7 +1169,7 @@ export function startStudioRuntime(
     else commitHit(nearestTrackIdxOnPrimary(latlng.lat, latlng.lng));
   }
 
-  function handleMeasureInteractionEvent(event, session) {
+  function handleMeasureInteractionEvent(event: any, session: any) {
     if(event.type === 'tap') {
       handleMeasureTap(event, session);
       return;
@@ -1215,7 +1212,7 @@ export function startStudioRuntime(
     }
     beginRuntimeInteraction('measure', 'select-a', main, {
       onEvent: handleMeasureInteractionEvent,
-      onCancel: opts => measureExit(opts),
+      onCancel: (opts: any) => measureExit(opts),
     });
     measureController.enter(main.id);
     enterInteractionRenderMode('测距');
@@ -1238,7 +1235,7 @@ export function startStudioRuntime(
     map.getContainer().classList.add('measure-active');
   }
 
-  function measureExit(opts = {}) {
+  function measureExit(opts: any = {}) {
     if(!opts.fromManager && cancelRuntimeInteraction('measure', opts.reason || 'cancelled')) return;
     measureController.exit();
     clearMeasureLayer();
@@ -1272,7 +1269,7 @@ export function startStudioRuntime(
     measureCompute();
   }
 
-  function measureMarker(lat, lng, label, color, opts = {}) {
+  function measureMarker(lat: any, lng: any, label: any, color: any, opts: any = {}) {
     // v1.27.0：用 divIcon 替代 circleMarker+tooltip，减少 DOM 层级和 layout 触发
     const draggable = !!opts.draggable;
     const icon = L.divIcon({
@@ -1310,13 +1307,13 @@ export function startStudioRuntime(
     if(hint) hint.classList.remove('active');
   }
 
-  function setMeasureElevHint(html) {
+  function setMeasureElevHint(html: any) {
     const hint = document.getElementById('measure-hint');
     if(hint) hint.innerHTML = html;
     if(hint) hint.classList.toggle('active', !!html);
   }
 
-  function resetMeasureElevReadout(hintText) {
+  function resetMeasureElevReadout(hintText: any) {
     const dist = document.getElementById('measure-distance');
     const distText = document.getElementById('m-dist');
     if(dist) dist.classList.remove('active');
@@ -1325,9 +1322,9 @@ export function startStudioRuntime(
   }
 
 
-  function renderMeasureSegmentLine(maxPoints = 900) {
+  function renderMeasureSegmentLine(maxPoints: any = 900) {
     if(!measureState.layer || !measureState.ptA || !measureState.ptB) return;
-    const main = projectSelectors.trails().find(t => t.id === (measureState.trailId || selectors.primaryTrailId()));
+    const main = projectSelectors.trails().find((t: any) => t.id === (measureState.trailId || selectors.primaryTrailId()));
     if(!main || !main.track) return;
     const model = buildMeasureSegmentRenderModel(
       main.track,
@@ -1345,7 +1342,7 @@ export function startStudioRuntime(
     );
   }
 
-  function updateMeasureReadout(loading = false) {
+  function updateMeasureReadout(loading: any = false) {
     const a = measureState.ptA, b = measureState.ptB;
     if(!a || !b) return;
     const dist_el = document.getElementById('m-dist');
@@ -1377,7 +1374,7 @@ export function startStudioRuntime(
   }
 
 
-  function applyMeasureEndpointHit(label, hit, live = false) {
+  function applyMeasureEndpointHit(label: any, hit: any, live: any = false) {
     if(!hit) return false;
     const pt = measurePointFromHit(hit);
     const changed = measureController.updateEndpoint(label, pt);
@@ -1386,22 +1383,22 @@ export function startStudioRuntime(
     return true;
   }
 
-  function bindMeasureEndpointDrag(marker, label) {
+  function bindMeasureEndpointDrag(marker: any, label: any) {
     const snapper = createPrimaryTrackDragSnapper(marker, {
-      scheduleFrame: callback => scheduleRuntimeInteractionFrame('measure', callback),
+      scheduleFrame: (callback: any) => scheduleRuntimeInteractionFrame('measure', callback),
       getCenterIdx: () => {
         const pt = label === 'A' ? measureState.ptA : measureState.ptB;
         return pt ? pt.idx : null;
       },
-      onSnap: hit => {
+      onSnap: (hit: any) => {
         dispatchRuntimeInteraction('measure', {type:'drag-snap', endpoint:label, hit});
       },
     });
     marker.on('dragstart', () => {
       dispatchRuntimeInteraction('measure', {type:'drag-start', endpoint:label});
     });
-    marker.on('drag', ev => snapper.schedule(ev));
-    marker.on('dragend', ev => {
+    marker.on('drag', (ev: any) => snapper.schedule(ev));
+    marker.on('dragend', (ev: any) => {
       const ll = ev.target.getLatLng();
       const hit = snapper.resolve(ll);
       snapper.cancel();
@@ -1409,7 +1406,7 @@ export function startStudioRuntime(
     });
   }
 
-  function addMeasureEndpointMarker(pt, label, color) {
+  function addMeasureEndpointMarker(pt: any, label: any, color: any) {
     const marker = measureMarker(pt.lat, pt.lng, label, color, { draggable: true }).addTo(measureState.layer);
     bindMeasureEndpointDrag(marker, label);
     return marker;
@@ -1418,7 +1415,7 @@ export function startStudioRuntime(
 
   function escapeReferenceTrails() {
     if(selectors.activeGroup() == null) return [];
-    return selectors.trailsInActiveGroup(projectSelectors.trails()).filter(trail => trail.track && trail.track.length);
+    return selectors.trailsInActiveGroup(projectSelectors.trails()).filter((trail: any) => trail.track && trail.track.length);
   }
 
   function ensureEscapeTrailSelector() {
@@ -1448,7 +1445,7 @@ export function startStudioRuntime(
     if(label) label.textContent = currentLang === 'zh' ? '依据轨迹：' : 'Reference trail:';
     const selectedId = addEscapeState.referenceTrailId || selectors.primaryTrailId() || '';
     select.replaceChildren();
-    escapeReferenceTrails().forEach(trail => {
+    escapeReferenceTrails().forEach((trail: any) => {
       const option = document.createElement('option');
       option.value = trail.id;
       option.textContent = trail.name + (trail.id === selectors.primaryTrailId()
@@ -1468,15 +1465,15 @@ export function startStudioRuntime(
       : 'Click <b style="color:#22c55e">point A</b>, then <b style="color:#ef4444">point B</b> on the selected reference trail.<br><span style="font-size:10px">A/B snap only to that trail.</span>';
   }
 
-  function refreshEscapeDaySelect(selectedDays = []) {
+  function refreshEscapeDaySelect(selectedDays: any = []) {
     const group = document.getElementById('addescape-day-select');
     if(!group) return [];
     const days = escapeController.availableDays();
     const requested = Array.isArray(selectedDays) ? selectedDays.map(Number) : [Number(selectedDays)];
-    const nextDays = days.filter(day => requested.includes(day));
+    const nextDays = days.filter((day: any) => requested.includes(day));
     if(!nextDays.length && days.length) nextDays.push(days[0]);
     group.replaceChildren();
-    days.forEach(day => {
+    days.forEach((day: any) => {
       const label = document.createElement('label');
       label.className = 'escape-day-option';
       const input = document.createElement('input');
@@ -1488,11 +1485,11 @@ export function startStudioRuntime(
     });
     if(nextDays.length) escapeController.setDays(nextDays);
     const dayValue = document.getElementById('ae-day');
-    if(dayValue) dayValue.textContent = nextDays.length ? nextDays.map(day => `D${day}`).join('、') : '-';
+    if(dayValue) dayValue.textContent = nextDays.length ? nextDays.map((day: any) => `D${day}`).join('、') : '-';
     return nextDays;
   }
 
-  function handleEscapeInteractionEvent(event, session) {
+  function handleEscapeInteractionEvent(event: any, session: any) {
     if(event.type !== 'tap') return;
     const hit = escapeController.nearestPoint(event.latlng.lat, event.latlng.lng);
     if(!hit) {
@@ -1522,7 +1519,7 @@ export function startStudioRuntime(
     if(!main || !main.track || !main.track.length) { showToast('请先设置主轨迹', 'error'); return; }
     beginRuntimeInteraction('escape', 'select-a', main, {
       onEvent: handleEscapeInteractionEvent,
-      onCancel: opts => addEscapeExit(opts),
+      onCancel: (opts: any) => addEscapeExit(opts),
     });
     if(!escapeController.enter(main.id)) return;
     refreshEscapeTrailSelector();
@@ -1539,7 +1536,7 @@ export function startStudioRuntime(
     drawTracks();
   }
 
-  function addEscapeExit(opts = {}) {
+  function addEscapeExit(opts: any = {}) {
     if(!opts.fromManager && cancelRuntimeInteraction('escape', opts.reason || 'cancelled')) return;
     escapeController.exit();
     const btn = document.getElementById('add-escape-btn');
@@ -1619,7 +1616,7 @@ export function startStudioRuntime(
 
   // 按钮绑定
   const escapeTrailSelect = ensureEscapeTrailSelector();
-  if(escapeTrailSelect) escapeTrailSelect.addEventListener('change', event => {
+  if(escapeTrailSelect) escapeTrailSelect.addEventListener('change', (event: any) => {
     const trailId = event.target.value;
     if(!escapeController.setReferenceTrail(trailId)) {
       refreshEscapeTrailSelector();
@@ -1638,16 +1635,16 @@ export function startStudioRuntime(
   document.getElementById('addescape-exit').addEventListener('click', addEscapeExit);
   document.getElementById('addescape-reset').addEventListener('click', addEscapeReset);
   document.getElementById('addescape-commit').addEventListener('click', addEscapeCommit);
-  document.getElementById('addescape-day-select').addEventListener('change', event => {
+  document.getElementById('addescape-day-select').addEventListener('change', (event: any) => {
     if(!event.target.matches('input[type="checkbox"]')) return;
     const inputs = [...event.currentTarget.querySelectorAll('input[type="checkbox"]')];
-    let days = inputs.filter(input => input.checked).map(input => Number(input.value));
+    let days = inputs.filter((input: any) => input.checked).map((input: any) => Number(input.value));
     if(!days.length) {
       event.target.checked = true;
       days = [Number(event.target.value)];
     }
     if(escapeController.setDays(days)) {
-      document.getElementById('ae-day').textContent = days.map(day => `D${day}`).join('、');
+      document.getElementById('ae-day').textContent = days.map((day: any) => `D${day}`).join('、');
     }
   });
   function measureCompute() {
@@ -1682,16 +1679,16 @@ export function startStudioRuntime(
     });
   }
   /* ============ 分段功能（在主轨迹上依次选点，标记每天行程） ============ */
-  const segmentController = HTM_APP.createSegmentController(runtimeContext, {
+  const segmentController:any = HTM_APP.createSegmentController(runtimeContext, {
     markRevision:markTrailRevision,
   });
-  const segmentState = segmentController.state;
+  const segmentState:any = segmentController.state;
 
-  function handleSegmentTap(event, session) {
+  function handleSegmentTap(event: any, session: any) {
     if(segmentState._justDragged) return;
     if(event.source !== 'fast' && segmentState._fastTapUntil > Date.now()) return;
     const latlng = event.latlng;
-    const commitHit = hit => {
+    const commitHit = (hit: any) => {
       if(!session.isCurrent()) return;
       if(!hit) {
         showToast('请点击主轨迹附近（200m 内）', 'error');
@@ -1714,7 +1711,7 @@ export function startStudioRuntime(
     });
   }
 
-  function handleSegmentInteractionEvent(event, session) {
+  function handleSegmentInteractionEvent(event: any, session: any) {
     if(event.type === 'tap') {
       handleSegmentTap(event, session);
       return;
@@ -1762,7 +1759,7 @@ export function startStudioRuntime(
     }
     beginRuntimeInteraction('segment', 'editing', main, {
       onEvent: handleSegmentInteractionEvent,
-      onCancel: opts => segmentExit(opts),
+      onCancel: (opts: any) => segmentExit(opts),
     });
     enterInteractionRenderMode('分段');
 
@@ -1778,7 +1775,7 @@ export function startStudioRuntime(
     updateSegmentUI();
   }
 
-  function segmentExit(opts = {}) {
+  function segmentExit(opts: any = {}) {
     if(!opts.fromManager && cancelRuntimeInteraction('segment', opts.reason || 'cancelled')) return;
     segmentController.exit();
     if(segmentState.layer) segmentState.layer.clearLayers();
@@ -1789,8 +1786,8 @@ export function startStudioRuntime(
     updateSegmentDirtyIndicator();
   }
 
-  let segmentExitPrompt = null;
-  function requestSegmentExit(reason = 'cancelled') {
+  let segmentExitPrompt:any = null;
+  function requestSegmentExit(reason: any = 'cancelled') {
     if(!segmentState.active && interactionManager.current.kind !== 'segment') return Promise.resolve(true);
     const finish = () => {
       if(cancelRuntimeInteraction('segment', reason)) return true;
@@ -1807,7 +1804,7 @@ export function startStudioRuntime(
       danger:true,
       confirmLabel:currentLang === 'zh' ? '放弃并退出' : 'Discard and exit',
       cancelLabel:currentLang === 'zh' ? '继续编辑' : 'Keep editing',
-    }).then(confirmed => confirmed ? finish() : false).finally(() => { segmentExitPrompt = null; });
+    }).then((confirmed: any) => confirmed ? finish() : false).finally(() => { segmentExitPrompt = null; });
     return segmentExitPrompt;
   }
 
@@ -1827,7 +1824,7 @@ export function startStudioRuntime(
   }
 
 
-  function segmentInsertPoint(pt) {
+  function segmentInsertPoint(pt: any) {
     const result = segmentController.insertPoint(pt);
     if(!result.ok) {
       if(result.reason === 'empty') return false;
@@ -1842,7 +1839,7 @@ export function startStudioRuntime(
     return true;
   }
 
-  function segmentDeleteDay(dayNo) {
+  function segmentDeleteDay(dayNo: any) {
     const result = segmentController.deleteDay(dayNo);
     if(!result.ok) {
       if(result.reason === 'min-days') {
@@ -1855,7 +1852,7 @@ export function startStudioRuntime(
   }
 
 
-  function segmentStats(startIdx, endIdx) {
+  function segmentStats(startIdx: any, endIdx: any) {
     const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track) return null;
     const stats = computeSegmentStatsForTrack(main.track, startIdx, endIdx);
@@ -1894,6 +1891,7 @@ export function startStudioRuntime(
       const campName = campData.name || '';
       const campElev = Math.round(pts[d].elev);
       const campCoordinates = formatTrackPointCoordinates([pts[d].lat, pts[d].lng]);
+      if(!stats) continue;
       html += '<div class="segment-day-card" style="--day-color:'+color+'">' +
         '<div class="segment-day-head">' +
           '<b class="segment-day-title">D'+d+'</b>' +
@@ -1913,15 +1911,15 @@ export function startStudioRuntime(
     }
     list.innerHTML = html;
     // 绑定输入事件
-    list.querySelectorAll('.seg-camp-name').forEach(inp => {
-      inp.addEventListener('input', e => {
+    list.querySelectorAll('.seg-camp-name').forEach((inp: any) => {
+      inp.addEventListener('input', (e: any) => {
         const d = +e.target.dataset.day;
         segmentController.updateCamp(d, {name:e.target.value});
         updateSegmentDirtyIndicator();
       });
     });
-    list.querySelectorAll('.seg-day-delete').forEach(btn => {
-      btn.addEventListener('click', e => {
+    list.querySelectorAll('.seg-day-delete').forEach((btn: any) => {
+      btn.addEventListener('click', (e: any) => {
         e.preventDefault();
         e.stopPropagation();
         segmentDeleteDay(+e.currentTarget.dataset.day);
@@ -1940,11 +1938,11 @@ export function startStudioRuntime(
     const DAY_COLORS = dayPalette;
     const model = buildSegmentLayerModel(tk, pts, DAY_COLORS, 900, main.track_breaks);
     // 为每天绘制不同颜色高亮线段
-    model.segments.forEach(seg => {
+    model.segments.forEach((seg: any) => {
       L.polyline(seg.latLngs, seg.lineStyle).addTo(segmentState.layer);
     });
     // 绘制分段点标记（可拖拽的 divIcon Marker）
-    model.markers.forEach(m => {
+    model.markers.forEach((m: any) => {
       const icon = L.divIcon({
         className: 'segment-marker',
         html: '<div style="width:22px;height:22px;background:'+m.color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a1a1a;font-size:10px;font-family:sans-serif;cursor:'+m.cursor+'">'+m.label+'</div>',
@@ -1955,15 +1953,15 @@ export function startStudioRuntime(
       marker._segIdx = m.pointIndex;
       if(!m.isBoundary) return;
       const snapper = createPrimaryTrackDragSnapper(marker, {
-        scheduleFrame: callback => scheduleRuntimeInteractionFrame('segment', callback),
+        scheduleFrame: (callback: any) => scheduleRuntimeInteractionFrame('segment', callback),
       });
       marker.on('dragstart', () => {
         dispatchRuntimeInteraction('segment', {type:'drag-start', boundaryIndex:marker._segIdx});
       });
       // 拖动过程中：吸附到主轨迹上（同时约束在相邻分段点之间）
-      marker.on('drag', ev => snapper.schedule(ev));
+      marker.on('drag', (ev: any) => snapper.schedule(ev));
       // 拖动结束：确定 idx，检查冲突，重排（保持递增顺序）后重绘
-      marker.on('dragend', ev => {
+      marker.on('dragend', (ev: any) => {
         const ll = ev.target.getLatLng();
         const hit = snapper.resolve(ll);
         snapper.cancel();
@@ -2020,8 +2018,8 @@ export function startStudioRuntime(
   // 判断"不是拖拽" = down 到 up 位置差 < 6px 且时间 < 400ms
   (function() {
     const container = map.getContainer();
-    let pd = null; // {x, y, t, pointerType, pointerId}
-    function isFastTap(x, y, t, pointerType, pointerId) {
+    let pd:any = null; // {x, y, t, pointerType, pointerId}
+    function isFastTap(x: any, y: any, t: any, pointerType: any, pointerId: any) {
       if(!pd) return false;
       if(pointerId != null && pd.pointerId != null && pointerId !== pd.pointerId) return false;
       return HTM_CORE.isPointerTap({
@@ -2030,7 +2028,7 @@ export function startStudioRuntime(
         pointerType:pointerType || pd.pointerType || 'mouse',
       });
     }
-    function onDown(x, y, target, pointerType = 'mouse', pointerId = null) {
+    function onDown(x: any, y: any, target: any, pointerType: any = 'mouse', pointerId: any = null) {
       // 只有测距/分段模式激活时才捕获
       if(!['measure', 'segment'].includes(interactionManager.current.kind)) { pd = null; return; }
       // 别拦截控件/UI 上的点击
@@ -2041,7 +2039,7 @@ export function startStudioRuntime(
       }
       pd = { x, y, pointerType, pointerId, t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
     }
-    function onUp(x, y, target, pointerType = 'mouse', pointerId = null) {
+    function onUp(x: any, y: any, target: any, pointerType: any = 'mouse', pointerId: any = null) {
       if(!pd) return;
       const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
       if(!isFastTap(x, y, t, pointerType, pointerId)) { pd = null; return; }
@@ -2056,7 +2054,7 @@ export function startStudioRuntime(
       handleFastTap(latlng);
       pd = null;
     }
-    function handleFastTap(latlng) {
+    function handleFastTap(latlng: any) {
       const kind = interactionManager.current.kind;
       if(kind !== 'measure' && kind !== 'segment') return;
       if(!dispatchRuntimeInteraction(kind, {type:'tap', source:'fast', latlng})) return;
@@ -2066,270 +2064,51 @@ export function startStudioRuntime(
     }
     // 优先使用 pointer 事件（覆盖鼠标 + 触屏 + 触控笔）
     if(window.PointerEvent) {
-      container.addEventListener('pointerdown', e => {
+      container.addEventListener('pointerdown', (e: any) => {
         if(e.pointerType !== 'mouse' && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
         onDown(e.clientX, e.clientY, e.target, e.pointerType, e.pointerId);
       }, {capture: true, passive: true});
-      container.addEventListener('pointerup', e => {
+      container.addEventListener('pointerup', (e: any) => {
         onUp(e.clientX, e.clientY, e.target, e.pointerType, e.pointerId);
       }, {capture: true, passive: true});
       container.addEventListener('pointercancel', () => { pd = null; }, {capture: true, passive: true});
     } else {
-      container.addEventListener('mousedown', e => onDown(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
-      container.addEventListener('mouseup', e => onUp(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
-      container.addEventListener('touchstart', e => {
+      container.addEventListener('mousedown', (e: any) => onDown(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
+      container.addEventListener('mouseup', (e: any) => onUp(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
+      container.addEventListener('touchstart', (e: any) => {
         if(e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY, e.target, 'touch', e.touches[0].identifier);
       }, {capture: true, passive: true});
-      container.addEventListener('touchend', e => {
+      container.addEventListener('touchend', (e: any) => {
         if(e.changedTouches.length === 1) onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY, e.target, 'touch', e.changedTouches[0].identifier);
       }, {capture: true, passive: true});
     }
   })();
 
   // 监听地图点击：测距模式下选点（fallback：如果 fast-tap 没触发，click 兜底）
-  map.on('click', e => {
+  map.on('click', (e: any) => {
     const kind = interactionManager.current.kind;
     if(!['measure', 'segment', 'waypoint', 'escape'].includes(kind)) return;
     dispatchRuntimeInteraction(kind, {type:'tap', source:'leaflet', latlng:e.latlng});
   });
 
-  /* ============ 底部海拔剖面图 ============ */
-  const elevCanvas = document.getElementById('elev-canvas');
-  const elevCtx = elevCanvas ? elevCanvas.getContext('2d') : null;
-  const elevCrosshair = document.getElementById('elev-crosshair');
-  const elevTip = document.getElementById('elev-tip');
-  const elevLabel = document.getElementById('elev-label');
-
-  // 当前绘制数据缓存
-  let _elevBarData = null;
-  const elevationCanvasRenderer = elevCtx ? HTM_APP.createElevationCanvasRenderer(elevCtx) : null;
-
-  /** 更新顶部爬升/下降 badge */
-  function updateElevBadges(badges) {
-    const ascEl = document.getElementById('elev-stat-asc');
-    const descEl = document.getElementById('elev-stat-desc');
-    if(ascEl) ascEl.textContent = badges.ascentText;
-    if(descEl) descEl.textContent = badges.descentText;
+  /* ============ Typed elevation Canvas owner ============ */
+  let elevationRuntime:any = null;
+  let elevCanvas:any = null;
+  let elevationCanvasRenderer:any = null;
+  function drawElevBar(points:any, color:any, label:any, options:any) {
+    return elevationRuntime?.draw(points, color, label, options);
   }
+  function renderElevationChartNow() { elevationRuntime?.renderNow(); }
+  function refreshElevBar() { elevationRuntime?.refresh(); }
+  function updateElevBadges(badges:any) { elevationRuntime?.updateBadges(badges); }
 
-  function drawElevBar(pts, color, label, opts) {
-    if(!elevCanvas || !elevationCanvasRenderer || !pts || pts.length < 2) return;
-    opts = opts || {};
-    const dimensions = {
-      width:elevCanvas.offsetWidth || 340,
-      height:elevCanvas.offsetHeight || 140,
-      dpr:window.devicePixelRatio || 1,
-    };
-    const scene = HTM_APP.buildElevationCanvasScene(pts, {
-      ...opts, width:dimensions.width, height:dimensions.height,
-      axisLabel:t('elev.km'), campLabel:t('elev.anno.camp'),
-      measureText:elevationCanvasRenderer.measureText,
-    });
-    _elevBarData = {
-      pts, minE:scene.layout.minE, maxE:scene.layout.maxE, color:color || '#3F5238',
-      km:scene.layout.km, PL:scene.layout.PL, PR:scene.layout.PR, pw:scene.layout.pw,
-    };
-    if(elevLabel) elevLabel.textContent = label || t('elev.title');
-    updateElevBadges(scene.chart.badges);
-    renderRuntimeStats.elevation = {sourcePoints:scene.sourcePoints, renderedPoints:scene.renderedPoints};
-    drawElevBar._overflowRequest = scene.overflow;
-    elevationCanvasRenderer.render(scene, dimensions);
-  }
-
-  function renderElevationChartNow() {
-    if(!elevCanvas) return;
-    // v1.20.0：无选中分组时不绘制
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) {
-      if(elevationCanvasRenderer) elevationCanvasRenderer.clear({
-        width:elevCanvas.offsetWidth || 340,
-        height:elevCanvas.offsetHeight || 140,
-        dpr:window.devicePixelRatio || 1,
-      });
-      _elevBarData = null;
-      renderRuntimeStats.elevation = {sourcePoints:0, renderedPoints:0};
-      return;
-    }
-
-    const bar = document.getElementById('elev-bar');
-
-    function doDraw() {
-      if(measureState.active && measureState.ptA && measureState.ptB) {
-        const i1 = Math.min(measureState.ptA.idx, measureState.ptB.idx);
-        const i2 = Math.max(measureState.ptA.idx, measureState.ptB.idx);
-        const reversed = measureState.ptA.idx > measureState.ptB.idx;
-        let segPts = main.track.slice(i1, i2 + 1);
-        if(reversed) segPts = segPts.slice().reverse();
-        drawElevBar(segPts, '#3F5238', t('elev.measure'), {
-          kmFromZero: true,
-          trackBreaks:trackBreaksInRange(main.track_breaks, i1, i2, reversed),
-          waypoints: main.waypoints,
-          segIdxStart: i1, segIdxEnd: i2, reversed,
-          measureMode: true,
-        });
-      } else if(dayPreviewState.active && dayPreviewState.trailId === main.id && dayPreviewState.iStart != null && dayPreviewState.iEnd != null) {
-        const i1 = Math.min(dayPreviewState.iStart, dayPreviewState.iEnd);
-        const i2 = Math.max(dayPreviewState.iStart, dayPreviewState.iEnd);
-        const segPts = main.track.slice(i1, i2 + 1);
-        drawElevBar(segPts, '#fbbf24', `D${dayPreviewState.day} · ${t('elev.measure')}`, {
-          kmFromZero: true,
-          trackBreaks:trackBreaksInRange(main.track_breaks, i1, i2, false),
-          waypoints: main.waypoints,
-          segIdxStart: i1, segIdxEnd: i2, reversed: false,
-          measureMode: true,
-        });
-      } else {
-        drawElevBar(main.track, main.color, (main.name || t('mini.primary')) + ' · ' + t('elev.title'), {
-          trackBreaks:main.track_breaks,
-          waypoints: main.waypoints,
-          segIdxStart: 0, segIdxEnd: main.track.length - 1, reversed: false,
-        });
-      }
-    }
-
-    function currentElevStackContext() {
-      let segPts = main.track;
-      const layoutOpts = { width: elevCanvas.offsetWidth || 340, height: 140, trackBreaks:main.track_breaks };
-      const annoOpts = {
-        waypoints: main.waypoints,
-        segIdxStart: 0,
-        segIdxEnd: main.track.length - 1,
-        reversed: false,
-        measureMode: false,
-      };
-      if(measureState.active && measureState.ptA && measureState.ptB) {
-        const i1 = Math.min(measureState.ptA.idx, measureState.ptB.idx);
-        const i2 = Math.max(measureState.ptA.idx, measureState.ptB.idx);
-        const reversed = measureState.ptA.idx > measureState.ptB.idx;
-        segPts = main.track.slice(i1, i2 + 1);
-        if(reversed) segPts = segPts.slice().reverse();
-        layoutOpts.kmFromZero = true;
-        layoutOpts.measureMode = true;
-        layoutOpts.trackBreaks = trackBreaksInRange(main.track_breaks, i1, i2, reversed);
-        Object.assign(annoOpts, { segIdxStart: i1, segIdxEnd: i2, reversed, measureMode: true });
-      } else if(dayPreviewState.active && dayPreviewState.trailId === main.id && dayPreviewState.iStart != null && dayPreviewState.iEnd != null) {
-        const i1 = Math.min(dayPreviewState.iStart, dayPreviewState.iEnd);
-        const i2 = Math.max(dayPreviewState.iStart, dayPreviewState.iEnd);
-        segPts = main.track.slice(i1, i2 + 1);
-        layoutOpts.kmFromZero = true;
-        layoutOpts.measureMode = true;
-        layoutOpts.trackBreaks = trackBreaksInRange(main.track_breaks, i1, i2, false);
-        Object.assign(annoOpts, { segIdxStart: i1, segIdxEnd: i2, reversed: false, measureMode: true });
-      }
-      return { segPts, layoutOpts, annoOpts };
-    }
-
-    // 计算目标高度：基础画布需求 + 堆叠层数 × (字高 + 间隔)
-    const stackContext = currentElevStackContext();
-    const targetH = HTM_APP.estimateElevationPanelHeightForPoints(stackContext.segPts, {
-      ...stackContext.layoutOpts,
-      ...stackContext.annoOpts,
-      width:elevCanvas.offsetWidth || 340,
-      campLabel:t('elev.anno.camp'),
-      measureText:elevationCanvasRenderer ? elevationCanvasRenderer.measureText : undefined,
-    });
-
-    if(bar) {
-      const cur = bar.offsetHeight;
-      if(Math.abs(cur - targetH) > 2) {
-        bar.style.height = targetH + 'px';
-        void bar.offsetHeight; // 强制同步 reflow
-      }
-    }
-    doDraw();
-  }
-
-  function refreshElevBar() {
-    invalidateRender(HTM_APP.RENDER_DIRTY.CHART);
-  }
-
-  // hover：在海拔图上移动鼠标显示十字准线和数值
-  if(elevCanvas) {
-    elevCanvas.style.pointerEvents = 'auto';
-
-    // 共用：根据鼠标 X 找到对应 track 点
-    function elevHitTest(e) {
-      if(!_elevBarData) return null;
-      const rect = elevCanvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const PL = _elevBarData.PL != null ? _elevBarData.PL : 44;
-      const PR = _elevBarData.PR != null ? _elevBarData.PR : 16;
-      const pw = rect.width - PL - PR;
-      if(mx < PL || mx > PL + pw) return null;
-      const ratio = (mx - PL) / pw;
-      const km = _elevBarData.km || [];
-      const pts = _elevBarData.pts;
-      if(!km.length || !pts.length) return null;
-      // X 是按 km 等距映射，不是按 idx —— 二分定位 idx
-      const kmStart = km[0], kmEnd = km[km.length - 1];
-      const targetKm = kmStart + (kmEnd - kmStart) * ratio;
-      let lo = 0, hi = km.length - 1;
-      while(lo < hi - 1) {
-        const mid = (lo + hi) >> 1;
-        if(km[mid] < targetKm) lo = mid; else hi = mid;
-      }
-      const idx = (Math.abs(km[lo] - targetKm) < Math.abs(km[hi] - targetKm)) ? lo : hi;
-      return { idx, pt: pts[idx], mx };
-    }
-
-    elevCanvas.addEventListener('mousemove', e => {
-      const hit = elevHitTest(e);
-      if(!hit) { elevCrosshair.style.display = 'none'; elevTip.style.display = 'none'; return; }
-      const { pt, mx } = hit;
-      elevCrosshair.style.display = 'block';
-      elevCrosshair.style.left = mx + 'px';
-      elevTip.style.display = 'block';
-      const rect = elevCanvas.getBoundingClientRect();
-      elevTip.style.left = Math.max(4, Math.min(mx + 8, rect.width - 210)) + 'px';
-      elevTip.innerHTML = `<b>${pt[3] !== undefined ? pt[3] + 'km' : ''}</b> · ${pt[2]}m · ↑<b>${pt[4]}m</b><span class="elev-tip-coordinate">${formatTrackPointCoordinates(pt)}</span>`;
-    });
-
-    elevCanvas.addEventListener('mouseleave', () => {
-      elevCrosshair.style.display = 'none';
-      elevTip.style.display = 'none';
-    });
-
-    // 点击：无论是否测距模式，海拔图内点击 → 地图定位
-    let _elevClickMarker = null;
-    elevCanvas.addEventListener('click', e => {
-      const hit = elevHitTest(e);
-      if(!hit) return;
-      const { pt } = hit;
-      if(!pt || pt[0] == null) return;
-
-      // 移除旧标记
-      if(_elevClickMarker) {
-        clearTimeout(_elevClickMarker._autoRemove);
-        _elevClickMarker.remove();
-        _elevClickMarker = null;
-      }
-
-      const latlng = [pt[0], pt[1]];
-      const color = (_elevBarData && _elevBarData.color) || '#fbbf24';
-      _elevClickMarker = L.circleMarker(latlng, {
-        radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1,
-        pane: 'tooltipPane'
-      }).addTo(map);
-      const tipTxt = `<b>${pt[3] !== undefined ? pt[3] + 'km · ' : ''}${Math.round(pt[2])}m</b><br><span class="track-point-coordinate">${formatTrackPointCoordinates(pt)}</span>`;
-      _elevClickMarker.bindTooltip(tipTxt, { permanent: true, direction: 'top', offset: [0,-8], className: 'measure-tip' }).openTooltip();
-      map.panTo(latlng, { animate: true, duration: 0.4 });
-
-      clearTimeout(_elevClickMarker._autoRemove);
-      _elevClickMarker._autoRemove = setTimeout(() => {
-        if(_elevClickMarker) { _elevClickMarker.remove(); _elevClickMarker = null; }
-      }, 8000);
-    });
-  }
-
-  // window resize 时重绘
-  window.addEventListener('resize', () => { if(_elevBarData) refreshElevBar(); });
   /* ============ Persistence (IndexedDB) ============ */
   const DB_NAME = 'hiking_trail_db';
   const STORE_NAME = 'trails';
   const DATA_KEY = 'main';
   let sandboxWarningShown = false;
 
-  function handleStorageControllerEvent(event) {
+  function handleStorageControllerEvent(event: any) {
     if(event.type === 'storage.saved') {
       showToast(`✓ 已自动保存（${event.trailCount} 条轨迹）`);
     } else if(event.type === 'storage.quota-exceeded') {
@@ -2364,23 +2143,23 @@ export function startStudioRuntime(
     try {
       const restoredTrails = restored.trails;
       // 兼容旧数据：缺 descent_m 则现场补算
-      restoredTrails.forEach(tr => {
+      restoredTrails.forEach((tr: any) => {
         const segmentedMetrics = tr.track?.length && tr.track_breaks?.length
           ? computeSegmentedTrackMetrics(tr.track, tr.track_breaks, 10)
           : null;
         if(tr.stats && (tr.stats.descent_m === undefined || tr.stats.descent_m === null) && tr.track && tr.track.length) {
-          const elevs = tr.track.map(p => p[2] || 0);
+          const elevs = tr.track.map((p: any) => p[2] || 0);
           const arr = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(elevs, 10);
           tr.stats.descent_m = Math.round(arr[arr.length-1] || 0);
         }
         // 兼容旧数据：补算 _descCum
         if(!tr._descCum && tr.track && tr.track.length) {
-          tr._descCum = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(tr.track.map(p => p[2] || 0), 10);
+          tr._descCum = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(tr.track.map((p: any) => p[2] || 0), 10);
         }
         // 兼容旧数据：escape_routes 为空则从 waypoints + track 重新推算（v1.12.3：默认关闭，仅 state.autoGenerateEscape=true 时启用）
         if(selectors.autoGenerateEscape() && (!tr.escape_routes || tr.escape_routes.length === 0) && tr.waypoints && tr.track && tr.track.length) {
-          const fakePts = tr.track.map(p => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
-          const others = restoredTrails.filter(t => t.id !== tr.id);
+          const fakePts = tr.track.map((p: any) => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
+          const others = restoredTrails.filter((t: any) => t.id !== tr.id);
           tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
         }
       });
@@ -2406,12 +2185,12 @@ export function startStudioRuntime(
     document,
     url:URL,
     BlobCtor:Blob,
-    showSaveFilePicker:typeof showSaveFilePicker === 'function'
-      ? options => showSaveFilePicker(options)
+    showSaveFilePicker:typeof window.showSaveFilePicker === 'function'
+      ? (options: any) => window.showSaveFilePicker!(options)
       : undefined,
   });
 
-  function handleFileExportEvent(event) {
+  function handleFileExportEvent(event: any) {
     if(event.type === 'export.error') {
       if(event.reason === 'missing-trails') showToast('当前组没有叠加中的轨迹', 'error');
       else if(event.reason === 'missing-primary') showToast('请先设置主轨迹', 'error');
@@ -2429,18 +2208,18 @@ export function startStudioRuntime(
     }
   }
 
-  const fileExportController = HTM_APP.createFileExportController(runtimeContext, {
+  const fileExportController:any = HTM_APP.createFileExportController(runtimeContext, {
     archive:fileArchiveAdapter,
     files:browserFileAdapter,
     dayPalette,
-    renderDayChart:(points, color, label) =>
+    renderDayChart:(points: any, color: any, label: any) =>
       HTM_APP.renderDayElevationChart(document, points, color, label),
     getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
-    schedule:(callback, delayMs) => setTimeout(callback, delayMs),
+    schedule:(callback: any, delayMs: any) => setTimeout(callback, delayMs),
     onEvent:handleFileExportEvent,
   });
 
-  const projectRuntimeController = HTM_APP.createProjectRuntimeController(runtimeContext, {
+  const projectRuntimeController:any = HTM_APP.createProjectRuntimeController(runtimeContext, {
     files:browserFileAdapter,
     appVersion:APP_VERSION,
     getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
@@ -2459,7 +2238,7 @@ export function startStudioRuntime(
       commandRegistry.notifyChanged(STUDIO_COMMANDS.EDIT_UNDO);
       commandRegistry.notifyChanged(STUDIO_COMMANDS.EDIT_REDO);
     },
-    notify:(message, type = 'info') => showToast(message, type),
+    notify:(message: any, type: any = 'info') => showToast(message, type),
   });
   const projectArchiveController = projectRuntimeController.archive;
   const projectHistoryController = projectRuntimeController.history;
@@ -2480,9 +2259,9 @@ export function startStudioRuntime(
       close:_closeAddModal,
     })
     : null;
-  const restoreProjectFile = file => projectRestoreUi?.restoreFile(file) ?? Promise.resolve(false);
+  const restoreProjectFile = (file: any) => projectRestoreUi?.restoreFile(file) ?? Promise.resolve(false);
 
-  function downloadTrailKML(id) {
+  function downloadTrailKML(id: any) {
     return fileExportController.downloadTrailKml(id);
   }
   const trailController = HTM_APP.createTrailController(runtimeContext, {
@@ -2492,15 +2271,15 @@ export function startStudioRuntime(
     markRevision:markTrailRevision,
     persist:saveToStorage,
     render:rebuildAll,
-    clearStorage,
-    notify:message => showToast(message),
+    clearStorage:async () => { await clearStorage(); },
+    notify:(message: any) => showToast(message),
   });
 
-  function deleteTrail(id) {
+  function deleteTrail(id: any) {
     return recordProjectEdit('删除轨迹', 'Delete trail', () => trailController.deleteTrail(id));
   }
 
-  function reverseTrail(id) {
+  function reverseTrail(id: any) {
     return recordProjectEdit('反向轨迹', 'Reverse trail', () => trailController.reverseTrail(id));
   }
 
@@ -2521,7 +2300,7 @@ export function startStudioRuntime(
   /* ============ Toast ============ */
   const toastController = createToastController({document, viewport:window});
 
-  function showToast(msg, type='info', duration=2400) {
+  function showToast(msg: any, type: any='info', duration: any=2400) {
     return toastController.show(msg, type === 'error' ? 'error' : 'info', duration);
   }
   /* ============ Export Offline ============ */
@@ -2558,7 +2337,7 @@ export function startStudioRuntime(
       color:var(--text, #222);
     `;
 
-    const activeCount = projectSelectors.trails().filter(t => isTrailActive(t)).length;
+    const activeCount = projectSelectors.trails().filter((t: any) => isTrailActive(t)).length;
     const items = [
       {
         icon: '📦',
@@ -2587,7 +2366,7 @@ export function startStudioRuntime(
       },
     ];
 
-    items.forEach(item => {
+    items.forEach((item: any) => {
       const el = document.createElement('div');
       el.style.cssText = `
         padding:8px 10px;
@@ -2623,7 +2402,7 @@ export function startStudioRuntime(
     document.body.appendChild(popup);
 
     // 点外部关闭
-    const closeOnOutside = (e) => {
+    const closeOnOutside = (e: any) => {
       if(!popup.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
         popup.remove();
         document.removeEventListener('mousedown', closeOnOutside, true);
@@ -2660,7 +2439,7 @@ export function startStudioRuntime(
     if(typeof applyI18n === 'function') applyI18n();
   }
 
-  function rebuildAll(opts={}) {
+  function rebuildAll(opts: any={}) {
     // 主轨迹兜底（v1.20.0：无选中分组时不做兜底，保留 null；否则先在当前分组挑，找不到再跨分组）
     if(selectors.activeGroup() != null && !selectors.primaryTrailId() && projectSelectors.trails().length) {
       const inGroup = selectors.trailsInActiveGroup(projectSelectors.trails());
@@ -2678,8 +2457,8 @@ export function startStudioRuntime(
     );
     // 自动定位（仅 fit=true 时）
     if(opts.fit && projectSelectors.trails().length) {
-      const allLatLngs = [];
-      projectSelectors.trails().forEach(t => t.track.forEach(p => allLatLngs.push([p[0], p[1]])));
+      const allLatLngs:any[] = [];
+      projectSelectors.trails().forEach((t: any) => t.track.forEach((p: any) => allLatLngs.push([p[0], p[1]])));
       if(allLatLngs.length) {
         fitWorkspaceBounds(L.latLngBounds(allLatLngs), {padding:[40,40]}, {source:'rebuild'});
       }
@@ -2700,7 +2479,7 @@ export function startStudioRuntime(
   /* ============ Boot ============ */
 
   function schedulePostRestoreReset() {
-    return new Promise(resolve => {
+    return new Promise((resolve: any) => {
       let completed = false;
       const run = async () => {
         if(completed) return;
@@ -2732,11 +2511,11 @@ export function startStudioRuntime(
     }
     // 防御性兜底：保证 activeTrails 至少包含全部已加载轨迹
     if(projectSelectors.trails().length && selectors.activeTrailIds().size === 0) {
-      stateActions.replaceActiveTrails(projectSelectors.trails().map(t => t.id));
+      stateActions.replaceActiveTrails(projectSelectors.trails().map((t: any) => t.id));
     }
     // 每次打开工作台都进入一个有效轨迹组；缓存中的“无分组”仅保留在当前会话。
     if(projectSelectors.trails().length && (selectors.activeGroup() == null
-        || !projectSelectors.trails().some(trail => trailGroup(trail) === selectors.activeGroup()))) {
+        || !projectSelectors.trails().some((trail: any) => trailGroup(trail) === selectors.activeGroup()))) {
       stateActions.setActiveGroup(trailGroup(projectSelectors.trails()[0]));
     }
     // 兜底主轨迹
@@ -2746,7 +2525,7 @@ export function startStudioRuntime(
       stateActions.setPrimaryTrail((inGroup[0] || projectSelectors.trails()[0]).id);
     }
     stateActions.setMode('elev');
-    document.querySelectorAll('[data-mode]').forEach(control => {
+    document.querySelectorAll('[data-mode]').forEach((control: any) => {
       const active = control.dataset.mode === 'elev';
       control.classList.toggle('on', active);
       control.setAttribute('aria-pressed', String(active));
@@ -2780,7 +2559,7 @@ export function startStudioRuntime(
   // Sidebar collapse remains a UI concern; map fitting consumes it through callbacks.
   const _sidebar = document.getElementById("sidebar");
   const _sbClose = document.getElementById("sidebar-close");
-  function toggleSidebar(open) {
+  function toggleSidebar(open: any) {
     if(open === undefined) open = _sidebar.classList.contains("collapsed");
     _sidebar.classList.toggle("collapsed", !open);
     setTimeout(() => {
@@ -2792,7 +2571,7 @@ export function startStudioRuntime(
     if(_sidebar.classList.contains("collapsed")) {
       const hasPrimary = buildPrimaryMini?.() || false;
       mini.style.display = hasPrimary ? "block" : "none";
-      if(hasPrimary) schedulePrimaryMiniPositionApply?.(mini);
+      if(hasPrimary) schedulePrimaryMiniPositionApply?.();
     } else mini.style.display = "none";
   }
   if(_sbClose) _sbClose.addEventListener("click", () => toggleSidebar(false));
@@ -2805,7 +2584,7 @@ export function startStudioRuntime(
     trailRevision:runtimeTrailRevision,
     leaflet:L,
     map,
-    requestFit:request => renderScheduler.requestFit(request),
+    requestFit:(request: any) => renderScheduler.requestFit(request),
     invalidateWorkspace:() => invalidateRender(
       HTM_APP.RENDER_DIRTY.TRACKS | HTM_APP.RENDER_DIRTY.MARKERS
       | HTM_APP.RENDER_DIRTY.SIDEBAR | HTM_APP.RENDER_DIRTY.LEGEND
@@ -2820,9 +2599,9 @@ export function startStudioRuntime(
     closeSidebar:() => toggleSidebar(false),
     prefersReducedMotion,
   });
-  const cachedTrailBounds = trail => workspaceController.cachedTrailBounds(trail);
-  const resetView = options => workspaceController.resetView(options);
-  const fitWorkspaceBounds = (bounds, options = {}, meta = {}) =>
+  const cachedTrailBounds = (trail: any) => workspaceController.cachedTrailBounds(trail);
+  const resetView = (options: any) => workspaceController.resetView(options);
+  const fitWorkspaceBounds = (bounds: any, options: any = {}, meta: any = {}) =>
     workspaceController.fitBounds(bounds, options, meta);
 
   const sidebarRuntime = HTM_APP.createSidebarRuntime({
@@ -2834,7 +2613,7 @@ export function startStudioRuntime(
     stateActions, selectors, projectActions, projectSelectors, dispatchStudioCommand, downloadTrailKML, drawTracks, drawWaypoints,
     escapeController, escapeUiText, fitWorkspaceBounds,
     getCurrentBase:() => currentBase,
-    setCurrentBase:value => { currentBase = value; },
+    setCurrentBase:(value: any) => { currentBase = value; },
     getGroups, hideMeasureElevReadout, interactionManager, isTrailActive, map,
     markTrailRevision, measureMarker, measureState, recordProjectEdit, refreshElevBar,
     requestSegmentExit, reverseTrail, runtimeContext, sanitizeExternalHttpUrl,
@@ -2859,22 +2638,31 @@ export function startStudioRuntime(
     setMapMode, enterInteractionRenderMode, buildWaypointModeTagGrid, syncDisplayControls,
   } = sidebarRuntime;
 
-  const waypointController = HTM_APP.createWaypointController(runtimeContext, {
+  elevationRuntime = createElevationRuntime({
+    document, window, leaflet:L, map, app:HTM_APP, core:HTM_CORE,
+    selectors, projectSelectors, measureState, dayPreviewState, trackBreaksInRange, t,
+    invalidateChart:() => invalidateRender(HTM_APP.RENDER_DIRTY.CHART),
+    renderRuntimeStats, formatTrackPointCoordinates,
+  });
+  elevCanvas = elevationRuntime.canvas;
+  elevationCanvasRenderer = elevationRuntime.renderer;
+
+  const waypointController:any = HTM_APP.createWaypointController(runtimeContext, {
     iconForTag:waypointIcon,
     markRevision:markTrailRevision,
     renderWaypoints:drawWaypoints,
     renderFilters:buildFilterGrid,
     renderDays:buildDaysTab,
     persist:saveToStorage,
-    notify:message => showToast(message),
+    notify:(message: any) => showToast(message),
   });
   const addWaypointState = waypointController.state;
 
-  function nextWaypointId(trail) {
+  function nextWaypointId(trail: any) {
     return waypointController.nextId(trail);
   }
 
-  function findWaypointAnchorOnPrimary(latlng, requireNear = false) {
+  function findWaypointAnchorOnPrimary(latlng: any, requireNear: any = false) {
     const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) return null;
     const hit = nearestTrackIdxOnPrimary(latlng.lat, latlng.lng);
@@ -2889,8 +2677,8 @@ export function startStudioRuntime(
     return { idx: bestI, point: main.track[bestI], dist: bestD, trail: main };
   }
 
-  function readWaypointPhoto(file) {
-    return new Promise((resolve, reject) => {
+  function readWaypointPhoto(file: any) {
+    return new Promise((resolve: any, reject: any) => {
       if(!file) { resolve(''); return; }
       const allowedTypes = new Set(['image/png','image/jpeg','image/gif','image/webp','image/avif']);
       if(!allowedTypes.has(file.type.toLowerCase())) {
@@ -2914,8 +2702,8 @@ export function startStudioRuntime(
       title:isZh ? '新增标注点' : 'Add waypoint',
       size:'wide',
       initialFocus:'#manual-waypoint-name',
-      render:({form, body, actions, close, cancel}) => {
-        const createField = (labelText, control) => {
+      render:({form, body, actions, close, cancel}: any) => {
+        const createField = (labelText: any, control: any) => {
           const label = document.createElement('label');
           label.className = 'workbench-dialog__field';
           const caption = document.createElement('span');
@@ -2937,7 +2725,7 @@ export function startStudioRuntime(
         const tag = document.createElement('select');
         tag.id = 'manual-waypoint-tag';
         tag.className = 'workbench-dialog__input workbench-dialog__select waypoint-type-select';
-        ['other','camp','water','supply','pass','fork','warn','shelter','village','bridge','river','start','end'].forEach(value => {
+        ['other','camp','water','supply','pass','fork','warn','shelter','village','bridge','river','start','end'].forEach((value: any) => {
           const option = document.createElement('option');
           option.value = value;
           option.textContent = t('tag.'+value) || value;
@@ -2950,7 +2738,7 @@ export function startStudioRuntime(
         tagPreview.className = 'waypoint-type-select-preview';
         tagPreview.setAttribute('aria-hidden', 'true');
         const updateTagPreview = () => {
-          tagPreview.style.color = tagColors[tag.value] || '#64748b';
+          tagPreview.style.color = (tagColors as Record<string, string>)[tag.value] || '#64748b';
           tagPreview.innerHTML = waypointIconMarkup(tag.value);
         };
         tag.addEventListener('change', updateTagPreview);
@@ -2989,11 +2777,11 @@ export function startStudioRuntime(
           error.textContent = '';
           photoData = '';
           preview.hidden = true;
-          photoRead = readWaypointPhoto(photo.files && photo.files[0]).then(data => {
+          photoRead = readWaypointPhoto(photo.files && photo.files[0]).then((data: any) => {
             photoData = data;
             if(data) { preview.src = data; preview.hidden = false; }
             return data;
-          }).catch(readError => {
+          }).catch((readError: any) => {
             photo.value = '';
             error.textContent = readError.message;
             return '';
@@ -3011,7 +2799,7 @@ export function startStudioRuntime(
         addButton.textContent = isZh ? '添加标注点' : 'Add waypoint';
         actions.append(cancelButton, addButton);
 
-        form.addEventListener('submit', event => {
+        form.addEventListener('submit', (event: any) => {
           event.preventDefault();
           const cleanName = name.value.trim();
           if(!cleanName) {
@@ -3033,7 +2821,7 @@ export function startStudioRuntime(
     });
   }
 
-  async function addManualWaypointAt(latlng, opts = {}) {
+  async function addManualWaypointAt(latlng: any, opts: any = {}) {
     const { requireNear = false, isCurrent = null } = opts;
     const anchor = findWaypointAnchorOnPrimary(latlng, requireNear);
     if(!anchor) {
@@ -3051,13 +2839,13 @@ export function startStudioRuntime(
     }, input));
   }
 
-  function handleWaypointInteractionEvent(event, session) {
+  function handleWaypointInteractionEvent(event: any, session: any) {
     if(event.type !== 'tap') return;
     if(!session.setPhase('committing')) return;
     void addManualWaypointAt(event.latlng, {
       requireNear:event.requireNear !== false,
       isCurrent:() => session.isCurrent() && runtimeInteractionOwnerIsCurrent(session),
-    }).then(added => {
+    }).then((added: any) => {
       if(!session.isCurrent()) return;
       if(added) {
         session.cancel('committed');
@@ -3065,13 +2853,13 @@ export function startStudioRuntime(
       }
       if(event.transient) session.cancel('cancelled');
       else session.setPhase('select');
-    }).catch(error => {
+    }).catch((error: any) => {
       console.error('Failed to add waypoint', error);
       if(session.isCurrent()) session.setPhase('select');
     });
   }
 
-  function exitAddWaypointMode(opts = {}) {
+  function exitAddWaypointMode(opts: any = {}) {
     if(!opts.fromManager && cancelRuntimeInteraction('waypoint', opts.reason || 'cancelled')) return;
     waypointController.exit();
     const btn = document.getElementById('add-waypoint-btn');
@@ -3079,7 +2867,7 @@ export function startStudioRuntime(
     map.getContainer().style.cursor = '';
   }
 
-  function enterAddWaypointMode(opts = {}) {
+  function enterAddWaypointMode(opts: any = {}) {
     const main = selectors.primaryTrail(projectSelectors.trails());
     if(!main || !main.track || !main.track.length) {
       showToast('请先设置主轨迹', 'error');
@@ -3087,7 +2875,7 @@ export function startStudioRuntime(
     }
     const session = beginRuntimeInteraction('waypoint', 'select', main, {
       onEvent: handleWaypointInteractionEvent,
-      onCancel: cancelOpts => exitAddWaypointMode(cancelOpts),
+      onCancel: (cancelOpts: any) => exitAddWaypointMode(cancelOpts),
     });
     if(!waypointController.enter(main.id)) return null;
     const btn = document.getElementById('add-waypoint-btn');
@@ -3097,7 +2885,7 @@ export function startStudioRuntime(
     return session;
   }
 
-  function dispatchTransientWaypointTap(latlng, source) {
+  function dispatchTransientWaypointTap(latlng: any, source: any) {
     const session = enterAddWaypointMode({announce:false});
     if(!session) return false;
     return dispatchRuntimeInteraction('waypoint', {
@@ -3108,12 +2896,12 @@ export function startStudioRuntime(
   // 右键/长按地图添加标注点
   if(map) {
     // 桌面端：右键 contextmenu
-    map.on('contextmenu', e => {
+    map.on('contextmenu', (e: any) => {
       dispatchTransientWaypointTap(e.latlng, 'contextmenu');
     });
     // 移动端：长按 600ms
-    let longPressTimer = null;
-    map.getContainer().addEventListener('touchstart', e => {
+    let longPressTimer:any = null;
+    map.getContainer().addEventListener('touchstart', (e: any) => {
       if(e.touches.length === 1) {
         const clientX = e.touches[0].clientX;
         const clientY = e.touches[0].clientY;
@@ -3164,588 +2952,20 @@ export function startStudioRuntime(
     return true;
   }
 
-  let stitchPartSequence = 0;
-
-  function createStitchDraftPart(trail) {
-    return {
-      id:`stitch-part-${++stitchPartSequence}`,
-      trail,
-      startIndex:0,
-      endIndex:Math.max(1, trail.track.length - 1),
-      reversed:false,
-    };
-  }
-
-  function stitchPartEndpointIndex(part, label) {
-    if(label === 'A') return part.reversed ? part.endIndex : part.startIndex;
-    return part.reversed ? part.startIndex : part.endIndex;
-  }
-
-  function stitchPartEndpoint(part, label) {
-    return part.trail.track[stitchPartEndpointIndex(part, label)];
-  }
-
-  function stitchPartDistanceKm(part) {
-    const start = part.trail.track[part.startIndex];
-    const end = part.trail.track[part.endIndex];
-    if(Number.isFinite(start?.[3]) && Number.isFinite(end?.[3])) {
-      return Math.max(0, Number(end[3]) - Number(start[3]));
-    }
-    let distanceM = 0;
-    const breakSet = new Set(part.trail.track_breaks || []);
-    for(let index = part.startIndex + 1; index <= part.endIndex; index += 1) {
-      if(!breakSet.has(index)) {
-        const previous = part.trail.track[index - 1];
-        const point = part.trail.track[index];
-        distanceM += haversine(previous[0], previous[1], point[0], point[1]);
-      }
-    }
-    return distanceM / 1000;
-  }
-
-  function stitchDraftJunctions() {
-    const junctions = [];
-    for(let index = 1; index < stitchState.parts.length; index += 1) {
-      const previous = stitchState.parts[index - 1];
-      const current = stitchState.parts[index];
-      const from = stitchPartEndpoint(previous, 'B');
-      const to = stitchPartEndpoint(current, 'A');
-      if(!from || !to) continue;
-      const distanceM = haversine(from[0], from[1], to[0], to[1]);
-      junctions.push({index, distanceM, connected:distanceM <= 5, from, to});
-    }
-    return junctions;
-  }
-
-  function applyStitchEndpoint(part, label, hit) {
-    if(!part || !hit || !Number.isInteger(hit.idx)) return false;
-    const last = part.trail.track.length - 1;
-    const index = Math.max(0, Math.min(last, hit.idx));
-    if(label === 'A') {
-      if(part.reversed) part.endIndex = Math.max(part.startIndex + 1, index);
-      else part.startIndex = Math.min(part.endIndex - 1, index);
-    } else if(part.reversed) part.startIndex = Math.min(part.endIndex - 1, index);
-    else part.endIndex = Math.max(part.startIndex + 1, index);
-    stitchState.dirty = true;
-    return true;
-  }
-
-  function stitchEndpointKey(part, label) {
-    return `${part.id}:${label}`;
-  }
-
-  function buildStitchEndpointOffsets(parts) {
-    const entries = parts.flatMap((part, index) => ['A','B'].map(label => ({
-      key:stitchEndpointKey(part, label),
-      index,
-      point:stitchPartEndpoint(part, label),
-    }))).filter(entry => entry.point);
-    const offsets = new Map(entries.map(entry => [entry.key, {x:0, y:0}]));
-    const assigned = new Set();
-    for(const entry of entries) {
-      if(assigned.has(entry.key)) continue;
-      const group = entries.filter(candidate => !assigned.has(candidate.key)
-        && haversine(entry.point[0], entry.point[1], candidate.point[0], candidate.point[1]) <= 20);
-      group.forEach(candidate => assigned.add(candidate.key));
-      if(group.length < 2) continue;
-      const radius = group.length === 2 ? 26 : 32;
-      group.sort((left, right) => left.index - right.index || left.key.localeCompare(right.key));
-      group.forEach((candidate, groupIndex) => {
-        const angle = -Math.PI / 2 + (Math.PI * 2 * groupIndex / group.length);
-        offsets.set(candidate.key, {
-          x:Math.round(Math.cos(angle) * radius),
-          y:Math.round(Math.sin(angle) * radius),
-        });
-      });
-    }
-    return offsets;
-  }
-
-  function stitchEndpointIcon(label, color, order, isSelected, offset = {x:0, y:0}) {
-    return L.divIcon({
-      className:'',
-      html:`<div class="stitch-endpoint-marker${isSelected ? ' is-active' : ''}" style="--stitch-color:${color};--stitch-offset-x:${offset.x}px;--stitch-offset-y:${offset.y}px">${order}${label}</div>`,
-      iconSize:[44,44],
-      iconAnchor:[22,22],
-    });
-  }
-
-  function applyStitchSelection(partId) {
-    stitchState.selectedPartId = partId;
-    document.querySelectorAll('.stitch-part-card').forEach(card => {
-      card.classList.toggle('is-active', card.dataset.partId === partId);
-    });
-    stitchLayer.eachLayer(layer => {
-      if(!layer._stitchPartId) return;
-      const active = layer._stitchPartId === partId;
-      if(layer._stitchRole === 'source' && layer.setStyle) {
-        layer.setStyle({weight:active ? 3 : 2, opacity:active ? .42 : .1});
-      } else if(layer._stitchRole === 'halo' && layer.setStyle) {
-        layer.setStyle({weight:active ? 13 : 8, opacity:active ? .72 : 0});
-        if(active && layer.bringToFront) layer.bringToFront();
-      } else if(layer._stitchRole === 'selection' && layer.setStyle) {
-        layer.setStyle({weight:active ? 8 : 3.5, opacity:active ? 1 : .3});
-        if(active && layer.bringToFront) layer.bringToFront();
-      } else if(layer._stitchRole === 'endpoint') {
-        if(layer.setOpacity) layer.setOpacity(active ? 1 : .78);
-        if(layer.setZIndexOffset) layer.setZIndexOffset(active ? 3000 : 700 + (layer._stitchOrder || 0));
-        layer._icon?.querySelector('.stitch-endpoint-marker')?.classList.toggle('is-active', active);
-      }
-    });
-  }
-
-  function renderStitchMap() {
-    stitchLayer.clearLayers();
-    if(!stitchState.active) return;
-    const endpointPaneName = 'stitch-endpoints';
-    const endpointPane = map.getPane(endpointPaneName) || map.createPane(endpointPaneName);
-    endpointPane.style.zIndex = '760';
-    const junctions = stitchDraftJunctions();
-    const endpointOffsets = buildStitchEndpointOffsets(stitchState.parts);
-    const renderParts = stitchState.parts
-      .map((part, index) => ({part, index}))
-      .sort((left, right) => Number(left.part.id === stitchState.selectedPartId) - Number(right.part.id === stitchState.selectedPartId));
-    renderParts.forEach(({part, index}) => {
-      const color = stitchPalette[index % stitchPalette.length];
-      const isSelected = part.id === stitchState.selectedPartId;
-      const sourcePaths = splitTrackByBreaks(part.trail.track, part.trail.track_breaks)
-        .map(segment => segment.map(point => [point[0], point[1]]));
-      const sourceLine = L.polyline(sourcePaths, {
-        color, weight:isSelected ? 3 : 2, opacity:isSelected ? .42 : .1,
-        dashArray:'4,7', interactive:false,
-      }).addTo(stitchLayer);
-      sourceLine._stitchPartId = part.id;
-      sourceLine._stitchRole = 'source';
-
-      const selectedPaths = buildTrackLatLngSegments(
-        part.trail.track,
-        part.startIndex,
-        part.endIndex,
-        part.trail.track_breaks,
-        1400,
-      );
-      const haloLine = L.polyline(selectedPaths, {
-        color:'#FFFFFF', weight:isSelected ? 13 : 8, opacity:isSelected ? .72 : 0,
-        lineCap:'round', lineJoin:'round', interactive:false,
-      }).addTo(stitchLayer);
-      haloLine._stitchPartId = part.id;
-      haloLine._stitchRole = 'halo';
-      const selectedLine = L.polyline(selectedPaths, {
-        color, weight:isSelected ? 8 : 3.5, opacity:isSelected ? 1 : .3,
-        lineCap:'round', lineJoin:'round', interactive:true,
-      }).addTo(stitchLayer);
-      selectedLine._stitchPartId = part.id;
-      selectedLine._stitchRole = 'selection';
-      selectedLine.bindTooltip(`${index + 1}. ${escapeUiText(part.trail.name)}`, {sticky:true});
-      selectedLine.on('click', event => {
-        if(event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
-        stitchState.selectedPartId = part.id;
-        renderStitchWorkbench();
-      });
-      if(L.polylineDecorator && L.Symbol?.arrowHead) {
-        L.polylineDecorator(selectedLine, {
-          patterns:[{
-            offset:'12%', repeat:'24%',
-            symbol:L.Symbol.arrowHead({pixelSize:7, polygon:false, pathOptions:{color, weight:2, opacity:.9}}),
-          }],
-        }).addTo(stitchLayer);
-      }
-
-      for(const label of ['A','B']) {
-        const point = stitchPartEndpoint(part, label);
-        if(!point) continue;
-        const snapGuide = L.polyline([], {
-          color, weight:2, opacity:0, dashArray:'3,6', interactive:false,
-        }).addTo(stitchLayer);
-        snapGuide._stitchPartId = part.id;
-        snapGuide._stitchRole = 'snap-guide';
-        const snapTarget = L.circleMarker([point[0], point[1]], {
-          radius:9, color:'#FFFFFF', weight:3, opacity:0,
-          fillColor:color, fillOpacity:0, interactive:false,
-        }).addTo(stitchLayer);
-        snapTarget._stitchPartId = part.id;
-        snapTarget._stitchRole = 'snap-target';
-        const marker = L.marker([point[0], point[1]], {
-          draggable:true, autoPan:true,
-          pane:endpointPaneName,
-          icon:stitchEndpointIcon(label, color, index + 1, isSelected, endpointOffsets.get(stitchEndpointKey(part, label))),
-          zIndexOffset:isSelected ? 3000 : 700 + index,
-        }).addTo(stitchLayer);
-        marker._stitchPartId = part.id;
-        marker._stitchRole = 'endpoint';
-        marker._stitchEndpoint = label;
-        marker._stitchOrder = index;
-        marker.setOpacity(isSelected ? 1 : .78);
-        marker.bindTooltip(`${index + 1}${label} · ${escapeUiText(part.trail.name)}`, {direction:'top', offset:[0,-16]});
-        const snapper = createPrimaryTrackDragSnapper(marker, {
-          trail:part.trail,
-          getCenterIdx:() => stitchPartEndpointIndex(part, label),
-          globalSearch:true,
-          snapMarker:false,
-          scheduleFrame:callback => scheduleRuntimeInteractionFrame('stitch', callback),
-          onSnap:(hit, pointer) => {
-            snapTarget.setLatLng([hit.point[0], hit.point[1]]);
-            snapTarget.setStyle({opacity:1, fillOpacity:.24});
-            snapGuide.setLatLngs([[pointer.lat, pointer.lng], [hit.point[0], hit.point[1]]]);
-            snapGuide.setStyle({opacity:.78});
-          },
-        });
-        marker.on('dragstart', () => {
-          applyStitchSelection(part.id);
-          marker._icon?.querySelector('.stitch-endpoint-marker')?.classList.add('is-dragging');
-          dispatchRuntimeInteraction('stitch', {type:'drag-start', partId:part.id, endpoint:label});
-        });
-        marker.on('drag', event => snapper.schedule(event));
-        marker.on('dragend', event => {
-          const hit = snapper.resolve(event.target.getLatLng());
-          snapper.cancel();
-          marker._icon?.querySelector('.stitch-endpoint-marker')?.classList.remove('is-dragging');
-          dispatchRuntimeInteraction('stitch', {type:'drag-end', partId:part.id, endpoint:label, hit});
-        });
-        marker.on('click', event => {
-          if(event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
-          stitchState.selectedPartId = part.id;
-          renderStitchWorkbench();
-        });
-      }
-    });
-
-    junctions.forEach(junction => {
-      if(junction.connected) return;
-      L.polyline(
-        [[junction.from[0], junction.from[1]], [junction.to[0], junction.to[1]]],
-        {color:'#A66A17', weight:2, opacity:.7, dashArray:'3,8', interactive:true},
-      ).bindTooltip(
-        currentLang === 'zh'
-          ? `断点 ${Math.round(junction.distanceM)} m（不计入里程）`
-          : `Gap ${Math.round(junction.distanceM)} m (excluded)`,
-        {sticky:true},
-      ).addTo(stitchLayer);
-    });
-  }
-
-  function stitchActionButton(label, title, action) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'stitch-part-action';
-    button.textContent = label;
-    button.title = title;
-    button.setAttribute('aria-label', title);
-    button.addEventListener('click', event => {
-      event.stopPropagation();
-      action();
-    });
-    return button;
-  }
-
-  function moveStitchPart(partId, direction) {
-    const index = stitchState.parts.findIndex(part => part.id === partId);
-    const target = index + direction;
-    if(index < 0 || target < 0 || target >= stitchState.parts.length) return;
-    const [part] = stitchState.parts.splice(index, 1);
-    stitchState.parts.splice(target, 0, part);
-    stitchState.dirty = true;
-    renderStitchWorkbench();
-  }
-
-  function renderStitchPanel() {
-    const panel = document.getElementById('stitch-panel');
-    const list = document.getElementById('stitch-parts');
-    const summary = document.getElementById('stitch-summary');
-    if(!panel || !list || !summary) return;
-    panel.classList.toggle('is-open', stitchState.active);
-    if(!stitchState.active) return;
-    list.replaceChildren();
-    const junctions = stitchDraftJunctions();
-    const gapByIndex = new Map(junctions.filter(item => !item.connected).map(item => [item.index, item]));
-    stitchState.parts.forEach((part, index) => {
-      const color = stitchPalette[index % stitchPalette.length];
-      const card = document.createElement('article');
-      card.className = 'stitch-part-card';
-      card.classList.toggle('is-active', part.id === stitchState.selectedPartId);
-      card.style.setProperty('--stitch-color', color);
-      card.draggable = true;
-      card.dataset.partId = part.id;
-      const order = document.createElement('span');
-      order.className = 'stitch-part-order';
-      order.textContent = String(index + 1);
-      const copy = document.createElement('div');
-      copy.className = 'stitch-part-copy';
-      const title = document.createElement('strong');
-      title.textContent = `${currentLang === 'zh' ? '片段' : 'Part'} ${index + 1} · ${part.trail.name}`;
-      const meta = document.createElement('small');
-      meta.textContent = `${part.reversed ? 'B → A' : 'A → B'} · ${stitchPartDistanceKm(part).toFixed(2)} km · ${part.startIndex}–${part.endIndex}`;
-      copy.append(title, meta);
-      if(part.id === stitchState.selectedPartId) {
-        const editing = document.createElement('span');
-        editing.className = 'stitch-part-editing';
-        editing.textContent = currentLang === 'zh' ? '正在调整' : 'Editing';
-        copy.append(editing);
-      }
-      const actions = document.createElement('div');
-      actions.className = 'stitch-part-actions';
-      actions.append(
-        stitchActionButton('↑', currentLang === 'zh' ? '上移' : 'Move up', () => moveStitchPart(part.id, -1)),
-        stitchActionButton('↓', currentLang === 'zh' ? '下移' : 'Move down', () => moveStitchPart(part.id, 1)),
-        stitchActionButton('⇄', currentLang === 'zh' ? '反向' : 'Reverse', () => {
-          part.reversed = !part.reversed;
-          stitchState.dirty = true;
-          renderStitchWorkbench();
-        }),
-        stitchActionButton('↔', currentLang === 'zh' ? '恢复完整轨迹' : 'Use full trail', () => {
-          part.startIndex = 0;
-          part.endIndex = part.trail.track.length - 1;
-          stitchState.dirty = true;
-          renderStitchWorkbench();
-        }),
-        stitchActionButton('⧉', currentLang === 'zh' ? '复制片段' : 'Duplicate part', () => {
-          const copyPart = {...part, id:`stitch-part-${++stitchPartSequence}`};
-          stitchState.parts.splice(index + 1, 0, copyPart);
-          stitchState.selectedPartId = copyPart.id;
-          stitchState.dirty = true;
-          renderStitchWorkbench();
-        }),
-        stitchActionButton('×', currentLang === 'zh' ? '删除片段' : 'Delete part', () => {
-          stitchState.parts.splice(index, 1);
-          stitchState.selectedPartId = stitchState.parts[Math.min(index, stitchState.parts.length - 1)]?.id || null;
-          stitchState.dirty = true;
-          renderStitchWorkbench();
-        }),
-      );
-      card.append(order, copy, actions);
-      const gap = gapByIndex.get(index);
-      if(gap) {
-        const gapLabel = document.createElement('span');
-        gapLabel.className = 'stitch-part-gap';
-        gapLabel.textContent = currentLang === 'zh'
-          ? `前一段后有 ${Math.round(gap.distanceM)} m 断点，不连接且不计入统计`
-          : `${Math.round(gap.distanceM)} m gap before this part; excluded from stats`;
-        card.append(gapLabel);
-      }
-      card.addEventListener('click', () => {
-        stitchState.selectedPartId = part.id;
-        renderStitchWorkbench();
-      });
-      card.addEventListener('dragstart', event => event.dataTransfer?.setData('text/plain', part.id));
-      card.addEventListener('dragover', event => event.preventDefault());
-      card.addEventListener('drop', event => {
-        event.preventDefault();
-        const sourceId = event.dataTransfer?.getData('text/plain');
-        const sourceIndex = stitchState.parts.findIndex(item => item.id === sourceId);
-        const targetIndex = stitchState.parts.findIndex(item => item.id === part.id);
-        if(sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
-        const [moved] = stitchState.parts.splice(sourceIndex, 1);
-        stitchState.parts.splice(targetIndex, 0, moved);
-        stitchState.dirty = true;
-        renderStitchWorkbench();
-      });
-      list.append(card);
-    });
-    const totalKm = stitchState.parts.reduce((sum, part) => sum + stitchPartDistanceKm(part), 0);
-    const gaps = junctions.filter(item => !item.connected).length;
-    summary.innerHTML = '';
-    for(const [value, gap] of [
-      [`${stitchState.parts.length} ${currentLang === 'zh' ? '个片段' : 'parts'}`, false],
-      [`${totalKm.toFixed(2)} km`, false],
-      [`${gaps} ${currentLang === 'zh' ? '个断点' : 'gaps'}`, gaps > 0],
-    ]) {
-      const chip = document.createElement('span');
-      chip.className = `stitch-summary-chip${gap ? ' is-gap' : ''}`;
-      chip.textContent = value;
-      summary.append(chip);
-    }
-  }
-
-  function renderStitchWorkbench() {
-    renderStitchPanel();
-    renderStitchMap();
-  }
-
-  function cleanupStitchWorkbench() {
-    stitchState.active = false;
-    stitchState.parts = [];
-    stitchState.selectedPartId = null;
-    stitchState.dirty = false;
-    stitchLayer.clearLayers();
-    document.getElementById('stitch-panel')?.classList.remove('is-open');
-    document.documentElement.classList.remove('stitch-editing');
-    commandRegistry.notifyChanged();
-  }
-
-  async function requestStitchExit(force = false) {
-    if(!stitchState.active) return true;
-    if(!force && stitchState.dirty) {
-      const confirmed = await studioDialogs.confirm({
-        title:currentLang === 'zh' ? '退出轨迹拼接？' : 'Exit trail composer?',
-        message:currentLang === 'zh' ? '当前片段范围、方向或顺序尚未生成新轨迹。' : 'The current ranges, directions, and order have not been created.',
-        confirmLabel:currentLang === 'zh' ? '放弃并退出' : 'Discard and exit',
-        cancelLabel:currentLang === 'zh' ? '继续编辑' : 'Keep editing',
-        danger:true,
-      });
-      if(!confirmed) return false;
-    }
-    if(interactionManager.current.kind === 'stitch') interactionManager.cancel('stitch-exit');
-    else cleanupStitchWorkbench();
-    return true;
-  }
-
-  function handleStitchInteraction(event, session) {
-    const part = stitchState.parts.find(item => item.id === event.partId);
-    if(!part) return;
-    if(event.type === 'drag-start') {
-      session.setPhase('dragging');
-      return;
-    }
-    if(event.type === 'drag-end') {
-      applyStitchEndpoint(part, event.endpoint, event.hit);
-      session.setPhase('editing');
-      renderStitchWorkbench();
-    }
-  }
-
-  async function enterStitchWorkbench(trails) {
-    const ownerTrail = selectors.primaryTrail(projectSelectors.trails()) || trails[0];
-    if(interactionManager.current.kind !== 'idle') interactionManager.cancel('switch-stitch');
-    stitchState.parts = trails.map(createStitchDraftPart);
-    stitchState.selectedPartId = stitchState.parts[0]?.id || null;
-    stitchState.dirty = false;
-    const session = beginRuntimeInteraction('stitch', 'editing', ownerTrail, {
-      onEvent:handleStitchInteraction,
-      onCancel:cleanupStitchWorkbench,
-    });
-    if(!session) return false;
-    stitchState.active = true;
-    document.documentElement.classList.add('stitch-editing');
-    const nameInput = document.getElementById('stitch-name');
-    if(nameInput) nameInput.value = currentLang === 'zh' ? '拼接轨迹' : 'Stitched trail';
-    const error = document.getElementById('stitch-error');
-    if(error) error.textContent = '';
-    renderStitchWorkbench();
-    const latLngs = trails.flatMap(trail => trail.track.map(point => [point[0], point[1]]));
-    if(latLngs.length) {
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      map.invalidateSize({pan:false, animate:false});
-      const fitOptions = window.innerWidth <= 760
-        ? {paddingTopLeft:[36,36], paddingBottomRight:[36,Math.min(360, Math.round(window.innerHeight * .42))]}
-        : {paddingTopLeft:[50,50], paddingBottomRight:[430,50]};
-      await fitWorkspaceBounds(L.latLngBounds(latLngs), fitOptions, {source:'stitch-workbench'});
-    }
-    return true;
-  }
-
-  async function commitStitchWorkbench() {
-    const error = document.getElementById('stitch-error');
-    const name = document.getElementById('stitch-name')?.value.trim();
-    if(stitchState.parts.length < 2) {
-      if(error) error.textContent = currentLang === 'zh' ? '至少保留两个轨迹片段。' : 'Keep at least two trail parts.';
-      return false;
-    }
-    if(!name) {
-      if(error) error.textContent = currentLang === 'zh' ? '请输入新轨迹名称。' : 'Enter a name for the new trail.';
-      return false;
-    }
-    if(!setRuntimeInteractionPhase('stitch', 'committing')) return false;
-    const trail = stitchTrails(stitchState.parts.map(part => ({
-      trail:part.trail,
-      startIndex:part.startIndex,
-      endIndex:part.endIndex,
-      reversed:part.reversed,
-    })), {
-      id:generateNextTrailId(),
-      name,
-      seamToleranceM:5,
-    });
-    const gapCount = trail.track_breaks.length;
-    interactionManager.cancel('stitch-committed');
-    const result = recordProjectEdit('生成拼接轨迹', 'Create stitched trail', () => fileImportController.addTrail(trail));
-    if(result.status !== 'added') {
-      showToast(currentLang === 'zh' ? '生成结果与已有轨迹重复' : 'The stitched result duplicates an existing trail', 'info');
-      return false;
-    }
-    fileImportController.finalizeImport(1);
-    showToast(currentLang === 'zh'
-      ? `已生成「${trail.name}」· ${trail.stats.distance_km.toFixed(1)} km · ${gapCount} 个断点`
-      : `Created “${trail.name}” · ${trail.stats.distance_km.toFixed(1)} km · ${gapCount} gaps`);
-    return true;
-  }
-
-  async function stitchTrailsCommand() {
-    if(stitchState.active) return true;
-    if(interactionManager.current.kind === 'segment' && !await requestSegmentExit('switch-stitch')) return false;
-    if(projectSelectors.trails().length < 2) {
-      await studioDialogs.info({
-        title:currentLang === 'zh' ? '无法拼接轨迹' : 'Cannot stitch trails',
-        message:currentLang === 'zh' ? '至少需要两条已有轨迹。' : 'At least two existing trails are required.',
-      });
-      return false;
-    }
-    const requested = await studioDialogs.openCustom({
-      title:currentLang === 'zh' ? '选择拼接来源' : 'Choose source trails',
-      message:currentLang === 'zh'
-        ? '从 0 开始选择两条或更多路线，下一步将在地图中调整每段范围、方向和顺序。'
-        : 'Start with no selection, choose two or more trails, then edit ranges, directions, and order on the map.',
-      size:'wide',
-      render(context) {
-        const list = document.createElement('div');
-        list.className = 'stitch-trail-list stitch-source-list';
-        for(const trail of projectSelectors.trails()) {
-          const row = document.createElement('label');
-          row.className = 'stitch-trail-row stitch-source-row';
-          row.dataset.trailId = trail.id;
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.className = 'stitch-trail-check';
-          checkbox.checked = false;
-          const copy = document.createElement('span');
-          copy.className = 'stitch-trail-copy';
-          const title = document.createElement('strong');
-          title.textContent = trail.name || trail.id;
-          const meta = document.createElement('small');
-          meta.textContent = `${trailGroup(trail)} · ${Number(trail.stats?.distance_km || 0).toFixed(1)} km`;
-          copy.append(title, meta);
-          row.append(checkbox, copy);
-          list.append(row);
-        }
-        const error = document.createElement('p');
-        error.className = 'workbench-dialog__error';
-        error.setAttribute('role', 'alert');
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.className = 'workbench-dialog__button workbench-dialog__button--secondary';
-        cancel.textContent = currentLang === 'zh' ? '取消' : 'Cancel';
-        cancel.addEventListener('click', context.cancel);
-        const next = document.createElement('button');
-        next.type = 'submit';
-        next.className = 'workbench-dialog__button workbench-dialog__button--primary';
-        next.textContent = currentLang === 'zh' ? '进入地图编辑' : 'Edit on map';
-        context.form.addEventListener('submit', event => {
-          event.preventDefault();
-          const trailIds = [...list.querySelectorAll('.stitch-trail-check:checked')]
-            .map(input => input.closest('.stitch-trail-row')?.dataset.trailId)
-            .filter(Boolean);
-          if(trailIds.length < 2) {
-            error.textContent = currentLang === 'zh' ? '请至少选择两条轨迹。' : 'Select at least two trails.';
-            return;
-          }
-          context.close({trailIds});
-        });
-        context.body.append(list, error);
-        context.actions.append(cancel, next);
-      },
-    });
-    if(!requested) return false;
-    const trails = requested.trailIds.map(id => projectSelectors.trails().find(trail => trail.id === id)).filter(Boolean);
-    return trails.length >= 2 && enterStitchWorkbench(trails);
-  }
-
-  const stitchPanel = document.getElementById('stitch-panel');
-  if(stitchPanel) {
-    L.DomEvent.disableClickPropagation(stitchPanel);
-    L.DomEvent.disableScrollPropagation(stitchPanel);
-  }
-  document.getElementById('stitch-close')?.addEventListener('click', () => void requestStitchExit());
-  document.getElementById('stitch-cancel')?.addEventListener('click', () => void requestStitchExit());
-  document.getElementById('stitch-commit')?.addEventListener('click', () => void commitStitchWorkbench());
+  const stitchRuntime = createStitchRuntime({
+    document, window, leaflet:L, map, haversine, splitTrackByBreaks,
+    buildTrackLatLngSegments, escapeUiText, createPrimaryTrackDragSnapper,
+    scheduleRuntimeInteractionFrame, dispatchRuntimeInteraction, commandRegistry,
+    studioDialogs, interactionManager, selectors, projectSelectors,
+    beginRuntimeInteraction, setRuntimeInteractionPhase, fitWorkspaceBounds,
+    stitchTrails, generateNextTrailId, recordProjectEdit, fileImportController,
+    showToast, requestSegmentExit, trailGroup, getCurrentLang:() => currentLang,
+  });
+  const stitchState = stitchRuntime.state;
+  const stitchLayer = stitchRuntime.layer;
+  const renderStitchWorkbench = stitchRuntime.render;
+  const requestStitchExit = stitchRuntime.requestExit;
+  const stitchTrailsCommand = stitchRuntime.command;
 
   async function reversePrimaryTrailCommand() {
     if(!selectors.primaryTrailId()) {
@@ -3810,7 +3030,7 @@ export function startStudioRuntime(
   }
 
   function registerRuntimeCommands() {
-    const register = (id, execute, options = {}) => commandRegistry.register({id, execute, ...options});
+    const register = (id: any, execute: any, options: any = {}) => commandRegistry.register({id, execute, ...options});
     const hasTrails = () => projectSelectors.trails().length > 0;
     const disposers = [
       register(STUDIO_COMMANDS.FILE_IMPORT, () => addModal.classList.add('open')),
@@ -3866,7 +3086,7 @@ export function startStudioRuntime(
   const runtimeCommandDisposers = registerRuntimeCommands();
 
   const bootPromise = _boot();
-  if(studioTestMode) window.__HTM_BOOT_READY__ = bootPromise;
+  if(studioTestMode) window.__HTM_BOOT_READY__ = bootPromise as Promise<StudioBootResult>;
 
   initFloatingPanelPositions();
   invalidateRender(
@@ -3880,10 +3100,24 @@ export function startStudioRuntime(
 
 
   if(studioTestMode) {
+    const readonlyProjectView = HTM_APP.createReadonlyRuntimeView(projectSelectors.snapshot());
+    const readonlyStateView = HTM_APP.createReadonlyRuntimeView(selectors.snapshot());
+    const testDriver = Object.freeze({
+      replaceProject:(project: any) => projectActions.replaceProject(project, 'test.fixture'),
+      replaceTrails:(trails: any) => projectActions.replaceTrails(trails, 'test.fixture'),
+      addTrail:(trail: any) => projectActions.addTrail(trail, 'test.fixture'),
+      removeTrail:(trailId: any) => projectActions.removeTrail(trailId, 'test.fixture'),
+      mutateTrail:(trailId: any, mutation: any) => projectActions.mutateTrail(trailId, 'test.fixture', mutation),
+      mutateTrails:(mutation: any) => projectActions.mutateTrails('test.fixture', mutation),
+      advanceTrailRevision:(trailId: any) => {
+        const trail = projectSelectors.trailById(String(trailId));
+        return trail ? markTrailRevision(trail) : null;
+      },
+    });
     window.__HTM_RUNTIME_INSPECTOR__ = HTM_APP.createReadonlyRuntimeInspector({
-      "APP_VERSION":() => APP_VERSION, "DATA":() => projectSelectors.snapshot(), "HTM_APP":() => HTM_APP,
+      "APP_VERSION":() => APP_VERSION, "DATA":() => readonlyProjectView, "HTM_APP":() => HTM_APP,
       "HTM_CORE":() => HTM_CORE, "L":() => L, "_doSave":() => _doSave,
-      "_elevBarData":() => _elevBarData, "addEscapeCommit":() => addEscapeCommit, "addEscapeEnter":() => addEscapeEnter,
+      "_elevBarData":() => elevationRuntime?.data || null, "addEscapeCommit":() => addEscapeCommit, "addEscapeEnter":() => addEscapeEnter,
       "addEscapeState":() => addEscapeState, "addManualWaypointAt":() => addManualWaypointAt, "addMeasureEndpointMarker":() => addMeasureEndpointMarker,
       "addWaypointState":() => addWaypointState, "addWpMarker":() => addWpMarker, "applyChange":() => applyChange,
       "applyMeasureEndpointHit":() => applyMeasureEndpointHit, "applyPrimaryMiniPosition":() => applyPrimaryMiniPosition, "bindKmlImportRowEvents":() => bindKmlImportRowEvents,
@@ -3923,7 +3157,7 @@ export function startStudioRuntime(
       "segmentInsertPoint":() => segmentInsertPoint, "requestSegmentExit":() => requestSegmentExit, "segmentState":() => segmentState,
       "setLang":() => setLang, "setMapMode":() => setMapMode, "setMeasureElevHint":() => setMeasureElevHint,
       "showDaySegmentPreview":() => showDaySegmentPreview, "showExportMenu":() => showExportMenu, "showMeasureElevReadout":() => showMeasureElevReadout,
-      "showToast":() => showToast, "showTooltip":() => showTooltip, "state":() => selectors.snapshot(),
+      "showToast":() => showToast, "showTooltip":() => showTooltip, "state":() => readonlyStateView, "testDriver":() => testDriver,
       "stitchState":() => stitchState, "stitchLayer":() => stitchLayer, "requestStitchExit":() => requestStitchExit,
       "switchGroup":() => switchGroup, "t":() => t,
       "toggleSidebar":() => toggleSidebar, "toggleTrailActive":() => toggleTrailActive, "toggleTrailBatch":() => toggleTrailBatch,
@@ -3934,5 +3168,5 @@ export function startStudioRuntime(
     });
   }
 
-  return bootPromise;
+  return bootPromise as Promise<StudioBootResult>;
 }

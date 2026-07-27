@@ -80,6 +80,7 @@ html[data-workbench='2'] #header.studio-topbar {
   border:0;
   border-bottom:1px solid var(--studio-line);
   background:var(--studio-surface);
+  box-shadow:0 2px 10px rgba(20,35,26,.06);
   color:var(--studio-ink);
   font-family:var(--studio-font);
 }
@@ -170,8 +171,8 @@ html[data-workbench='2'] #toolbar-context {
   overflow:hidden;
   color:var(--studio-muted);
   font-family:var(--studio-font);
-  font-size:8px;
-  font-weight:650;
+  font-size:9px;
+  font-weight:600;
   line-height:1.2;
   text-overflow:ellipsis;
   white-space:nowrap;
@@ -232,6 +233,10 @@ html[data-workbench='2'] .studio-menu-group {
   position:relative;
   display:flex;
   align-items:stretch;
+}
+
+html[data-workbench='2'] .studio-menu-group + .studio-menu-group {
+  border-left:1px solid rgba(213,220,215,.72);
 }
 
 html[data-workbench='2'] .studio-menu-trigger {
@@ -455,9 +460,10 @@ html[data-workbench='2'] .studio-activity-button:hover {
 }
 
 html[data-workbench='2'] .studio-activity-button.is-active {
-  border-color:#3B765D;
-  background:var(--studio-forest);
+  border-color:#5E8F76;
+  background:#315742;
   color:#FFFFFF;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
 }
 
 html[data-workbench='2'] .studio-activity-button.is-active::before {
@@ -568,6 +574,9 @@ html[data-workbench='2'] #sidebar .tab-pane.active {
 }
 
 html[data-workbench='2'] #sidebar .sidebar-heading {
+  position:sticky;
+  top:0;
+  z-index:8;
   min-height:54px;
   padding:10px 46px 10px 14px;
   border-bottom:1px solid var(--studio-line);
@@ -593,6 +602,7 @@ html[data-workbench='2'] #primary-card .pc-name {
 
 html[data-workbench='2'] #primary-card .pc-stats {
   padding-top:10px;
+  font-variant-numeric:tabular-nums;
 }
 
 html[data-workbench='2'] #sidebar[data-activity='groups'] #primary-card {
@@ -695,6 +705,12 @@ html[data-workbench='2'] #sidebar .section {
 html[data-workbench='2'] #sidebar .trail-card {
   border-radius:6px;
   background:var(--studio-surface);
+  box-shadow:0 1px 0 rgba(24,39,30,.03);
+}
+
+html[data-workbench='2'] #sidebar .trail-card:hover {
+  border-color:#94A99C;
+  box-shadow:0 3px 10px rgba(25,39,30,.08);
 }
 
 html[data-workbench='2'] #sidebar-close {
@@ -714,9 +730,11 @@ html[data-workbench='2'] #sidebar-close {
 }
 
 html[data-workbench='2'] #sidebar-close {
+  position:absolute;
   top:10px;
   right:10px;
   left:auto;
+  z-index:2;
   transform:none;
 }
 
@@ -855,7 +873,7 @@ html[data-workbench='2'] .studio-bottom-dock {
   overflow:hidden;
   border-top:1px solid var(--studio-line-strong);
   background:var(--studio-canvas);
-  box-shadow:0 -4px 14px rgba(25,39,30,0.07);
+  box-shadow:0 -5px 18px rgba(25,39,30,0.09);
 }
 
 html[data-workbench='2'] .studio-bottom-dock--fixed {
@@ -963,6 +981,7 @@ html[data-workbench='2'] .studio-bottom-pane > #measure-panel.studio-elevation-m
   border-radius:5px !important;
   background:rgba(255,255,255,.94) !important;
   box-shadow:0 3px 12px rgba(25,39,30,.14) !important;
+  backdrop-filter:blur(10px) saturate(1.05);
 }
 
 html[data-workbench='2'] .studio-bottom-pane > #measure-panel.studio-elevation-measure-actions[style*="display: block"] {

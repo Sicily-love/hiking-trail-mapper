@@ -147,7 +147,7 @@ T('direct runtime delegates segment state and project writes to the controller',
   const map = segment;
   const directBusinessWrite = /segmentState\.(?:active|trailId|points|campEdits|_justDragged|_fastTapUntil)\s*(?:=|\+\+)/;
   assert.match(segment, /createSegmentController\(runtimeContext/);
-  assert.match(segment, /const segmentState = segmentController\.state/);
+  assert.match(segment, /const segmentState(?::any)? = segmentController\.state/);
   assert.match(segment, /segmentController\.enter/);
   assert.match(segment, /segmentController\.insertPoint/);
   assert.match(segment, /segmentController\.deleteDay/);

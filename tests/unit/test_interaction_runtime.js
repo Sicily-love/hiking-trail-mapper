@@ -5,7 +5,11 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
 const { read, runtimeSource } = require('./runtime_source');
-const runtime = [runtimeSource, read('src/ui/sidebar/runtime-owner.ts')].join('\n');
+const runtime = [
+  runtimeSource,
+  read('src/ui/sidebar/runtime-owner.ts'),
+  read('src/features/stitch/runtime-owner.ts'),
+].join('\n');
 const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const segmentController = fs.readFileSync(path.join(root, 'src/features/segment/controller.ts'), 'utf8');
 let passed = 0;
@@ -60,7 +64,7 @@ test('the original five cleanup paths cancel through the manager', () => {
 test('stitch cleanup exits through its owner-bound session', () => {
   assert.ok(runtime.includes("interactionManager.current.kind === 'stitch'"));
   assert.ok(runtime.includes("interactionManager.cancel('stitch-exit')"));
-  assert.ok(runtime.includes('cleanupStitchWorkbench'));
+  assert.ok(runtime.includes('function cleanup()'));
 });
 
 test('map taps use one active-kind dispatcher', () => {
@@ -80,9 +84,9 @@ test('fast taps and both drag systems dispatch typed events', () => {
 });
 
 test('scheduled drag work is session-owned', () => {
-  assert.ok(runtime.includes("scheduleFrame: callback => scheduleRuntimeInteractionFrame('measure', callback)"));
-  assert.ok(runtime.includes("scheduleFrame: callback => scheduleRuntimeInteractionFrame('segment', callback)"));
-  assert.ok(runtime.includes("scheduleFrame:callback => scheduleRuntimeInteractionFrame('stitch', callback)"));
+  assert.match(runtime, /scheduleFrame:\s*\(callback(?:: any)?\) => scheduleRuntimeInteractionFrame\('measure', callback\)/);
+  assert.match(runtime, /scheduleFrame:\s*\(callback(?:: any)?\) => scheduleRuntimeInteractionFrame\('segment', callback\)/);
+  assert.ok(runtime.includes("scheduleRuntimeInteractionFrame('stitch', callback)"));
   assert.ok(runtime.includes('session.delay(250'));
   assert.ok(runtime.includes('session.delay(200'));
 });

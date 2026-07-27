@@ -19,6 +19,7 @@ RUNTIME_SOURCE_FILES = [
     ROOT / "src/ui/sidebar/runtime-owner.ts",
     ROOT / "src/ui/import/runtime-owner.ts",
     ROOT / "src/features/map/workspace-controller.ts",
+    ROOT / "src/features/elevation/runtime-owner.ts",
 ]
 RUNTIME_SOURCE = "\n".join(path.read_text(encoding="utf-8") for path in RUNTIME_SOURCE_FILES)
 
@@ -176,6 +177,33 @@ try:
     evalj("window.__OUTDOOR_ROUTE_STUDIO__.workbench.closeMenus()")
     check("左侧轨迹组、轨迹和行程 3 个入口已渲染，重复标注点入口已移除",
           evalj("document.querySelectorAll('.studio-activity-button').length === 3 && document.querySelector('.studio-activity-button')?.dataset.activity === 'groups' && !document.querySelector('[data-activity=\"settings\"], [data-activity=\"waypoints\"]')"))
+    sidebar_collapse_flow = evalj("""
+      (async () => {
+        const results = [];
+        for(const activity of ['groups', 'trails', 'itinerary']) {
+          document.getElementById(`workbench-activity-${activity}`)?.click();
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const sidebar = document.getElementById('sidebar');
+          const close = document.getElementById('sidebar-close');
+          const visible = !!close
+            && close.closest('.sidebar-heading') != null
+            && close.getClientRects().length > 0
+            && getComputedStyle(close).visibility !== 'hidden';
+          close?.click();
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const collapsed = sidebar?.classList.contains('collapsed') === true;
+          results.push({activity, visible, collapsed});
+        }
+        document.getElementById('workbench-activity-trails')?.click();
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        return results;
+      })()
+    """)
+    check("轨迹组、轨迹和行程页面共享同一个可用的侧栏收起键",
+          isinstance(sidebar_collapse_flow, list)
+          and len(sidebar_collapse_flow) == 3
+          and all(item.get('visible') and item.get('collapsed') for item in sidebar_collapse_flow),
+          str(sidebar_collapse_flow))
     check("Workbench 已移除右上角旧侧栏恢复按钮",
           evalj("!document.getElementById('sidebar-toggle')"))
     check("底部已收敛为无重复 Tab 的海拔分析区",
@@ -554,7 +582,7 @@ try:
                     && annotations.every(item => !item.text.startsWith('高 ') && !item.text.startsWith('低 '));
                 })();
             })()
-          """) and source_has('function measureReverse', 'measureController.reverse', 'elev-stat-asc', 'elev-stat-desc', "stats.distKm.toFixed(2) + ' km'", 'buildElevationCanvasScene', 'measureMode: true'))
+          """) and source_has('function measureReverse', 'measureController.reverse', 'elev-stat-asc', 'elev-stat-desc', "stats.distKm.toFixed(2) + ' km'", 'buildElevationCanvasScene', 'measureMode:true'))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
           evalj("""
             (() => {
@@ -630,7 +658,7 @@ try:
                 })
                 && scene.chart.fillPolygon.length === scene.chart.curve.length + 2;
             })()
-          """) and source_has('elevationCanvasRenderer.render(scene, dimensions)'))
+          """) and source_has('renderer.render(scene, dimensions)'))
 
     print("\n▸ 需求 3：KML.zip 导入")
     check("fflate.unzipSync 可用",
@@ -691,6 +719,8 @@ try:
           const importedWaypoints = DATA.trails.slice(before).flatMap(trail => trail.waypoints || []);
           return {{ before, after, added: after - before,
                    trailNames: DATA.trails.slice(before).map(t => t.name),
+                   trailGroups: DATA.trails.slice(before).map(t => t.group),
+                   activeGroup: state.activeGroup,
                    waypointCount: importedWaypoints.length,
                    waypointFieldsReady: importedWaypoints.length > 0 && importedWaypoints.every(waypoint =>
                      typeof waypoint.tag === 'string'
@@ -708,6 +738,11 @@ try:
         check("KML 标注点同步类型、里程和 Day",
               e2e['waypointFieldsReady'] is True,
               f"waypoints={e2e['waypointCount']}")
+        check("新导入轨迹统一进入默认轨迹组并切换到该组",
+              e2e.get('trailGroups')
+              and all(group == '默认' for group in e2e['trailGroups'])
+              and e2e.get('activeGroup') == '默认',
+              f"groups={e2e.get('trailGroups')}, active={e2e.get('activeGroup')}")
     else:
         check("端到端 zip 导入", False, str(e2e)[:200])
 
@@ -787,10 +822,13 @@ try:
         fixture.group = groupPayload;
         fixture.waypoints = [];
         window.__securityBoundaryExecuted = false;
-        DATA.trails.push(fixture);
-        trail.name = payload;
-        trail.source = 'javascript:window.__securityBoundaryExecuted=true';
-        if(waypoint) waypoint.label = payload;
+        testDriver.addTrail(fixture);
+        testDriver.mutateTrail(trail.id, target => {
+          target.name = payload;
+          target.source = 'javascript:window.__securityBoundaryExecuted=true';
+          const targetWaypoint = (target.waypoints || []).find(item => item.id === waypoint?.id);
+          if(targetWaypoint) targetWaypoint.label = payload;
+        });
         if(!original.expanded) toggleTrailExpanded(trail.id);
         buildTrailList();
         buildDaysTab();
@@ -809,10 +847,13 @@ try:
           unsafeLinkRemoved:![...document.querySelectorAll('.pc-link,.trail-link-btn')]
             .some(link => link.getAttribute('href')?.trim().toLowerCase().startsWith('javascript:')),
         };
-        trail.name = original.name;
-        trail.source = original.source;
-        if(waypoint) waypoint.label = original.waypointLabel;
-        DATA.trails.splice(DATA.trails.indexOf(fixture), 1);
+        testDriver.mutateTrail(trail.id, target => {
+          target.name = original.name;
+          target.source = original.source;
+          const targetWaypoint = (target.waypoints || []).find(item => item.id === waypoint?.id);
+          if(targetWaypoint) targetWaypoint.label = original.waypointLabel;
+        });
+        testDriver.removeTrail(fixture.id);
         if(!original.expanded && state.expandedTrails.has(trail.id)) toggleTrailExpanded(trail.id);
         buildTrailList();
         buildDaysTab();
@@ -923,7 +964,9 @@ try:
         const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
         const original = trail.name;
         projectHistoryController.clear();
-        projectHistoryController.execute('Browser rename', () => { trail.name = 'History renamed'; });
+        projectHistoryController.execute('Browser rename', () => {
+          testDriver.mutateTrail(trail.id, target => { target.name = 'History renamed'; });
+        });
         const changed = DATA.trails[0].name === 'History renamed';
         const undoEnabled = registry.isEnabled('edit.undo');
         registry.dispatch('edit.undo');
@@ -953,7 +996,7 @@ try:
         fixture.name = 'Browser stitch fixture';
         fixture.track = fixture.track.map(point => [point[0] + 1, point[1] + 1, point[2], point[3], point[4], point[5]]);
         fixture.waypoints = [];
-        DATA.trails.push(fixture);
+        testDriver.addTrail(fixture);
         const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
         registry.notifyChanged('trail.stitch');
         const before = DATA.trails.length;
@@ -1241,7 +1284,7 @@ try:
             km:main.track[index][3],
             gps_idx:index,
           }));
-        main.waypoints.push(...sidebarProbeWaypoints);
+        testDriver.mutateTrail(main.id, target => { target.waypoints.push(...sidebarProbeWaypoints); });
         stateActions.setTrailActive(main.id, true);
         buildFilterGrid();
         const expectedVectorIcons = {fork:'git-fork', warn:'triangle-alert', other:'map-pin'};
@@ -1279,7 +1322,10 @@ try:
           && Math.abs(metric.symbolCenterX - metric.slotCenterX) < 0.5
           && Math.abs(metric.symbolCenterY - metric.slotCenterY) < 0.5)
           && sidebarTagMetrics.every(metric => Math.abs(metric.labelOffset - sidebarTagMetrics[0].labelOffset) < 0.5);
-        main.waypoints = main.waypoints.filter(waypoint => !sidebarProbeWaypoints.includes(waypoint));
+        const sidebarProbeIds = new Set(sidebarProbeWaypoints.map(waypoint => waypoint.id));
+        testDriver.mutateTrail(main.id, target => {
+          target.waypoints = target.waypoints.filter(waypoint => !sidebarProbeIds.has(waypoint.id));
+        });
         buildFilterGrid();
         enterAddWaypointMode({announce:false});
         const waypointBefore = main.waypoints.length;
@@ -1364,7 +1410,7 @@ try:
         summary.escapeKey = interactionManager.current.kind === 'idle' && !segmentState.active;
 
         measureEnter();
-        markTrailRevision(main);
+        testDriver.advanceTrailRevision(main.id);
         summary.ownerInvalidated = !revalidateRuntimeInteractionOwner()
           && interactionManager.current.kind === 'idle'
           && !measureState.active;
@@ -1407,9 +1453,11 @@ try:
         if(!main?.track?.length) return {error:'missing-primary'};
 
         const originalDays = main.track.map(point => point[5]);
-        const originalDayMeta = main.day_meta;
+        const originalDayMeta = JSON.parse(JSON.stringify(main.day_meta || []));
         const half = Math.floor(main.track.length / 2);
-        main.track.forEach((point, index) => { point[5] = index < half ? 1 : 2; });
+        testDriver.mutateTrail(main.id, target => {
+          target.track.forEach((point, index) => { point[5] = index < half ? 1 : 2; });
+        });
         const dayMeta = (day, start, end) => {
           const stats = HTM_CORE.computeDayRangeStats(main, {iStart:start, iEnd:end});
           return {
@@ -1419,7 +1467,9 @@ try:
             i_start:start, i_end:end,
           };
         };
-        main.day_meta = [dayMeta(1, 0, half - 1), dayMeta(2, half, main.track.length - 1)];
+        testDriver.mutateTrail(main.id, target => {
+          target.day_meta = [dayMeta(1, 0, half - 1), dayMeta(2, half, main.track.length - 1)];
+        });
         const makeAnchor = index => {
           const point = main.track[index];
           return {
@@ -1497,7 +1547,7 @@ try:
             {id:'near-other', lat:main.track[1][0], lng:main.track[1][1], tag:'other', label:'Nearby other', elev:main.track[1][2], km:0},
           ],
         };
-        DATA.trails.push(nearbySource);
+        testDriver.addTrail(nearbySource);
         buildDaysTab();
         const nearbyInput = document.querySelector('.nearby-waypoint-option[data-waypoint-ref="browser-nearby-source#near-bridge"] input');
         const nearbyCandidateVisible = !!nearbyInput;
@@ -1508,11 +1558,13 @@ try:
         }
         const nearbySelectionPersisted = Object.values(main.itinerary_waypoint_refs || {})
           .some(refs => refs.includes('browser-nearby-source#near-bridge'));
-        DATA.trails.splice(DATA.trails.indexOf(nearbySource), 1);
-        delete main.itinerary_waypoint_refs;
+        testDriver.removeTrail(nearbySource.id);
+        testDriver.mutateTrail(main.id, target => { delete target.itinerary_waypoint_refs; });
         escapeController.deleteRoute(main.id, routeId);
-        main.track.forEach((point, index) => { point[5] = originalDays[index]; });
-        main.day_meta = originalDayMeta;
+        testDriver.mutateTrail(main.id, target => {
+          target.track.forEach((point, index) => { point[5] = originalDays[index]; });
+          target.day_meta = originalDayMeta;
+        });
         buildDaysTab();
 
         segmentEnter();
@@ -1727,7 +1779,7 @@ try:
           day:anchor[5] || null, photo:'',
         };
         stateActions.setVisibleTag('other', true);
-        main.waypoints.push(testWaypoint);
+        testDriver.mutateTrail(main.id, target => { target.waypoints.push(testWaypoint); });
         drawWaypoints();
         await waitFrames();
         const addDiff = {...window.__HTM_RENDER_STATS__.markers};
@@ -1735,7 +1787,9 @@ try:
         const markerAdded = addDiff.add === 1 && !!wpMarkers[testKey]
           && (!retainedKey || retainedMarker === wpMarkers[retainedKey]);
 
-        main.waypoints = main.waypoints.filter(waypoint => waypoint !== testWaypoint);
+        testDriver.mutateTrail(main.id, target => {
+          target.waypoints = target.waypoints.filter(waypoint => waypoint.id !== testWaypoint.id);
+        });
         drawWaypoints();
         await waitFrames();
         const removeDiff = {...window.__HTM_RENDER_STATS__.markers};

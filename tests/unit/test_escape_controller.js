@@ -182,7 +182,7 @@ T('direct runtime retains escape effects but delegates business state and writes
   const source = [read('src/app/runtime/studio.ts'), read('src/ui/sidebar/runtime-owner.ts')].join('\n');
   const directBusinessWrite = /addEscapeState\.(?:active|trailId|referenceTrailId|ptA|ptB|_pending)\s*(?:=|\+\+)/;
   assert.match(source, /createEscapeController\(runtimeContext/);
-  assert.match(source, /const addEscapeState = escapeController\.state/);
+  assert.match(source, /const addEscapeState(?::any)? = escapeController\.state/);
   for(const method of [
     'enter', 'setReferenceTrail', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute',
     'availableDays', 'setDay', 'setDays', 'commit',

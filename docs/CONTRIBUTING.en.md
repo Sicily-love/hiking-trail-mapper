@@ -25,7 +25,8 @@ Use `npm run dev` for local development. Do not edit `hiking-trail-mapper.html` 
 | Leaflet, IndexedDB, file, and browser effects | `src/adapters/` |
 | Workbench, dialogs, components, and copy | `src/ui/`, `src/features/localization/` |
 | Layout, components, and theme | `src/styles/` |
-| Mature orchestration that must share DOM/Leaflet instances | `src/app/runtime/studio.ts` |
+| DOM/Leaflet orchestration for one vertical feature | `src/features/<feature>/runtime-owner.ts` |
+| Cross-feature dependency assembly only | `src/app/runtime/studio.ts` |
 
 The startup chain is fixed:
 
@@ -35,11 +36,11 @@ index.html -> src/main.ts -> bootstrap.ts
            -> startStudioRuntime({ document, commands, dialogs })
 ```
 
-Do not restore raw imports, `executeClassicScript()`, a runtime composer, feature runtime owners, or `window.HikingTrailCore/HikingTrailApp`.
+Do not restore raw imports, `executeClassicScript()`, a runtime composer, dual execution paths, or `window.HikingTrailCore/HikingTrailApp`. A vertical feature owner must declare explicit dependencies and replace its old implementation in the same change.
 
 ## Direct Runtime Boundary
 
-`src/app/runtime/studio.ts` currently owns mature orchestration that shares the DOM, Leaflet map, and layer handles, and temporarily uses `@ts-nocheck`. It is not an entry point for new untyped logic.
+`src/app/runtime/studio.ts` is limited to cross-feature dependency assembly and shared browser orchestration that has not yet migrated. Every TypeScript source, including the runtime, must pass strict checking; dynamic Leaflet plugin fields may remain only at an explicit browser-adapter type boundary.
 
 When extracting behavior:
 
@@ -49,7 +50,7 @@ When extracting behavior:
 4. Delete the replaced implementation in the same change; retain no dual path or mirrored state.
 5. Run units, real Chrome, E2E, and required visual regression.
 
-The test inspector may only be created through `?studio-test=1` and must remain frozen and read-only. Product code must not depend on it.
+The test inspector may only be created through `?studio-test=1` and must remain frozen and deeply read-only. Fixture writes must use the dedicated `testDriver` and typed actions. Product code must not depend on either test surface.
 
 ## State, Commands, and Interaction
 
@@ -70,7 +71,7 @@ The test inspector may only be created through `?studio-test=1` and must remain 
 
 ## TypeScript and Naming
 
-- New modules must pass type checking; the direct runtime's `@ts-nocheck` is not a broader exemption.
+- Every module must pass strict type checking; do not add `@ts-nocheck`.
 - Keep pure logic DOM-free with explicit inputs and outputs.
 - Use `camelCase` for values/functions, `PascalCase` for types/classes, and `SCREAMING_SNAKE_CASE` for constants.
 - Controllers indicate ownership, render data uses `*Model`, and factories use `create*`.

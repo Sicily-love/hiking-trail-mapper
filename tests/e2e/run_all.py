@@ -154,7 +154,7 @@ try:
     check("state.activeGroup 默认值", evalj("typeof state.activeGroup === 'string'"))
 
     # 清空 IndexedDB + trails，保证从零开始。使用应用 API 等待事务完成，避免挂起的 deleteDatabase 在后续重载时误删新缓存。
-    evalj("(async () => { await clearStorage(); DATA.trails = []; stateActions.clearWorkspace(); rebuildAll({fit:false}); })()")
+    evalj("(async () => { await clearStorage(); testDriver.replaceTrails([]); stateActions.clearWorkspace(); rebuildAll({fit:false}); })()")
     time.sleep(0.5)
 
     # ═══════════════════════════════════════════════════════════════
@@ -191,7 +191,7 @@ try:
     print("\n▸ E3 · 导入 KML.zip")
     r = evalj(f"""
       (async () => {{
-        DATA.trails = []; stateActions.clearWorkspace();
+        testDriver.replaceTrails([]); stateActions.clearWorkspace();
         const bin = atob('{zip_b64}');
         const arr = new Uint8Array(bin.length);
         for(let i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -286,7 +286,7 @@ try:
       (() => {{
         const tr = DATA.trails.find(t => t.id === '{first_id}');
         const firstPt = tr.track[0].slice();
-        tr.reversed = !tr.reversed;
+        testDriver.mutateTrail(tr.id, trail => {{ trail.reversed = !trail.reversed; }});
         applyChange({{fit:false}});
         return {{
           reversed: !!tr.reversed,
@@ -297,7 +297,7 @@ try:
     check("reversed 标志已翻转", r.get("reversed") == True)
     check("track 数据本身不改（只改渲染方向）", r.get("firstPtSame") == True)
     # 反转回来
-    evalj(f"(() => {{ const tr = DATA.trails.find(t => t.id === '{first_id}'); tr.reversed = false; applyChange(); }})()")
+    evalj(f"(() => {{ testDriver.mutateTrail('{first_id}', trail => {{ trail.reversed = false; }}); applyChange(); }})()")
 
     # ═══════════════════════════════════════════════════════════════
     # E8 — 删除轨迹（activeTrails / primaryTrailId 兜底）
@@ -306,7 +306,7 @@ try:
     r = evalj(f"""
       (() => {{
         const before = DATA.trails.length;
-        DATA.trails = DATA.trails.filter(t => t.id !== '{second_id}');
+        testDriver.removeTrail('{second_id}');
         stateActions.setTrailActive('{second_id}', false);
         // 手动模拟：如果主轨迹被删了，自动 fallback
         if(state.primaryTrailId === '{second_id}' && DATA.trails.length) {{
@@ -482,7 +482,7 @@ try:
     setup = evalj(f"""
       (async () => {{
         try {{
-          DATA.trails = [];
+          testDriver.replaceTrails([]);
           stateActions.restoreWorkspace({{activeTrails:[], activeGroup:'甲组', primaryByGroup:{{}}}});
           // 加两条不同内容的 trail
           const bin = atob('{kml_b64}');
@@ -494,7 +494,7 @@ try:
           const t2 = parseAndProcessKml(text.replace(/(-?\\d+\\.\\d+),(-?\\d+\\.\\d+),/g,
             (m, lng, lat) => `${{(+lng+0.002).toFixed(6)}},${{(+lat+0.002).toFixed(6)}},`), '乙.kml');
           t2.id = 'b1'; t2.group = '乙组';
-          DATA.trails.push(t1, t2);
+          testDriver.replaceTrails([t1, t2]);
           stateActions.restoreWorkspace({{activeTrails:['a1', 'b1'], activeGroup:'甲组', primaryByGroup:{{'甲组':'a1'}}}});
           applyChange({{fit: false}});
           return {{ok: true, count: DATA.trails.length, group: state.activeGroup, primary: state.primaryTrailId}};
@@ -564,7 +564,7 @@ try:
     setup16 = evalj(f"""
       (async () => {{
         try {{
-          DATA.trails = [];
+          testDriver.replaceTrails([]);
           stateActions.restoreWorkspace({{activeTrails:[], activeGroup:'A组', primaryByGroup:{{}}}});
           const bin = atob('{kml_b64}');
           const arr = new Uint8Array(bin.length);
@@ -577,7 +577,7 @@ try:
           const t3 = parseAndProcessKml(text.replace(/(-?\\d+\\.\\d+),(-?\\d+\\.\\d+),/g,
             (m,lng,lat)=>`${{(+lng+0.003).toFixed(6)}},${{(+lat+0.003).toFixed(6)}},`), 'b1.kml');
           t3.id = 'B1'; t3.group = 'B组';
-          DATA.trails.push(t1, t2, t3);
+          testDriver.replaceTrails([t1, t2, t3]);
           stateActions.restoreWorkspace({{
             activeTrails:['A1', 'A2', 'B1'],
             activeGroup:'A组',
@@ -677,8 +677,7 @@ try:
             ? parsed.archive.workspace.primaryByGroup[parsed.archive.workspace.activeGroup]
             : null,
         };
-        DATA.title = 'Temporary';
-        DATA.trails.splice(0, DATA.trails.length);
+        testDriver.replaceProject({title:'Temporary', trails:[], calc_method:DATA.calc_method});
         stateActions.clearWorkspace();
         const result = projectArchiveController.restore(parsed.archive);
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -718,7 +717,9 @@ try:
         const registry = window.__OUTDOOR_ROUTE_STUDIO__.commands;
         const original = trail.name;
         projectHistoryController.clear();
-        projectHistoryController.execute('E2E rename', () => { trail.name = 'E2E history name'; });
+        projectHistoryController.execute('E2E rename', () => {
+          testDriver.mutateTrail(trail.id, target => { target.name = 'E2E history name'; });
+        });
         const undoEnabled = registry.isEnabled('edit.undo');
         registry.dispatch('edit.undo');
         const undone = DATA.trails[0].name === original;

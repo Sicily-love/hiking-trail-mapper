@@ -131,9 +131,14 @@ export function createFileImportController<TTrail extends ImportTrail>(
     if(duplicate) return {status:'duplicate', trail, duplicate};
     ensureUniqueId(trail);
     trail.color = dependencies.palette[context.projectSelectors.trailCount() % dependencies.palette.length];
-    if(!trail.group) trail.group = context.stateSelectors.activeGroup() || '默认';
+    const defaultGroup = '默认';
+    trail.group = defaultGroup;
     context.projectActions.addTrail(trail, 'trail.import');
     context.stateActions.setTrailActive(trail.id, true);
+    if(!context.stateSelectors.primaryForGroup(defaultGroup)) {
+      context.stateActions.setGroupPrimary(defaultGroup, trail.id);
+    }
+    context.stateActions.setActiveGroup(defaultGroup);
     return {status:'added', trail};
   };
 

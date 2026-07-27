@@ -88,10 +88,23 @@ function createHarness(trails = []) {
     const added = controller.addTrail(collision);
     assert.strictEqual(added.status, 'added');
     assert.strictEqual(collision.id, '1-1');
-    assert.strictEqual(collision.group, 'A');
+    assert.strictEqual(collision.group, '默认');
     assert.strictEqual(collision.color, '#222222');
     assert.deepStrictEqual(project.trails.map(item => item.id), ['1', '1-1']);
     assert.strictEqual(state.snapshot().activeTrails.has('1-1'), true);
+    assert.strictEqual(state.snapshot().activeGroup, '默认');
+    assert.strictEqual(state.snapshot().primaryByGroup['默认'], '1-1');
+  });
+
+  await T('always places newly added trails in the default group', () => {
+    const existing = trail('a', [[1, 1, 1]], '自定义组');
+    const {controller, state} = createHarness([existing]);
+    state.dispatch({type:'group.set-active', group:'自定义组'});
+    const added = trail('b', [[2, 2, 2]], '导入文件中的组');
+    assert.strictEqual(controller.addTrail(added).status, 'added');
+    assert.strictEqual(added.group, '默认');
+    assert.strictEqual(state.snapshot().activeGroup, '默认');
+    assert.strictEqual(state.snapshot().primaryByGroup['默认'], 'b');
   });
 
   await T('renames IDs and edits source through one project mutation boundary', () => {

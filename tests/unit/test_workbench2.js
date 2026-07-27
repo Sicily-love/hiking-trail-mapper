@@ -15,6 +15,7 @@ const bootstrapPath = path.join(root, 'src/app/bootstrap.ts');
 const shellPath = path.join(root, 'src/ui/layout/app-shell.ts');
 const runtimePath = path.join(root, 'src/app/runtime/studio.ts');
 const sidebarRuntimePath = path.join(root, 'src/ui/sidebar/runtime-owner.ts');
+const stitchRuntimePath = path.join(root, 'src/features/stitch/runtime-owner.ts');
 const iconSource = fs.readFileSync(iconPath, 'utf8');
 const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
 const css = fs.readFileSync(cssPath, 'utf8');
@@ -27,6 +28,7 @@ const shellSource = fs.readFileSync(shellPath, 'utf8');
 const runtimeSource = [runtimePath, sidebarRuntimePath]
   .map(file => fs.readFileSync(file, 'utf8'))
   .join('\n');
+const stitchRuntimeSource = fs.readFileSync(stitchRuntimePath, 'utf8');
 
 let iconModule = null;
 let workbenchModule = null;
@@ -206,29 +208,30 @@ test('trail stitching selects from zero then edits ordered parts on the map', ()
   assert.ok(workbenchSource.includes("'stitch-btn'"));
   assert.ok(workbenchSource.includes('STUDIO_COMMANDS.TRAIL_STITCH'));
   assert.ok(shellSource.includes('id="stitch-btn"'));
-  assert.ok(runtimeSource.includes('async function stitchTrailsCommand()'));
-  assert.ok(runtimeSource.includes('studioDialogs.openCustom'));
-  assert.ok(runtimeSource.includes('stitchTrails(stitchState.parts.map'));
-  assert.ok(runtimeSource.includes('fileImportController.addTrail(trail)'));
+  assert.ok(runtimeSource.includes('createStitchRuntime'));
+  assert.ok(stitchRuntimeSource.includes('async function command()'));
+  assert.ok(stitchRuntimeSource.includes('studioDialogs.openCustom'));
+  assert.ok(stitchRuntimeSource.includes('stitchTrails(state.parts.map'));
+  assert.ok(stitchRuntimeSource.includes('fileImportController.addTrail(trail)'));
   assert.ok(css.includes('.stitch-trail-row'));
   assert.ok(shellSource.includes('id="stitch-panel"'));
   assert.ok(shellSource.includes('id="stitch-parts"'));
-  assert.ok(runtimeSource.includes('checkbox.checked = false'));
-  assert.ok(runtimeSource.includes("beginRuntimeInteraction('stitch', 'editing'"));
-  assert.ok(runtimeSource.includes('createPrimaryTrackDragSnapper(marker'));
-  assert.ok(runtimeSource.includes('globalSearch:true'));
-  assert.ok(runtimeSource.includes('snapMarker:false'));
-  assert.ok(runtimeSource.includes('applyStitchSelection(part.id)'));
-  assert.ok(runtimeSource.includes("layer._stitchRole === 'selection'"));
-  assert.ok(runtimeSource.includes('buildStitchEndpointOffsets(stitchState.parts)'));
-  assert.ok(runtimeSource.includes("const endpointPaneName = 'stitch-endpoints'"));
-  assert.ok(runtimeSource.includes("endpointPane.style.zIndex = '760'"));
-  assert.ok(runtimeSource.includes('pane:endpointPaneName'));
-  assert.ok(runtimeSource.includes("<= 20"));
-  assert.ok(runtimeSource.includes('paddingBottomRight:[430,50]'));
-  assert.ok(runtimeSource.includes('await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))'));
-  assert.ok(runtimeSource.includes("await fitWorkspaceBounds(L.latLngBounds(latLngs), fitOptions, {source:'stitch-workbench'})"));
-  assert.ok(runtimeSource.includes('track_breaks'));
+  assert.ok(stitchRuntimeSource.includes('checkbox.checked = false'));
+  assert.ok(stitchRuntimeSource.includes("beginRuntimeInteraction('stitch', 'editing'"));
+  assert.ok(stitchRuntimeSource.includes('createPrimaryTrackDragSnapper(marker'));
+  assert.ok(stitchRuntimeSource.includes('globalSearch:true'));
+  assert.ok(stitchRuntimeSource.includes('snapMarker:false'));
+  assert.ok(stitchRuntimeSource.includes('applySelection(part.id)'));
+  assert.ok(stitchRuntimeSource.includes("item._stitchRole === 'selection'"));
+  assert.ok(stitchRuntimeSource.includes('endpointOffsets(state.parts)'));
+  assert.ok(stitchRuntimeSource.includes("const paneName = 'stitch-endpoints'"));
+  assert.ok(stitchRuntimeSource.includes("pane.style.zIndex = '760'"));
+  assert.ok(stitchRuntimeSource.includes('pane:paneName'));
+  assert.ok(stitchRuntimeSource.includes("<= 20"));
+  assert.ok(stitchRuntimeSource.includes('paddingBottomRight:[430,50]'));
+  assert.ok(stitchRuntimeSource.includes('window.requestAnimationFrame'));
+  assert.ok(stitchRuntimeSource.includes("fitWorkspaceBounds(L.latLngBounds(points), options, {source:'stitch-workbench'})"));
+  assert.ok(stitchRuntimeSource.includes('track_breaks'));
   assert.ok(css.includes('.stitch-part-card'));
   assert.ok(css.includes('.stitch-endpoint-marker.is-active'));
   assert.ok(css.includes('.stitch-part-editing'));
@@ -248,10 +251,18 @@ test('layout moves existing ID nodes without cloning or HTML string copies', () 
   assert.strictEqual(workbenchSource.includes('insertAdjacentHTML'), false);
 });
 
+test('sidebar collapse control belongs to the persistent sidebar heading', () => {
+  assert.ok(workbenchSource.includes("sidebarTitle?.closest<HTMLElement>('.sidebar-heading')"));
+  assert.ok(workbenchSource.includes("document.getElementById('sidebar-close')"));
+  assert.ok(workbenchSource.includes('sidebarHeading.appendChild(sidebarClose)'));
+  assert.ok(css.includes("html[data-workbench='2'] #sidebar-close"));
+  assert.ok(css.includes('position:absolute;'));
+});
+
 test('every trail card exposes one typed rename action', () => {
   assert.ok(runtimeSource.includes('class="trail-rename-btn"'));
   assert.ok(runtimeSource.includes("createWorkbenchIcon(document, 'pencil'"));
-  assert.ok(runtimeSource.includes('async function editTrailName(tr)'));
+  assert.match(runtimeSource, /async function editTrailName\(tr(?:: any)?\)/);
   assert.ok(runtimeSource.includes('trailController.renameTrail(tr.id, newName)'));
   assert.ok(componentCss.includes('.trail-rename-btn'));
   assert.ok(css.includes('grid-template-columns:68px 310px minmax(0,1fr)'));

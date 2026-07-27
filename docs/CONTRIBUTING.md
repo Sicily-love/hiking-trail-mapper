@@ -25,7 +25,8 @@ npm run build
 | Leaflet、IndexedDB、文件与浏览器副作用 | `src/adapters/` |
 | Workbench、dialog、组件与文案 | `src/ui/`、`src/features/localization/` |
 | 布局、组件和主题 | `src/styles/` |
-| 必须共享 DOM/Leaflet 实例的成熟编排 | `src/app/runtime/studio.ts` |
+| 单个垂直功能的 DOM/Leaflet 编排 | `src/features/<feature>/runtime-owner.ts` |
+| 仅负责跨功能依赖装配的胶水 | `src/app/runtime/studio.ts` |
 
 启动链固定为：
 
@@ -35,11 +36,11 @@ index.html -> src/main.ts -> bootstrap.ts
            -> startStudioRuntime({ document, commands, dialogs })
 ```
 
-不得恢复 raw import、`executeClassicScript()`、runtime composer、功能 runtime owner 或 `window.HikingTrailCore/HikingTrailApp`。
+不得恢复 raw import、`executeClassicScript()`、runtime composer、双执行路径或 `window.HikingTrailCore/HikingTrailApp`。垂直功能 owner 必须拥有明确依赖并在迁移时删除旧实现。
 
 ## Direct Runtime 边界
 
-`src/app/runtime/studio.ts` 当前承载需要共享 DOM、Leaflet map 和 layer 句柄的成熟编排，并暂时使用 `@ts-nocheck`。这不是新增无类型逻辑的入口。
+`src/app/runtime/studio.ts` 只承载跨功能依赖装配与尚未迁出的共享浏览器编排。包括 runtime 在内的全部 TypeScript 源码都必须通过严格类型检查；Leaflet 插件字段仅可在显式 browser adapter 类型边界内保持动态。
 
 迁出一组行为时：
 
@@ -49,7 +50,7 @@ index.html -> src/main.ts -> bootstrap.ts
 4. 在同一提交删除被替代实现，不保留双路径或镜像状态。
 5. 跑单元、真实 Chrome、E2E 和必要的截图回归。
 
-测试 inspector 仅允许通过 `?studio-test=1` 创建，并应保持冻结、只读。产品代码不得依赖它。
+测试 inspector 仅允许通过 `?studio-test=1` 创建，并应保持冻结、深只读。夹具写入必须通过专用 `testDriver` 和 typed actions；产品代码不得依赖这些接口。
 
 ## 状态、命令与交互
 
@@ -70,7 +71,7 @@ index.html -> src/main.ts -> bootstrap.ts
 
 ## TypeScript 与命名
 
-- 新模块必须通过类型检查，不因 direct runtime 的 `@ts-nocheck` 放宽要求。
+- 所有模块必须通过严格类型检查，不得新增 `@ts-nocheck`。
 - 纯逻辑使用显式输入输出且不依赖 DOM。
 - 变量和函数使用 `camelCase`，类型和类使用 `PascalCase`，常量使用 `SCREAMING_SNAKE_CASE`。
 - controller 表示所有权，渲染数据使用 `*Model`，工厂使用 `create*`。

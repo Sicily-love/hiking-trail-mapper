@@ -127,7 +127,7 @@ Bottom fixed elevation profile (Canvas 2D).
 - **Entry**: Tab bar at top of sidebar (only shows when > 1 group exists)
 - **Rule**: switching group filters ALL rendering / stats / legends to that group
 - **Move**: expand trail card → dropdown → choose target group or `+ New group…`
-- **New imports**: join current active group by default
+- **New additions**: imported and stitched trails always enter the `"默认"` (Default) group and switch to it; restoring a complete project backup preserves its original groups
 
 ## Batch group (v1.14.1)
 

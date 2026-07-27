@@ -34,6 +34,7 @@ npm run dev
 - 选择“添加轨迹”，导入一个或多个 `.kml` 文件。
 - 也可导入 `.zip` / `.kml.zip`，应用会提取其中的 KML 并跳过 macOS 元数据文件。
 - 支持把文件直接拖入工作区。
+- 新添加或拼接生成的轨迹统一进入“默认”轨迹组，之后可在轨迹详情中移动分组。
 
 ## 核心能力
 
@@ -54,7 +55,7 @@ npm run dev
 
 Workbench 使用同一组命令语义适配不同屏幕：
 
-- 桌面端和移动端均保留轨迹、行程、标注点、设置四个明确入口。
+- 桌面端和移动端均保留轨迹组、轨迹、行程三个明确入口，地图模式在活动栏最前方独立切换。
 - 路线库与主轨迹摘要位于轨迹页，保存的下撤方案直接归入行程页。
 - 底部区域专注海拔分析；测距操作临时嵌入海拔区，分段使用独立编辑面板。
 - 命令状态、键盘/指针交互、渲染刷新和模态对话框分别由专门的管理器协调，避免 DOM 事件各自维护一套状态。
@@ -80,12 +81,12 @@ index.html
 - `index.html` 只保留元信息、`#app` 和 `/src/main.ts`，不承载业务实现。
 - `src/app/bootstrap.ts` 挂载 Workbench DOM，通过 Vite 模块图加载 vendor，并显式启动 Studio runtime；业务代码不再通过字符串脚本执行。
 - `src/core` 负责无 DOM 的计算、解析、版本化项目归档、数据转换和渲染模型。
-- `src/app` 与 `src/features` 负责状态和交互编排；工作区状态和项目数据分别由 `AppStateStore`、`ProjectStore` 持有，写入走 typed action、读取走 selector；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench、侧栏/导入 owner 与对话框。
+- `src/app` 与 `src/features` 负责状态和交互编排；工作区状态和项目数据分别由 `AppStateStore`、`ProjectStore` 持有，写入走 typed action、读取走 selector；轨迹拼接与海拔 Canvas 已有独立 feature owner；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench、侧栏/导入 owner 与对话框。
 - `InteractionManager` 保证测距、分段、标注、下撤、轨迹拼接和 Day 预览等交互互斥。
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏、撤销/重做和快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
-`v2.0.0` 删除了 classic 启动桥；当前进一步把 `studio.ts` 从约 6200 行压到约 3940 行。KML 项目构建、复位/fit、侧栏/行程和导入界面已有独立 owner，主 runtime 与 typed feature 只通过 project/state actions 和 selectors 交换数据。仅真实浏览器测试通过 `?studio-test=1` 启用 inspector，正常发布不暴露业务 globals。
+`v2.0.0` 删除了 classic 启动桥；当前进一步把 `studio.ts` 从约 6200 行压到约 3170 行。KML 项目构建、复位/fit、侧栏/行程、导入、轨迹拼接和海拔 Canvas 已有独立 owner，全部 TypeScript 源码通过严格检查且不再使用 `@ts-nocheck`。主 runtime 与 typed feature 只通过 project/state actions 和 selectors 交换数据。仅真实浏览器测试通过 `?studio-test=1` 启用深只读 inspector，测试写入走专用 `testDriver`；正常发布不暴露业务 globals。
 
 ## 开发与测试
 
@@ -128,7 +129,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v2.2.5
+版本：v2.2.6
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。

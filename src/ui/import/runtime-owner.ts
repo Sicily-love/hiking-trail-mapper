@@ -1,13 +1,12 @@
-// @ts-nocheck
-
 export interface ImportRuntimeDependencies {
   document: Document;
-  [name: string]: unknown;
+  [name: string]: any;
 }
 
 /** Owns KML/ZIP import DOM and delegates all project writes to FileImportController. */
 export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
-  const {document, HTM_APP, fflate, runtimeContext, trailContentHash, applyChange,
+  const document:any = dependencies.document;
+  const {HTM_APP, fflate, runtimeContext, trailContentHash, applyChange,
     resetView, selectors, projectActions, projectSelectors, buildEscapeRoutes, parseAndProcessKml, escapeUiText, t,
     studioDialogs, getCurrentLang} = dependencies;
   /* ============ Add Trail UI (KML upload) ============ */
@@ -32,22 +31,22 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
     }, 250);
   }
   addCancel.addEventListener('click', _closeAddModal);
-  addModal.addEventListener('click', e => { if(e.target === addModal) _closeAddModal(); });
+  addModal.addEventListener('click', (e: any) => { if(e.target === addModal) _closeAddModal(); });
 
   kmlDrop.addEventListener('click', () => kmlFile.click());
-  kmlDrop.addEventListener('dragover', e => { e.preventDefault(); kmlDrop.style.borderColor = 'var(--accent)'; kmlDrop.style.background = 'var(--bg-2)'; });
-  kmlDrop.addEventListener('dragleave', e => { kmlDrop.style.borderColor = 'var(--line)'; kmlDrop.style.background = 'var(--bg-0)'; });
-  kmlDrop.addEventListener('drop', e => {
+  kmlDrop.addEventListener('dragover', (e: any) => { e.preventDefault(); kmlDrop.style.borderColor = 'var(--accent)'; kmlDrop.style.background = 'var(--bg-2)'; });
+  kmlDrop.addEventListener('dragleave', (e: any) => { kmlDrop.style.borderColor = 'var(--line)'; kmlDrop.style.background = 'var(--bg-0)'; });
+  kmlDrop.addEventListener('drop', (e: any) => {
     e.preventDefault();
     kmlDrop.style.borderColor = 'var(--line)';
     kmlDrop.style.background = 'var(--bg-0)';
     handleFiles(e.dataTransfer.files);
   });
-  kmlFile.addEventListener('change', e => handleFiles(e.target.files));
+  kmlFile.addEventListener('change', (e: any) => handleFiles(e.target.files));
 
   const PALETTE_LOCAL = ['#f97316','#3b82f6','#10b981','#a855f7','#eab308','#ec4899','#06b6d4','#f59e0b','#84cc16'];
 
-  function handleFileImportEvent(event) {
+  function handleFileImportEvent(event: any) {
     if(event.type === 'archive.expanded') {
       kmlList.innerHTML += `<div style="color:#5cb85c;font-size:11px">📦 ${event.archiveName} → 提取 ${event.count} 个 KML</div>`;
     } else if(event.type === 'archive.empty') {
@@ -90,14 +89,14 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
    * @param {FileList|Array<File>} files
    * @returns {Promise<Array<File | {name:string, text:()=>Promise<string>, _fromZip:string}>>}
    */
-  async function expandZipFiles(files) {
+  async function expandZipFiles(files: any) {
     return fileImportController.expandFiles(files);
   }
 
   /**
    * 保证 trail.id 在 projectSelectors.trails() 中唯一（时间戳+随机极端撞车时补序号）
    */
-  function ensureUniqueTrailId(trail) {
+  function ensureUniqueTrailId(trail: any) {
     return fileImportController.ensureUniqueId(trail);
   }
 
@@ -105,14 +104,14 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
    * 检查 trail 是否与已有轨迹重复（基于 trailContentHash）
    * @returns {Trail|null} 重复的现有轨迹；null 表示不重复
    */
-  function findDuplicateTrail(trail) {
+  function findDuplicateTrail(trail: any) {
     return fileImportController.findDuplicate(trail);
   }
 
   /**
    * 渲染一条 KML 导入的 UI 行（含 ID / source 可编辑输入框）
    */
-  function renderKmlImportRow(displayLabel, trail) {
+  function renderKmlImportRow(displayLabel: any, trail: any) {
     const row = document.createElement('div');
     row.style.cssText = 'border:1px solid var(--line);border-radius:5px;padding:8px;margin-top:6px;background:var(--bg-0)';
     const trailId = escapeUiText(trail.id);
@@ -135,7 +134,7 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
   /**
    * 绑定导入行的 ID / source 输入框事件（v1.18.0 从 handleFiles 拆出）
    */
-  function bindKmlImportRowEvents(row, trail) {
+  function bindKmlImportRowEvents(row: any, trail: any) {
     const idInput = row.querySelector('.kml-row-id');
     const srcInput = row.querySelector('.kml-row-source');
     let cachedTid = trail.id;
@@ -168,7 +167,7 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
    * 导入单个 KML 文件（含解析、去重、入库、UI 反馈）
    * @returns {'added' | 'skipped' | 'failed'}
    */
-  async function importSingleKml(f) {
+  async function importSingleKml(f: any) {
     if(!f.name.toLowerCase().endsWith('.kml')) {
       kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(f.name)}：不是 KML/ZIP 文件</div>`);
       return 'failed';
@@ -194,7 +193,7 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
       renderKmlImportRow(displayLabel, trail);
       addStatus.textContent = '';
       return 'added';
-    } catch(err) {
+    } catch(err:any) {
       console.error('[importSingleKml] 处理失败:', displayLabel, err);
       kmlList.insertAdjacentHTML('beforeend', `<div style="color:#ff8888">❌ ${escapeUiText(displayLabel)}：${escapeUiText(err.message)}</div>`);
       return 'failed';
@@ -204,14 +203,14 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
   /**
    * 完成导入后的收尾：清下撤高亮、重算 escape_routes（可选）、fit 视野、持久化
    */
-  function postImportFinalize(addedCount) {
+  function postImportFinalize(addedCount: any) {
     if(addedCount === 0) return;
     if(selectors.autoGenerateEscape()) {
-      projectActions.mutateTrails('escape.generate', trails => {
+      projectActions.mutateTrails('escape.generate', (trails: any) => {
         for(const tr of trails) {
           if(!tr.waypoints || !tr.track || !tr.track.length) continue;
-          const fakePts = tr.track.map(p => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
-          const others = trails.filter(t => t.id !== tr.id);
+          const fakePts = tr.track.map((p: any) => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
+          const others = trails.filter((t: any) => t.id !== tr.id);
           tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
         }
       });
@@ -219,7 +218,7 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
     fileImportController.finalizeImport(addedCount);
   }
 
-  async function handleFiles(files) {
+  async function handleFiles(files: any) {
     if(!files || files.length === 0) return;
 
     const expanded = await expandZipFiles(files);
@@ -230,7 +229,7 @@ export function createImportRuntime(dependencies: ImportRuntimeDependencies) {
       const result = await importSingleKml(f);
       if(result === 'added') added++;
       // 每条之间让出主线程一帧
-      await new Promise(r => setTimeout(r, 0));
+      await new Promise((r: any) => setTimeout(r, 0));
     }
     postImportFinalize(added);
   }

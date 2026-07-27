@@ -1,14 +1,14 @@
-// @ts-nocheck
-
 export interface SidebarRuntimeDependencies {
   document: Document;
   window: Window;
-  [name: string]: unknown;
+  [name: string]: any;
 }
 
 /** Owns sidebar, itinerary, filter, and map-mode DOM orchestration. */
 export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
-  const {document, window, DAY_ITINERARY_WAYPOINT_TAGS, HTM_APP, HTM_CORE, L, STUDIO_COMMANDS, TAG_RULES_JS,
+  const document:any = dependencies.document;
+  const window:any = dependencies.window;
+  const {DAY_ITINERARY_WAYPOINT_TAGS, HTM_APP, HTM_CORE, L, STUDIO_COMMANDS, TAG_RULES_JS,
     applyChange, baseLayers, beginRuntimeInteraction, cancelRuntimeInteraction, clearEscape,
     commandRegistry, createFloatingPanelPositionController, createWorkbenchIcon, getCurrentLang,
     dayPalette, deleteTrail, t, stateActions, dispatchStudioCommand, downloadTrailKML, drawTracks,
@@ -23,7 +23,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const card = document.getElementById('primary-card');
     const toolbarContext = document.getElementById('toolbar-context');
     if(!card) return;
-    const main = selectors.activeGroup() == null ? null : projectSelectors.trails().find(t => t.id === selectors.primaryTrailId());
+    const main = selectors.activeGroup() == null ? null : projectSelectors.trails().find((t: any) => t.id === selectors.primaryTrailId());
     if(!main) {
       // v1.20.0：区分"未选中分组"和"没有轨迹/主轨迹"两种空态
       const emptyKey = (selectors.activeGroup() == null && projectSelectors.trails().length > 0)
@@ -58,12 +58,12 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const renameEl = document.getElementById('pc-name');
     if(renameEl) renameEl.addEventListener('click', () => void editTrailName(main));
     const dlBtn = document.getElementById('pc-dl-kml');
-    if(dlBtn) dlBtn.addEventListener('click', e => {
+    if(dlBtn) dlBtn.addEventListener('click', (e: any) => {
       e.preventDefault();
       downloadTrailKML(main.id);
     });
     const editLinkBtn = document.getElementById('pc-edit-link');
-    if(editLinkBtn) editLinkBtn.addEventListener('click', async e => {
+    if(editLinkBtn) editLinkBtn.addEventListener('click', async (e: any) => {
       e.preventDefault();
       const newLink = await studioDialogs.prompt({
         title:getCurrentLang() === 'zh' ? '编辑来源链接' : 'Edit source link',
@@ -74,7 +74,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
         cancelLabel:getCurrentLang() === 'zh' ? '取消' : 'Cancel',
       });
       if(newLink !== null) {
-        projectActions.mutateTrail(main.id, 'trail.source', trail => { trail.source = newLink.trim(); });
+        projectActions.mutateTrail(main.id, 'trail.source', (trail: any) => { trail.source = newLink.trim(); });
         saveToStorage(); renderPrimaryCard();
       }
     });
@@ -86,14 +86,14 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     element:document.getElementById('primary-mini'),
     mapElement:document.getElementById('map'),
     storage:window.localStorage,
-    getTrail:() => selectors.activeGroup() == null ? null : projectSelectors.trails().find(trail => trail.id === selectors.primaryTrailId()) || null,
+    getTrail:() => selectors.activeGroup() == null ? null : projectSelectors.trails().find((trail: any) => trail.id === selectors.primaryTrailId()) || null,
     translate:t,
     escapeText:escapeUiText,
     dragHint:() => getCurrentLang() === 'zh' ? '拖动可移动' : 'Drag to move',
     openSidebar:() => toggleSidebar(true),
   });
   const PRIMARY_MINI_POS_KEY = primaryMiniController.storageKey;
-  function clampPrimaryMiniPosition(_mini, left, top) { return primaryMiniController.clamp(left, top); }
+  function clampPrimaryMiniPosition(_mini: any, left: any, top: any) { return primaryMiniController.clamp(left, top); }
   function applyPrimaryMiniPosition() { primaryMiniController.applyPosition(); }
   function schedulePrimaryMiniPositionApply() { primaryMiniController.schedulePositionApply(); }
   function savePrimaryMiniPosition() { primaryMiniController.savePosition(); }
@@ -104,7 +104,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     document,
     viewport:window,
     storage:window.localStorage,
-    disablePropagation:element => {
+    disablePropagation:(element: any) => {
       L.DomEvent?.disableClickPropagation(element);
       L.DomEvent?.disableScrollPropagation(element);
     },
@@ -134,7 +134,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   // 生成轨迹缩略图：左侧轨迹形状（GPS 平面投影 + 类等高线底） + 右侧海拔迷你图
-  function buildTrailThumbnail(tr) {
+  function buildTrailThumbnail(tr: any) {
     const W = 280, H = 60;
     const pad = 4;
     const track = tr.track || [];
@@ -142,8 +142,8 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     // 左侧 33% 区域：地图轨迹（lat/lng 投影到 box）
     const mapW = Math.floor(W * 0.34) - pad * 2;
     const mapH = H - pad * 2;
-    const lats = track.map(p => p[0]);
-    const lngs = track.map(p => p[1]);
+    const lats = track.map((p: any) => p[0]);
+    const lngs = track.map((p: any) => p[1]);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
     const latR = maxLat - minLat || 1, lngR = maxLng - minLng || 1;
@@ -155,7 +155,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     else { mh = mapH; mw = mapH * aspectGeo; }
     const mox = pad + (mapW - mw) / 2;
     const moy = pad + (mapH - mh) / 2;
-    const proj = (lat, lng) => [
+    const proj = (lat: any, lng: any) => [
       mox + ((lng - minLng) / lngR) * mw,
       moy + (1 - (lat - minLat) / latR) * mh,
     ];
@@ -165,7 +165,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     for(let i = 0; i < track.length; i += stride) mapPts.push(proj(track[i][0], track[i][1]));
     if(mapPts[mapPts.length-1][0] !== proj(track[track.length-1][0], track[track.length-1][1])[0])
       mapPts.push(proj(track[track.length-1][0], track[track.length-1][1]));
-    const mapPath = 'M ' + mapPts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L ');
+    const mapPath = 'M ' + mapPts.map((p: any) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L ');
     // 起终点
     const startPt = mapPts[0], endPt = mapPts[mapPts.length-1];
     // 山顶（最高海拔点）在地图上的位置
@@ -180,7 +180,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const elevW = W - elevX - pad;
     const elevH = H - pad * 2;
     const eY = pad;
-    const alts = track.map(p => p[2]);
+    const alts = track.map((p: any) => p[2]);
     const minE = Math.min(...alts), maxE = Math.max(...alts);
     const eR = maxE - minE || 1;
     const eStride = Math.max(1, Math.floor(track.length / 70));
@@ -191,7 +191,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       ePts.push([x, y]);
     }
     ePts.push([elevX + elevW, eY + elevH * (1 - (alts[alts.length-1] - minE) / eR)]);
-    const elevPath = 'M ' + ePts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L ');
+    const elevPath = 'M ' + ePts.map((p: any) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L ');
     const elevFill = elevPath + ` L ${elevX + elevW},${eY + elevH} L ${elevX},${eY + elevH} Z`;
     // 海拔图最高点
     const ePeakX = elevX + (peakIdxAll / (track.length - 1)) * elevW;
@@ -244,9 +244,9 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const groups = getGroups();
     const bar = document.createElement('div');
     bar.className = 'group-tab-bar studio-group-list';
-    groups.forEach(g => {
+    groups.forEach((g: any) => {
       const btn = document.createElement('button');
-      const count = projectSelectors.trails().filter(t => trailGroup(t) === g).length;
+      const count = projectSelectors.trails().filter((t: any) => trailGroup(t) === g).length;
       btn.className = 'group-tab' + (g === selectors.activeGroup() ? ' active' : '');
       btn.setAttribute('aria-pressed', String(g === selectors.activeGroup()));
       const name = document.createElement('span');
@@ -270,7 +270,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 批量工具栏（仅在 batchSelected.size > 0 时显示） */
-  function renderBatchToolbar(others) {
+  function renderBatchToolbar(others: any) {
     if(selectors.batchSelected().size === 0) return null;
     const toolbar = document.createElement('div');
     toolbar.className = 'batch-toolbar';
@@ -280,7 +280,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     info.textContent = `已选 ${selectors.batchSelected().size} / ${others.length}`;
     toolbar.appendChild(info);
 
-    const btn = (text, muted, onClick) => {
+    const btn = (text: any, muted: any, onClick: any) => {
       const b = document.createElement('button');
       if(muted) b.className = 'muted';
       b.textContent = text;
@@ -288,26 +288,26 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       return b;
     };
     toolbar.appendChild(btn('全选', false, () => {
-      stateActions.replaceBatch(others.map(t => t.id));
+      stateActions.replaceBatch(others.map((t: any) => t.id));
       buildTrailList();
     }));
     toolbar.appendChild(btn('反选', false, () => {
       const cur = selectors.batchSelected();
-      stateActions.replaceBatch(others.map(t => t.id).filter(id => !cur.has(id)));
+      stateActions.replaceBatch(others.map((t: any) => t.id).filter((id: any) => !cur.has(id)));
       buildTrailList();
     }));
 
     const moveSel = document.createElement('select');
-    const appendMoveOption = (value, label) => {
+    const appendMoveOption = (value: any, label: any) => {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = label;
       moveSel.appendChild(option);
     };
     appendMoveOption('', '移到…');
-    getGroups().filter(g => g !== selectors.activeGroup()).forEach(g => appendMoveOption(g, g));
+    getGroups().filter((g: any) => g !== selectors.activeGroup()).forEach((g: any) => appendMoveOption(g, g));
     appendMoveOption('__new__', '＋ 新建组…');
-    moveSel.addEventListener('change', async e => {
+    moveSel.addEventListener('change', async (e: any) => {
       let target = e.target.value;
       if(!target) return;
       if(target === '__new__') {
@@ -333,21 +333,21 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 执行批量移动（供 renderBatchToolbar 调用） */
-  function moveBatchToGroup(target) {
+  function moveBatchToGroup(target: any) {
     const ids = [...selectors.batchSelected()];
     let moved = 0;
-    projectSelectors.trails().forEach(t => {
+    projectSelectors.trails().forEach((t: any) => {
       if(!ids.includes(t.id)) return;
       const oldGroup = trailGroup(t);
       t.group = target;
       // v1.21.0：如果被移动的 trail 是 activeGroup 的主轨迹，重新挑一条
       if(t.id === selectors.primaryTrailId()) {
-        const remaining = projectSelectors.trails().filter(x => trailGroup(x) === selectors.activeGroup() && x.id !== t.id);
+        const remaining = projectSelectors.trails().filter((x: any) => trailGroup(x) === selectors.activeGroup() && x.id !== t.id);
         stateActions.setPrimaryTrail(remaining[0] ? remaining[0].id : null);
       }
       // v1.21.0：如果 trail 是它原来组的主轨迹，清掉原组的记忆（避免"幽灵主轨迹"）
       if(oldGroup !== target && selectors.primaryForGroup(oldGroup) === t.id) {
-        const remaining = projectSelectors.trails().filter(x => trailGroup(x) === oldGroup && x.id !== t.id);
+        const remaining = projectSelectors.trails().filter((x: any) => trailGroup(x) === oldGroup && x.id !== t.id);
         stateActions.setGroupPrimary(oldGroup, remaining[0] ? remaining[0].id : null);
       }
       moved++;
@@ -366,7 +366,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
    * @param {boolean} isBatchChecked 是否被批量选中
    * @param {boolean} [isPrimary]    是否是当前分组的主轨迹（v1.21.0）
    */
-  function trailCardHeaderHtml(tr, isActive, isExpanded, isBatchChecked, isPrimary) {
+  function trailCardHeaderHtml(tr: any, isActive: any, isExpanded: any, isBatchChecked: any, isPrimary: any) {
     const trailId = escapeUiText(tr.id);
     return `
       <div class="trail-card-hdr">
@@ -381,14 +381,14 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 单张轨迹卡片的详情区 HTML（仅展开态） */
-  function trailCardExpandedHtml(tr) {
+  function trailCardExpandedHtml(tr: any) {
     const thumbSvg = buildTrailThumbnail(tr);
     const trailId = escapeUiText(tr.id);
     const sourceUrl = sanitizeExternalHttpUrl(tr.source);
     const linkArea = sourceUrl
       ? `<a href="${escapeUiText(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="trail-link-btn" title="${escapeUiText(sourceUrl)}" style="color:var(--accent);font-size:10px;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${escapeUiText(tr.name)}</a><a href="#" class="trail-edit-link-btn" data-tid="${escapeUiText(tr.id)}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">✎</a>`
       : `<a href="#" class="trail-edit-link-btn" data-tid="${escapeUiText(tr.id)}" title="${t('trail.editLink')}" style="color:var(--text-muted);font-size:10px;text-decoration:none">🔗 ${t('trail.addLink') || '添加链接'} ✎</a>`;
-    const groupOpts = getGroups().map(g => `<option value="${escapeUiText(g)}" ${trailGroup(tr)===g?'selected':''}>${escapeUiText(g)}</option>`).join('');
+    const groupOpts = getGroups().map((g: any) => `<option value="${escapeUiText(g)}" ${trailGroup(tr)===g?'selected':''}>${escapeUiText(g)}</option>`).join('');
     // v1.21.0：主轨迹卡不显示"设为主轨迹"按钮，显示 "★ 主轨迹" 标识
     const isPrimary = (tr.id === selectors.primaryTrailId());
     const primaryLabel = isPrimary
@@ -420,7 +420,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 判断 click 是否来自"要走详情按钮独立 handler"的元素 */
-  function isDetailButtonTarget(el) {
+  function isDetailButtonTarget(el: any) {
     return el.closest('.trail-link-btn')
         || el.closest('.trail-rename-btn')
         || el.classList.contains('trail-edit-link-btn')
@@ -433,7 +433,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 卡片主点击 handler（复选框 / 展开箭头 / 其他区域=切换叠加） */
-  function handleTrailCardClick(tr, e) {
+  function handleTrailCardClick(tr: any, e: any) {
     if(e.target.classList.contains('trail-checkbox')) {
       e.preventDefault(); e.stopPropagation();
       toggleTrailBatch(tr.id);
@@ -450,13 +450,13 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     // 其他区域：切换地图叠加
     toggleTrailActive(tr.id);
     stateActions.setActiveEscape(null);
-    document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.escape-item').forEach((el: any) => el.classList.remove('active'));
     applyChange();
     return true;
   }
 
   /** 展开态特有的详情按钮 handler（编辑 ID / 编辑链接 / 删除 / 反向 / 设为主 等） */
-  async function editTrailSource(tr) {
+  async function editTrailSource(tr: any) {
     const newUrl = await studioDialogs.prompt({
       title:t('trail.editLink'),
       inputLabel:'URL',
@@ -467,13 +467,13 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     });
     if(newUrl === null || !projectSelectors.trails().includes(tr)) return false;
     return recordProjectEdit('编辑轨迹来源', 'Edit trail source', () => {
-      projectActions.mutateTrail(tr.id, 'trail.source', trail => { trail.source = newUrl.trim(); });
+      projectActions.mutateTrail(tr.id, 'trail.source', (trail: any) => { trail.source = newUrl.trim(); });
       applyChange();
       return true;
     });
   }
 
-  async function editTrailName(tr) {
+  async function editTrailName(tr: any) {
     const newName = await studioDialogs.prompt({
       title:getCurrentLang() === 'zh' ? '重命名轨迹' : 'Rename trail',
       inputLabel:getCurrentLang() === 'zh' ? '轨迹名称' : 'Trail name',
@@ -488,7 +488,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     return recordProjectEdit('重命名轨迹', 'Rename trail', () => trailController.renameTrail(tr.id, newName));
   }
 
-  async function editTrailId(tr) {
+  async function editTrailId(tr: any) {
     const newId = await studioDialogs.prompt({
       title:t('trail.editId'),
       inputLabel:'ID',
@@ -497,9 +497,9 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       selectOnOpen:true,
       confirmLabel:getCurrentLang() === 'zh' ? '保存' : 'Save',
       cancelLabel:getCurrentLang() === 'zh' ? '取消' : 'Cancel',
-      validate:value => {
+      validate:(value: any) => {
         const trimmed = value.trim();
-        return projectSelectors.trails().some(other => other !== tr && other.id === trimmed)
+        return projectSelectors.trails().some((other: any) => other !== tr && other.id === trimmed)
           ? 'ID 已存在 / ID already exists'
           : null;
       },
@@ -508,14 +508,14 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     return recordProjectEdit('编辑轨迹 ID', 'Edit trail ID', () => {
       const trimmed = newId.trim();
       const oldId = tr.id;
-      projectActions.mutateTrail(oldId, 'trail.rename-id', trail => { trail.id = trimmed; });
+      projectActions.mutateTrail(oldId, 'trail.rename-id', (trail: any) => { trail.id = trimmed; });
       stateActions.renameTrailId(oldId, trimmed);
       applyChange();
       return true;
     });
   }
 
-  async function confirmDeleteTrail(tr) {
+  async function confirmDeleteTrail(tr: any) {
     const confirmed = await studioDialogs.confirm({
       title:getCurrentLang() === 'zh' ? '删除轨迹' : 'Delete trail',
       message:getCurrentLang() === 'zh' ? `确定删除「${tr.name}」吗？` : `Delete "${tr.name}"?`,
@@ -528,7 +528,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     return true;
   }
 
-  function handleTrailDetailClick(tr, e) {
+  function handleTrailDetailClick(tr: any, e: any) {
     if(e.target.closest('.trail-rename-btn')) {
       e.preventDefault(); e.stopPropagation();
       void editTrailName(tr);
@@ -562,7 +562,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       stateActions.setPrimaryTrail(tr.id);
       stateActions.setTrailActive(tr.id, true);
       stateActions.setActiveEscape(null);
-      document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.escape-item').forEach((el: any) => el.classList.remove('active'));
       applyChange();
       return true;
     }
@@ -570,7 +570,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 分组下拉的 change handler（展开态） */
-  async function handleTrailGroupChange(tr, newGroup, selectEl) {
+  async function handleTrailGroupChange(tr: any, newGroup: any, selectEl: any) {
     if(newGroup === '__new__') {
       const name = await studioDialogs.prompt({
         title:getCurrentLang() === 'zh' ? '新建分组' : 'New group',
@@ -584,10 +584,10 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     }
     recordProjectEdit('移动轨迹组', 'Move trail to group', () => {
       const oldGroup = trailGroup(tr);
-      projectActions.mutateTrail(tr.id, 'trail.move-group', trail => { trail.group = newGroup; });
+      projectActions.mutateTrail(tr.id, 'trail.move-group', (trail: any) => { trail.group = newGroup; });
       // v1.21.0：如果被移出的 trail 是原组的主轨迹，清掉原组的记忆
       if(oldGroup !== newGroup && selectors.primaryForGroup(oldGroup) === tr.id) {
-        const remaining = projectSelectors.trails().filter(t => trailGroup(t) === oldGroup && t.id !== tr.id);
+        const remaining = projectSelectors.trails().filter((t: any) => trailGroup(t) === oldGroup && t.id !== tr.id);
         stateActions.setGroupPrimary(oldGroup, remaining[0] ? remaining[0].id : null);
       }
       applyChange();
@@ -596,7 +596,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   }
 
   /** 渲染单张 trail 卡片并绑定所有 handler */
-  function renderTrailCard(tr) {
+  function renderTrailCard(tr: any) {
     const card = document.createElement('div');
     const isActive = selectors.isTrailActive(tr);
     const isExpanded = selectors.expandedTrails().has(tr.id);
@@ -618,7 +618,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const bindCardEvents = () => {
       const renameButton = card.querySelector('.trail-rename-btn');
       if(renameButton) renameButton.replaceChildren(createWorkbenchIcon(document, 'pencil', {size:13}));
-      card.addEventListener('click', e => {
+      card.addEventListener('click', (e: any) => {
         if(handleTrailDetailClick(tr, e)) return;
         handleTrailCardClick(tr, e);
       });
@@ -635,13 +635,13 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
 
     // 详情区里的 <a class="trail-link-btn"> 保留浏览器默认行为（打开新标签），阻止 click 冒泡即可
     const linkBtn = card.querySelector('.trail-link-btn');
-    if(linkBtn) linkBtn.addEventListener('click', e => e.stopPropagation());
+    if(linkBtn) linkBtn.addEventListener('click', (e: any) => e.stopPropagation());
 
     bindCardEvents();
 
     const groupSel = card.querySelector('.trail-group-select');
     if(groupSel) {
-      groupSel.addEventListener('change', e => {
+      groupSel.addEventListener('change', (e: any) => {
         e.stopPropagation();
         void handleTrailGroupChange(tr, e.target.value, e.target);
       });
@@ -670,10 +670,10 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
 
     // v1.21.0：主轨迹不再被剔除，而是保留在列表里（用 is-primary class 视觉标记）
     //          排序：主轨迹在最前，其他按原顺序
-    const inGroup = projectSelectors.trails().filter(tr => trailGroup(tr) === selectors.activeGroup());
-    const primary = inGroup.find(tr => tr.id === selectors.primaryTrailId());
+    const inGroup = projectSelectors.trails().filter((tr: any) => trailGroup(tr) === selectors.activeGroup());
+    const primary = inGroup.find((tr: any) => tr.id === selectors.primaryTrailId());
     const others = primary
-      ? [primary, ...inGroup.filter(tr => tr.id !== selectors.primaryTrailId())]
+      ? [primary, ...inGroup.filter((tr: any) => tr.id !== selectors.primaryTrailId())]
       : inGroup;
 
     const toolbar = renderBatchToolbar(others);
@@ -686,22 +686,22 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       list.appendChild(empty);
       return;
     }
-    others.forEach(tr => list.appendChild(renderTrailCard(tr)));
+    others.forEach((tr: any) => list.appendChild(renderTrailCard(tr)));
   }
 
   function buildFilterGrid() {
     const grid = document.getElementById('filter-grid');
     grid.innerHTML = '';
     // 统计各tag数量（active trails）
-    const counts = {};
-    projectSelectors.trails().forEach(t => {
+    const counts:Record<string, number> = {};
+    projectSelectors.trails().forEach((t: any) => {
       if(!isTrailActive(t)) return;
-      t.waypoints.forEach(w => counts[w.tag] = (counts[w.tag]||0) + 1);
+      t.waypoints.forEach((w: any) => counts[w.tag] = (counts[w.tag]||0) + 1);
     });
 
     const tagOrder = ['camp','pass','supply','water','fork','warn','shelter','village','bridge','river','other','start','end'];
 
-    tagOrder.forEach(tag => {
+    tagOrder.forEach((tag: any) => {
       if(!counts[tag]) return;
       const chip = document.createElement('div');
       chip.className = 'filter-chip' + (selectors.visibleTags().has(tag) ? ' on' : '');
@@ -718,22 +718,22 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   const dayPreviewController = HTM_APP.createDayPreviewController(runtimeContext);
   const dayPreviewState = dayPreviewController.state;
 
-  function clearDaySegmentPreview(opts = {}) {
+  function clearDaySegmentPreview(opts: any = {}) {
     if(!opts.fromManager && cancelRuntimeInteraction('day-preview', opts.reason || 'cancelled')) return;
     if(dayPreviewState.layer) dayPreviewState.layer.clearLayers();
     dayPreviewController.exit();
-    document.querySelectorAll('.day-preview-target.active').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.day-preview-target.active').forEach((el: any) => el.classList.remove('active'));
     if(!measureState.active) hideMeasureElevReadout();
     if(!opts.silent && typeof refreshElevBar === 'function') refreshElevBar();
   }
 
-  function handleDayPreviewInteractionEvent(event) {
+  function handleDayPreviewInteractionEvent(event: any) {
     if(event.type === 'refresh' && typeof refreshElevBar === 'function') refreshElevBar();
   }
 
-  function showDaySegmentPreview(trail, dm) {
+  function showDaySegmentPreview(trail: any, dm: any) {
     if(interactionManager.current.kind === 'segment') {
-      void requestSegmentExit('switch-day-preview').then(exited => {
+      void requestSegmentExit('switch-day-preview').then((exited: any) => {
         if(exited) showDaySegmentPreview(trail, dm);
       });
       return;
@@ -747,7 +747,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     }
     const session = beginRuntimeInteraction('day-preview', 'preview', trail, {
       onEvent: handleDayPreviewInteractionEvent,
-      onCancel: opts => clearDaySegmentPreview(opts),
+      onCancel: (opts: any) => clearDaySegmentPreview(opts),
     });
     if(!session) return;
     if(!dayPreviewController.activate(plan)) {
@@ -763,10 +763,10 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       model.fitOptions,
       {source:'day-preview'},
     );
-    model.endpoints.forEach(endpoint => {
+    model.endpoints.forEach((endpoint: any) => {
       measureMarker(endpoint.lat, endpoint.lng, endpoint.label, endpoint.color).addTo(dayPreviewState.layer);
     });
-    document.querySelectorAll(`[data-day-preview="${dm.d}"]`).forEach(el => el.classList.add('active'));
+    document.querySelectorAll(`[data-day-preview="${dm.d}"]`).forEach((el: any) => el.classList.add('active'));
     const stats = plan.stats;
     const distEl = document.getElementById('m-dist');
     const distBox = document.getElementById('measure-distance');
@@ -780,7 +780,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const tab = document.getElementById('tab-days');
     tab.innerHTML = '';
     // 只显示主轨迹的行程
-    const trail = projectSelectors.trails().find(t => t.id === selectors.primaryTrailId());
+    const trail = projectSelectors.trails().find((t: any) => t.id === selectors.primaryTrailId());
     if(!trail) return;
     const trailHdr = document.createElement('div');
     trailHdr.className = 'days-summary';
@@ -809,10 +809,10 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       return;
     }
 
-    const unassignedRoutes = (trail.escape_routes || []).filter(route => HTM_CORE.escapeRouteDays(route).length === 0);
+    const unassignedRoutes = (trail.escape_routes || []).filter((route: any) => HTM_CORE.escapeRouteDays(route).length === 0);
     if(unassignedRoutes.length) appendEscapeRoutesForDay(tab, trail, null);
 
-    trail.day_meta.forEach((dm, dIdx) => {
+    trail.day_meta.forEach((dm: any, dIdx: any) => {
         const range = HTM_CORE.getDayIndexRange(trail, dm);
         const computed = HTM_CORE.computeDayRangeStats(trail, range) || {};
         const dayKm = Number.isFinite(Number(dm.km)) ? Number(dm.km) : (computed.km || 0);
@@ -820,7 +820,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
         const dayDesc = Number.isFinite(Number(dm.desc)) ? Number(dm.desc) : (computed.desc || 0);
         const dayMax = Number.isFinite(Number(dm.max)) ? Number(dm.max) : (computed.max || 0);
         const dayMin = Number.isFinite(Number(dm.min)) ? Number(dm.min) : (computed.min || 0);
-        const dayWps = trail.waypoints.filter(w => {
+        const dayWps = trail.waypoints.filter((w: any) => {
           // v1.27.0：优先用 wp.day 字段；否则用 day_meta cumulative km 划分
           if(w.day != null) return w.day === dm.d;
           if(range && w.gps_idx != null) return w.gps_idx >= range.iStart && w.gps_idx <= range.iEnd;
@@ -868,15 +868,15 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
           </div>
         `;
         tab.appendChild(block);
-        block.querySelectorAll('.day-preview-target').forEach(el => {
-          el.addEventListener('click', e => {
+        block.querySelectorAll('.day-preview-target').forEach((el: any) => {
+          el.addEventListener('click', (e: any) => {
             e.stopPropagation();
             showDaySegmentPreview(trail, dm);
           });
         });
         const list = block.querySelector('.wp-list');
         // v1.27.0：行程 tab 固定显示这几类关键信息（不受 filter 影响）
-        dayWps.forEach(wp => {
+        dayWps.forEach((wp: any) => {
           if(!DAY_ITINERARY_WAYPOINT_TAGS.has(wp.tag)) return;
           const item = document.createElement('div');
           item.className = 'wp-item';
@@ -904,31 +904,31 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     if(escapeFilters) applyEscapeFilters(tab, escapeFilters);
   }
 
-  function selectedNearbyWaypointRefs(trail, day) {
+  function selectedNearbyWaypointRefs(trail: any, day: any) {
     const stored = trail.itinerary_waypoint_refs;
     if(!stored || typeof stored !== 'object') return new Set();
     return new Set(Array.isArray(stored[String(day)]) ? stored[String(day)] : []);
   }
 
-  function appendNearbyWaypointPicker(container, trail, dm, range) {
+  function appendNearbyWaypointPicker(container: any, trail: any, dm: any, range: any) {
     if(!container || !range) return;
-    const sources = projectSelectors.trails().filter(candidate =>
+    const sources = projectSelectors.trails().filter((candidate: any) =>
       candidate.id !== trail.id && trailGroup(candidate) === selectors.activeGroup());
     const candidates = HTM_CORE.collectNearbyItineraryWaypoints(trail.track, range, sources, 200)
-      .filter(candidate => DAY_ITINERARY_WAYPOINT_TAGS.has(candidate.waypoint.tag));
+      .filter((candidate: any) => DAY_ITINERARY_WAYPOINT_TAGS.has(candidate.waypoint.tag));
     if(!candidates.length) return;
     const selected = selectedNearbyWaypointRefs(trail, dm.d);
     const details = document.createElement('details');
     details.className = 'nearby-waypoint-picker';
     const summary = document.createElement('summary');
     const updateSummary = () => {
-      const count = [...details.querySelectorAll('input[type="checkbox"]')].filter(input => input.checked).length;
+      const count = [...details.querySelectorAll('input[type="checkbox"]')].filter((input: any) => input.checked).length;
       summary.textContent = `${getCurrentLang() === 'zh' ? '附近轨迹标注' : 'Nearby trail waypoints'} · ${count}/${candidates.length}`;
     };
     details.append(summary);
     const options = document.createElement('div');
     options.className = 'nearby-waypoint-options';
-    candidates.forEach(candidate => {
+    candidates.forEach((candidate: any) => {
       const wp = candidate.waypoint;
       const item = document.createElement('label');
       item.className = 'nearby-waypoint-option';
@@ -953,7 +953,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
         if(checkbox.checked) refs.add(candidate.ref);
         else refs.delete(candidate.ref);
         recordProjectEdit('编辑行程标注', 'Edit itinerary waypoints', () => {
-          projectActions.mutateTrail(trail.id, 'itinerary.waypoints', candidate => {
+          projectActions.mutateTrail(trail.id, 'itinerary.waypoints', (candidate: any) => {
             candidate.itinerary_waypoint_refs = {
               ...(candidate.itinerary_waypoint_refs || {}),
               [String(dm.d)]:[...refs],
@@ -973,7 +973,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     updateSummary();
   }
 
-  function appendEscapeTools(container, trail) {
+  function appendEscapeTools(container: any, trail: any) {
     const routes = trail.escape_routes || [];
     const tools = document.createElement('section');
     tools.className = 'itinerary-escape-tools';
@@ -998,7 +998,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     const dayFilter = document.createElement('select');
     const referenceFilter = document.createElement('select');
     for(const select of [directionFilter, dayFilter, referenceFilter]) select.className = 'escape-filter-select';
-    const addOption = (select, value, label) => {
+    const addOption = (select: any, value: any, label: any) => {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = label;
@@ -1008,16 +1008,16 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     addOption(directionFilter, 'forward', getCurrentLang() === 'zh' ? '正向' : 'Forward');
     addOption(directionFilter, 'reverse', getCurrentLang() === 'zh' ? '反向' : 'Reverse');
     addOption(dayFilter, 'all', getCurrentLang() === 'zh' ? '全部 Day' : 'All days');
-    [...new Set(routes.flatMap(route => HTM_CORE.escapeRouteDays(route)))]
-      .sort((left, right) => left - right)
-      .forEach(day => addOption(dayFilter, String(day), `D${day}`));
-    if(routes.some(route => HTM_CORE.escapeRouteDays(route).length === 0)) {
+    [...new Set(routes.flatMap((route: any) => HTM_CORE.escapeRouteDays(route)))]
+      .sort((left: any, right: any) => left - right)
+      .forEach((day: any) => addOption(dayFilter, String(day), `D${day}`));
+    if(routes.some((route: any) => HTM_CORE.escapeRouteDays(route).length === 0)) {
       addOption(dayFilter, 'none', getCurrentLang() === 'zh' ? '未关联 Day' : 'No day');
     }
     addOption(referenceFilter, 'all', getCurrentLang() === 'zh' ? '全部依据轨迹' : 'All references');
     const references = new Map();
-    routes.forEach(route => references.set(route._anchor?.trailId || trail.id, route._anchor?.trailName || trail.name));
-    references.forEach((name, id) => addOption(referenceFilter, id, name));
+    routes.forEach((route: any) => references.set(route._anchor?.trailId || trail.id, route._anchor?.trailName || trail.name));
+    references.forEach((name: any, id: any) => addOption(referenceFilter, id, name));
     const count = document.createElement('span');
     count.className = 'escape-filter-count';
     filters.append(nameFilter, directionFilter, dayFilter, referenceFilter, count);
@@ -1029,10 +1029,10 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     return {nameFilter, directionFilter, dayFilter, referenceFilter, count};
   }
 
-  function applyEscapeFilters(container, filters) {
+  function applyEscapeFilters(container: any, filters: any) {
     const query = filters.nameFilter.value.trim().toLocaleLowerCase();
     const visibleRouteIds = new Set();
-    container.querySelectorAll('.escape-item').forEach(item => {
+    container.querySelectorAll('.escape-item').forEach((item: any) => {
       const days = (item.dataset.days || '').split(',').filter(Boolean);
       const dayMatches = filters.dayFilter.value === 'all'
         || (filters.dayFilter.value === 'none' ? days.length === 0 : days.includes(filters.dayFilter.value));
@@ -1043,15 +1043,15 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       item.hidden = !matches;
       if(matches) visibleRouteIds.add(item.dataset.id);
     });
-    container.querySelectorAll('.day-escape-section').forEach(section => {
+    container.querySelectorAll('.day-escape-section').forEach((section: any) => {
       section.hidden = !section.querySelector('.escape-item:not([hidden])');
     });
-    filters.count.textContent = `${visibleRouteIds.size}/${new Set([...container.querySelectorAll('.escape-item')].map(item => item.dataset.id)).size}`;
+    filters.count.textContent = `${visibleRouteIds.size}/${new Set([...container.querySelectorAll('.escape-item')].map((item: any) => item.dataset.id)).size}`;
   }
 
-  function appendEscapeRoutesForDay(container, trail, day, includeAll = false) {
+  function appendEscapeRoutesForDay(container: any, trail: any, day: any, includeAll: any = false) {
     if(!container) return;
-    const routes = (trail.escape_routes || []).filter(route => {
+    const routes = (trail.escape_routes || []).filter((route: any) => {
       if(includeAll) return true;
       const days = HTM_CORE.escapeRouteDays(route);
       return day == null ? days.length === 0 : days.includes(Number(day));
@@ -1066,7 +1066,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       : `${getCurrentLang() === 'zh' ? '本日下撤方案' : 'Escape routes'} · ${routes.length}`;
     const routeList = document.createElement('div');
     routeList.className = 'escape-route-list';
-    routes.forEach(r => {
+    routes.forEach((r: any) => {
         const item = document.createElement('div');
         item.className = 'escape-item';
         item.dataset.trail = trail.id;
@@ -1087,7 +1087,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
           ? `<span style="background:#1a2e1a;color:#4ade80;padding:1px 6px;border-radius:3px;font-size:10px;margin-left:4px">手动</span>`
           : '';
         const dayTag = routeDays.length
-          ? `<span class="escape-day-tag">${routeDays.map(value => `D${value}`).join(' · ')}</span>`
+          ? `<span class="escape-day-tag">${routeDays.map((value: any) => `D${value}`).join(' · ')}</span>`
           : '';
         const directionTag = `<span class="escape-direction-tag ${direction}">${direction === 'reverse' ? (getCurrentLang() === 'zh' ? '反向' : 'Reverse') : (getCurrentLang() === 'zh' ? '正向' : 'Forward')}</span>`;
         const delBtn = r._manual
@@ -1102,7 +1102,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
             <span>${r.drop_m > 0 ? '⬇' : r.drop_m < 0 ? '⬆' : '—'} ${Math.abs(r.drop_m)} m</span>
           </div>
         `;
-        item.addEventListener('click', e => {
+        item.addEventListener('click', (e: any) => {
           if(e.target.classList.contains('escape-del-btn')) {
             const delId = e.target.dataset.id;
             const wasActive = selectors.activeEscape() === delId;
@@ -1116,8 +1116,8 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
           if(selectors.activeEscape() === r.id) {
             clearEscape();
           } else {
-            document.querySelectorAll('.escape-item').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.escape-item').forEach(el => {
+            document.querySelectorAll('.escape-item').forEach((el: any) => el.classList.remove('active'));
+            document.querySelectorAll('.escape-item').forEach((el: any) => {
               if(el.dataset.id === r.id && el.dataset.trail === trail.id) el.classList.add('active');
             });
             showEscape(trail.id, r.id);
@@ -1134,11 +1134,11 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
       if(projectSelectors.trails().length === 1) {
         lg.innerHTML = `
           <h4>按天分色</h4>
-          ${dayPalette.map((c,i)=>`<div class="lg-row"><div class="swatch" style="background:${c}"></div>D${i+1}</div>`).join('')}
+          ${dayPalette.map((c: any,i: any)=>`<div class="lg-row"><div class="swatch" style="background:${c}"></div>D${i+1}</div>`).join('')}
         `;
       } else {
-        lg.innerHTML = `<h4><span data-i18n="legend.title">多轨迹（主轨迹高亮）</span></h4>` + projectSelectors.trails().filter(t=>isTrailActive(t))
-          .map(t=>{
+        lg.innerHTML = `<h4><span data-i18n="legend.title">多轨迹（主轨迹高亮）</span></h4>` + projectSelectors.trails().filter((t: any)=>isTrailActive(t))
+          .map((t: any)=>{
             const isP = t.id === selectors.primaryTrailId();
             return `<div class="lg-row" style="opacity:${isP?1:0.6}"><div class="swatch" style="background:${sanitizeHexColor(t.color)};height:${isP?5:3}px"></div>${isP?'★ ':''}${escapeUiText(t.name)}</div>`;
           }).join('');
@@ -1167,18 +1167,18 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   /* ============ Wire up controls ============ */
   // tabs
   let lastNonDayMode = selectors.mode() === 'day' ? 'elev' : selectors.mode();
-  const sidebarTabCommands = {
+  const sidebarTabCommands:Record<string, any> = {
     groups:STUDIO_COMMANDS.WORKSPACE_GROUPS,
     trails:STUDIO_COMMANDS.WORKSPACE_TRAILS,
     days:STUDIO_COMMANDS.WORKSPACE_ITINERARY,
   };
 
-  function activateSidebarTab(tabName) {
+  function activateSidebarTab(tabName: any) {
     const tab = document.querySelector(`.tab[data-tab="${tabName}"]`);
     const pane = document.getElementById('tab-' + tabName);
     if(!tab || !pane) return false;
-    document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(item => item.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach((item: any) => item.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach((item: any) => item.classList.remove('active'));
     tab.classList.add('active');
     pane.classList.add('active');
     if(tabName === 'days') {
@@ -1193,7 +1193,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     return true;
   }
 
-  document.querySelectorAll('.tab').forEach(t => {
+  document.querySelectorAll('.tab').forEach((t: any) => {
     const commandId = sidebarTabCommands[t.dataset.tab];
     if(commandId) t.dataset.commandId = commandId;
     t.addEventListener('click', () => {
@@ -1202,14 +1202,14 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   });
 
   // day collapse
-  document.addEventListener('click', e => {
+  document.addEventListener('click', (e: any) => {
     if(e.target.closest('[data-toggle]')) {
       e.target.closest('[data-toggle]').nextElementSibling.classList.toggle('open');
     }
   });
 
-  function setMapMode(mode, opts = {}) {
-    document.querySelectorAll('[data-mode]').forEach(x => {
+  function setMapMode(mode: any, opts: any = {}) {
+    document.querySelectorAll('[data-mode]').forEach((x: any) => {
       const active = x.dataset.mode === mode;
       x.classList.toggle('on', active);
       x.setAttribute('aria-pressed', String(active));
@@ -1233,14 +1233,14 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     commandRegistry.notifyChanged();
   }
 
-  function enterInteractionRenderMode(toolName) {
+  function enterInteractionRenderMode(toolName: any) {
     if(selectors.mode() !== 'waypoint') {
       setMapMode('waypoint', { toast: `${toolName}已切换到标注点模式以提升拖动流畅度` });
     }
   }
 
   // mode buttons
-  document.querySelectorAll('[data-mode]').forEach(b => {
+  document.querySelectorAll('[data-mode]').forEach((b: any) => {
     const commandId = b.dataset.mode === 'waypoint'
       ? STUDIO_COMMANDS.MODE_WAYPOINT
       : STUDIO_COMMANDS.MODE_ELEVATION;
@@ -1254,7 +1254,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
     if(!grid) return;
     grid.innerHTML = '';
     if(typeof TAG_RULES_JS === 'undefined') return;  // 还没定义，等后面再调
-    TAG_RULES_JS.forEach(([tag, kws, icon, color]) => {
+    TAG_RULES_JS.forEach(([tag, kws, icon, color]: any) => {
       const btn = document.createElement('button');
       const on = selectors.waypointModeTags().has(tag);
       btn.className = 'btn-mini waypoint-mode-tag' + (on ? ' on' : '');
@@ -1270,9 +1270,9 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   // 不在这里立即调，TAG_RULES_JS 还未定义；放到 Boot 里调
 
   // base layer
-  document.querySelectorAll('[data-base]').forEach(b => {
+  document.querySelectorAll('[data-base]').forEach((b: any) => {
     b.addEventListener('click', () => {
-      document.querySelectorAll('[data-base]').forEach(x=>x.classList.remove('on'));
+      document.querySelectorAll('[data-base]').forEach((x: any)=>x.classList.remove('on'));
       b.classList.add('on');
       map.removeLayer(getCurrentBase());
       setCurrentBase(baseLayers[b.dataset.base].addTo(map));
@@ -1281,17 +1281,17 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
 
   // show track checkbox
   const _showTrackEl = document.getElementById('showTrack');
-  if(_showTrackEl) _showTrackEl.addEventListener('change', e => {
+  if(_showTrackEl) _showTrackEl.addEventListener('change', (e: any) => {
     stateActions.setDisplay('showTrack', e.target.checked);
     drawTracks();
   });
   const _showLabelEl = document.getElementById('showLabel');
-  if(_showLabelEl) _showLabelEl.addEventListener('change', e => {
+  if(_showLabelEl) _showLabelEl.addEventListener('change', (e: any) => {
     stateActions.setDisplay('showLabel', e.target.checked);
     drawWaypoints();
   });
   const _showHighPointEl = document.getElementById('showHighPoint');
-  if(_showHighPointEl) _showHighPointEl.addEventListener('change', e => {
+  if(_showHighPointEl) _showHighPointEl.addEventListener('change', (e: any) => {
     stateActions.setDisplay('showHighPoint', e.target.checked);
     drawWaypoints();
   });
@@ -1314,7 +1314,7 @@ export function createSidebarRuntime(dependencies: SidebarRuntimeDependencies) {
   });
 
   // click empty to clear escape
-  map.on('click', e => {
+  map.on('click', (e: any) => {
     if(selectors.activeEscape()) {
       const target = e.originalEvent.target;
       if(!target.closest('.leaflet-marker-icon, .leaflet-interactive')) clearEscape();

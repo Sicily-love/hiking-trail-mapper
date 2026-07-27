@@ -1,6 +1,7 @@
 /** Runtime contracts for RenderScheduler and Performance 2.0 integration. */
 const assert = require('assert');
 const { read, runtimeSource: runtime } = require('./runtime_source');
+const elevationRuntime = read('src/features/elevation/runtime-owner.ts');
 let passed = 0;
 let failed = 0;
 
@@ -27,7 +28,7 @@ console.log('\nPerformance 2.0 runtime contracts');
 test('one RenderScheduler owns all seven runtime phases', () => {
   assert.strictEqual((runtime.match(/new HTM_APP\.RenderScheduler\(/g) || []).length, 1);
   for(const phase of ['tracks', 'markers', 'sidebar', 'days', 'legend', 'chart', 'fit']) {
-    assert.ok(runtime.includes(`${phase}(context)`), phase);
+    assert.match(runtime, new RegExp(`${phase}\\(context(?:: any)?\\)`), phase);
   }
   assert.ok(runtime.includes('window.__HTM_RENDER_SCHEDULER__ = renderScheduler'));
   assert.ok(runtime.includes('window.__HTM_RENDER_STATS__ = renderRuntimeStats'));
@@ -39,7 +40,8 @@ test('legacy redraw entrypoints only invalidate dirty flags', () => {
   const chart = functionSource('refreshElevBar');
   assert.ok(tracks.includes('RENDER_DIRTY.TRACKS'));
   assert.ok(markers.includes('RENDER_DIRTY.MARKERS'));
-  assert.ok(chart.includes('RENDER_DIRTY.CHART'));
+  assert.ok(chart.includes('elevationRuntime?.refresh'));
+  assert.ok(elevationRuntime.includes('invalidateChart()'));
   assert.strictEqual(tracks.includes('trackLayer.clearLayers'), false);
   assert.strictEqual(markers.includes('wpLayer.clearLayers'), false);
 });
@@ -65,12 +67,15 @@ test('track runtime delegates bounded elevation rendering to the typed model and
   assert.strictEqual(source.includes('state.'), false);
   assert.ok(runtime.includes('HTM_APP.createLeafletTrackRenderer'));
   assert.ok(runtime.includes('HTM_APP.createMapRenderController'));
-  assert.ok(runtime.includes('onInspectPoint:(event, model) => inspectTrackPoint(event, model.trail)'));
-  assert.ok(runtime.includes('formatTrackPointCoordinates(pt)'));
+  assert.match(runtime, /onInspectPoint:\(event(?:: any)?, model(?:: any)?\) => inspectTrackPoint\(event, model\.trail\)/);
+  assert.ok(elevationRuntime.includes('formatTrackPointCoordinates(point)'));
 });
 
 test('Canvas elevation rendering downsamples without replacing full hit data', () => {
-  const draw = functionSource('drawElevBar', 'renderElevationChartNow');
+  const draw = elevationRuntime.slice(
+    elevationRuntime.indexOf('function draw('),
+    elevationRuntime.indexOf('function buildStackContext('),
+  );
   const model = read('src/features/elevation/render-model.ts');
   const adapter = read('src/adapters/elevation-canvas.ts');
   assert.ok(model.includes('downsampleMinMaxIndices'));
@@ -78,9 +83,9 @@ test('Canvas elevation rendering downsamples without replacing full hit data', (
   assert.ok(model.includes('renderedPoints:sampleIndices.length'));
   assert.ok(model.includes('computeElevationRenderModel(points, layout, sourceBreaks).badges'));
   assert.ok(model.includes('sampledBreaks'));
-  assert.ok(draw.includes('_elevBarData ='));
-  assert.ok(draw.includes('HTM_APP.buildElevationCanvasScene'));
-  assert.ok(draw.includes('elevationCanvasRenderer.render(scene, dimensions)'));
+  assert.ok(draw.includes('data ='));
+  assert.ok(draw.includes('app.buildElevationCanvasScene'));
+  assert.ok(draw.includes('renderer.render(scene, dimensions)'));
   assert.strictEqual(draw.includes('elevCtx.'), false);
   assert.ok(adapter.includes('chart.fillPolygon'));
   assert.ok(adapter.includes('chart.curve'));

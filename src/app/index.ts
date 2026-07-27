@@ -257,6 +257,7 @@ export {
 } from './actions.ts';
 export {
   createReadonlyRuntimeInspector,
+  createReadonlyRuntimeView,
   type RuntimeInspectorBindings,
 } from './runtime/inspector.ts';
 export {
