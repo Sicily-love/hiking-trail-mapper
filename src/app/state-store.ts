@@ -2,6 +2,25 @@ import { createAppState, type AppState, type MapMode } from './state.ts';
 
 export type DisplayOption = 'showTrack' | 'showLabel' | 'showHighPoint';
 
+export interface AppStateSnapshot {
+  readonly activeTrails: ReadonlySet<string>;
+  readonly expandedTrails: ReadonlySet<string>;
+  readonly autoGenerateEscape: boolean;
+  readonly primaryByGroup: Readonly<Record<string, string>>;
+  readonly primaryTrailId: string | null;
+  readonly activeGroup: string | null;
+  readonly batchSelected: ReadonlySet<string>;
+  readonly modeVisibleTags: Readonly<Record<MapMode, ReadonlySet<string>>>;
+  readonly visibleTags: ReadonlySet<string>;
+  readonly waypointModeTags: ReadonlySet<string>;
+  readonly showTrack: boolean;
+  readonly showLabel: boolean;
+  readonly showHighPoint: boolean;
+  readonly mode: MapMode;
+  readonly baseLayer: string;
+  readonly activeEscape: string | null;
+}
+
 export type AppStateCommand =
   | { type: 'active-trail.set'; trailId: string; active: boolean }
   | { type: 'active-trails.replace'; trailIds: Iterable<string> }
@@ -47,18 +66,89 @@ function replaceSet(target: Set<string>, values: Iterable<string>): void {
   for(const value of values) target.add(value);
 }
 
+function replaceRecord<T>(target: Record<string, T>, values: Readonly<Record<string, T>>): void {
+  for(const key of Object.keys(target)) delete target[key];
+  Object.assign(target, values);
+}
+
+function rejectSnapshotMutation(): never {
+  throw new TypeError('Application state snapshots are read-only');
+}
+
+function createReadonlySetView<T>(source: Set<T>): ReadonlySet<T> {
+  return new Proxy(source, {
+    get(target, property) {
+      if(property === 'add' || property === 'delete' || property === 'clear') {
+        return rejectSnapshotMutation;
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set:rejectSnapshotMutation,
+    defineProperty:rejectSnapshotMutation,
+    deleteProperty:rejectSnapshotMutation,
+  }) as ReadonlySet<T>;
+}
+
+function createReadonlyRecordView<T>(source: Record<string, T>): Readonly<Record<string, T>> {
+  return new Proxy(source, {
+    set:rejectSnapshotMutation,
+    defineProperty:rejectSnapshotMutation,
+    deleteProperty:rejectSnapshotMutation,
+  });
+}
+
+function createAppStateSnapshot(state: AppState): AppStateSnapshot {
+  const activeTrails = createReadonlySetView(state.activeTrails);
+  const expandedTrails = createReadonlySetView(state.expandedTrails);
+  const batchSelected = createReadonlySetView(state.batchSelected);
+  const waypointModeTags = createReadonlySetView(state.waypointModeTags);
+  const modeVisibleTags = createReadonlyRecordView({
+    day:createReadonlySetView(state.modeVisibleTags.day),
+    elev:createReadonlySetView(state.modeVisibleTags.elev),
+    waypoint:createReadonlySetView(state.modeVisibleTags.waypoint),
+  });
+  const primaryByGroup = createReadonlyRecordView(state.primaryByGroup);
+
+  const snapshot = {
+    activeTrails,
+    expandedTrails,
+    get autoGenerateEscape() { return state.autoGenerateEscape; },
+    primaryByGroup,
+    get primaryTrailId() { return state.primaryTrailId; },
+    get activeGroup() { return state.activeGroup; },
+    batchSelected,
+    modeVisibleTags,
+    get visibleTags() { return modeVisibleTags[state.mode]; },
+    waypointModeTags,
+    get showTrack() { return state.showTrack; },
+    get showLabel() { return state.showLabel; },
+    get showHighPoint() { return state.showHighPoint; },
+    get mode() { return state.mode; },
+    get baseLayer() { return state.baseLayer; },
+    get activeEscape() { return state.activeEscape; },
+  };
+  return new Proxy(snapshot, {
+    set:rejectSnapshotMutation,
+    defineProperty:rejectSnapshotMutation,
+    deleteProperty:rejectSnapshotMutation,
+  });
+}
+
 /** Owns application-level mutable state and exposes one typed write boundary. */
 export class AppStateStore {
   private readonly value: AppState;
+  private readonly view: AppStateSnapshot;
   private readonly listeners = new Set<AppStateListener>();
   private revision = 0;
 
   constructor(seed: Parameters<typeof createAppState>[0] = {}) {
     this.value = createAppState(seed);
+    this.view = createAppStateSnapshot(this.value);
   }
 
-  snapshot(): Readonly<AppState> {
-    return this.value;
+  snapshot(): AppStateSnapshot {
+    return this.view;
   }
 
   dispatch(command: AppStateCommand): AppStateChangedEvent {
@@ -89,7 +179,7 @@ export class AppStateStore {
         state.primaryTrailId = command.trailId;
         break;
       case 'primary-by-group.replace':
-        state.primaryByGroup = { ...command.value };
+        replaceRecord(state.primaryByGroup, command.value);
         break;
       case 'group.set-active':
         state.activeGroup = command.group;
@@ -132,7 +222,7 @@ export class AppStateStore {
       case 'workspace.restore':
         replaceSet(state.activeTrails, command.activeTrails);
         state.activeGroup = command.activeGroup;
-        state.primaryByGroup = { ...command.primaryByGroup };
+        replaceRecord(state.primaryByGroup, command.primaryByGroup);
         state.batchSelected.clear();
         state.expandedTrails.clear();
         state.activeEscape = null;
@@ -156,7 +246,7 @@ export class AppStateStore {
         state.activeTrails.clear();
         state.batchSelected.clear();
         state.expandedTrails.clear();
-        state.primaryByGroup = {};
+        replaceRecord(state.primaryByGroup, {});
         state.activeEscape = null;
         break;
     }

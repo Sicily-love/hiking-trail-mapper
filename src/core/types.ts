@@ -469,7 +469,7 @@ export type PersistedStorageSnapshot<TTrail extends StorageTrailLike = StorageTr
 
 export type RuntimeStorageState = {
   primaryTrailId?: string | null;
-  primaryByGroup?: Record<string, string | null | undefined>;
+  primaryByGroup?: Readonly<Record<string, string | null | undefined>>;
   activeTrails?: Iterable<string> | null;
   activeGroup?: string | null;
 };

@@ -51,6 +51,19 @@ T('restores workspace ownership without replacing stable Set views', () => {
   assert.strictEqual(state.activeGroup, 'B');
   assert.strictEqual(state.primaryTrailId, 'b');
 });
+T('snapshots expose stable live views but reject writes outside typed actions', () => {
+  const store = createAppStateStore({trails:[{id:'a', group:'A'}]});
+  const snapshot = store.snapshot();
+  assert.throws(() => snapshot.activeTrails.add('b'), /read-only/);
+  assert.throws(() => snapshot.activeTrails.clear(), /read-only/);
+  assert.throws(() => { snapshot.primaryByGroup.A = 'b'; }, /read-only/);
+  assert.throws(() => { delete snapshot.primaryByGroup.A; }, /read-only/);
+  store.dispatch({type:'active-trail.set', trailId:'b', active:true});
+  store.dispatch({type:'group.set-primary', group:'A', trailId:'b'});
+  assert.strictEqual(store.snapshot(), snapshot);
+  assert.deepStrictEqual([...snapshot.activeTrails], ['a', 'b']);
+  assert.strictEqual(snapshot.primaryTrailId, 'b');
+});
 T('restores complete workspace preferences and clears transient selections', () => {
   const store = createAppStateStore({trails:[{id:'a', group:'A'}]});
   store.dispatch({type:'batch.replace', trailIds:['a']});

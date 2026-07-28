@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const app = require(path.join(root, 'src/app/index.ts'));
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const studioRuntime = read('src/app/runtime/studio.ts');
+const localizationRuntime = read('src/features/localization/runtime-owner.ts');
 
 let passed = 0;
 let failed = 0;
@@ -109,10 +110,11 @@ T('direct runtime transition modals delegate to one dialog controller without HT
   }
 });
 
-T('direct runtime publishes language changes for Workbench-owned labels', () => {
-  assert.ok(studioRuntime.includes("document.documentElement.lang = currentLang === 'en' ? 'en' : 'zh-CN'"));
-  assert.ok(studioRuntime.includes("new CustomEvent('studio:language-changed'"));
-  assert.ok(studioRuntime.includes('detail:{language:currentLang}'));
+T('localization owner publishes language changes for Workbench-owned labels', () => {
+  assert.ok(studioRuntime.includes('createLocalizationRuntime'));
+  assert.ok(localizationRuntime.includes("document.documentElement.lang = current === 'en' ? 'en' : 'zh-CN'"));
+  assert.ok(localizationRuntime.includes("new EventConstructor('studio:language-changed'"));
+  assert.ok(localizationRuntime.includes('detail:{language:current}'));
 });
 
 console.log(`\nResult: ${passed}/${passed + failed} passed`);

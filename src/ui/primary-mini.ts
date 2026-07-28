@@ -136,6 +136,8 @@ export function createPrimaryMiniController(
       top:miniRect.top - mapRect.top,
       moved:false,
     };
+    element.setAttribute('aria-grabbed', 'true');
+    element.classList.add('drag-ready');
     try { element.setPointerCapture(event.pointerId); } catch {}
     event.preventDefault();
     event.stopPropagation();
@@ -155,6 +157,8 @@ export function createPrimaryMiniController(
     if(!drag || event.pointerId !== drag.id) return;
     const moved = drag.moved;
     drag = null;
+    element.setAttribute('aria-grabbed', 'false');
+    element.classList.remove('drag-ready');
     element.classList.remove('dragging');
     try { element.releasePointerCapture(event.pointerId); } catch {}
     event.preventDefault();
@@ -168,6 +172,7 @@ export function createPrimaryMiniController(
   element.addEventListener('pointermove', onPointerMove);
   element.addEventListener('pointerup', onPointerUp);
   element.addEventListener('pointercancel', onPointerCancel);
+  element.setAttribute('aria-grabbed', 'false');
 
   return Object.freeze({
     storageKey,

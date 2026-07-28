@@ -19,7 +19,9 @@ function fixture(trail = {name:'A very long trail', stats:{distance_km:12.4, asc
   const listeners = new Map();
   const element = {
     style:{}, title:'', innerHTML:'',
+    attributes:{},
     classList:{add() {}, remove() {}},
+    setAttribute(name, value) { this.attributes[name] = String(value); },
     replaceChildren() { this.innerHTML = ''; },
     addEventListener(type, listener) { (listeners.get(type) || listeners.set(type, []).get(type)).push(listener); },
     removeEventListener(type, listener) { listeners.set(type, (listeners.get(type) || []).filter(item => item !== listener)); },
@@ -54,6 +56,7 @@ test('renders a class-based compact summary without inline style', () => {
   assert.doesNotMatch(element.innerHTML, /mini\.peak/);
   assert.doesNotMatch(element.innerHTML, /style=/);
   assert.match(element.title, /Drag to move/);
+  assert.strictEqual(element.attributes['aria-grabbed'], 'false');
 });
 
 test('hides itself when no primary trail exists', () => {

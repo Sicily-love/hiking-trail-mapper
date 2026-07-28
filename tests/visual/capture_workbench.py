@@ -157,19 +157,32 @@ try:
         raise RuntimeError("Sample KML did not produce a trail")
     time.sleep(1)
 
-    viewports = [(1440, 900), (1024, 768), (390, 844), (320, 568)]
+    viewports = [
+        (1440, 900),
+        (1024, 768),
+        (768, 1024),
+        (430, 932),
+        (390, 844),
+        (320, 568),
+        (844, 390),
+    ]
     report = []
     for width, height in viewports:
+        mobile_workbench = width <= 760 or height <= 520
         cdp("Emulation.setDeviceMetricsOverride", {
             "width": width,
             "height": height,
             "deviceScaleFactor": 1,
-            "mobile": width <= 760,
+            "mobile": mobile_workbench,
+        })
+        cdp("Emulation.setTouchEmulationEnabled", {
+            "enabled": mobile_workbench,
+            "maxTouchPoints": 5 if mobile_workbench else 1,
         })
         evaluate(f"""
           (() => {{
             document.getElementById('elev-bar')?.classList.remove('collapsed');
-            if({str(width <= 760).lower()}) {{
+            if({str(mobile_workbench).lower()}) {{
               toggleSidebar(true);
               resetView();
             }} else toggleSidebar(true);
@@ -177,6 +190,27 @@ try:
           }})()
         """)
         time.sleep(0.5)
+        drag_feedback = evaluate("""
+          (() => {
+            const mini = document.getElementById('primary-mini');
+            if(!matchMedia('(pointer:coarse)').matches || !mini || getComputedStyle(mini).display === 'none') {
+              return true;
+            }
+            const rect = mini.getBoundingClientRect();
+            const event = (type, x, y) => mini.dispatchEvent(new PointerEvent(type, {
+              bubbles:true, cancelable:true, pointerId:41, pointerType:'touch',
+              clientX:x, clientY:y, button:0,
+            }));
+            event('pointerdown', rect.left + 20, rect.top + 20);
+            event('pointermove', rect.left + 32, rect.top + 30);
+            const active = mini.getAttribute('aria-grabbed') === 'true'
+              && mini.classList.contains('dragging');
+            event('pointerup', rect.left + 32, rect.top + 30);
+            return active
+              && mini.getAttribute('aria-grabbed') === 'false'
+              && !mini.classList.contains('dragging');
+          })()
+        """)
         metrics = evaluate("""
           (() => {
             const rect = id => {
@@ -192,14 +226,30 @@ try:
             const zoom = zoomRect ? {left:zoomRect.left, top:zoomRect.top, right:zoomRect.right, bottom:zoomRect.bottom, width:zoomRect.width, height:zoomRect.height} : null;
             const elevation = rect('elev-bar');
             const map = rect('map');
+            const mapStage = document.querySelector('.studio-map-stage')?.getBoundingClientRect();
+            const activityRail = document.querySelector('.studio-activity-rail')?.getBoundingClientRect();
+            const bottomDock = document.querySelector('.studio-bottom-dock')?.getBoundingClientRect();
             const primaryMini = rect('primary-mini');
+            const mobileWorkbench = innerWidth <= 760
+              || (matchMedia('(pointer:coarse)').matches && innerHeight <= 520);
             const overlaps = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
             const inside = (inner, outer) => !!inner && !!outer
               && inner.left >= outer.left && inner.right <= outer.right
               && inner.top >= outer.top && inner.bottom <= outer.bottom;
+            const visibleTouchTargets = [...document.querySelectorAll(
+              '.studio-activity-button,.studio-mode-button,.leaflet-control-zoom a,#elev-toggle,#map-toolbar button'
+            )].filter(node => {
+              const style = getComputedStyle(node);
+              const rect = node.getBoundingClientRect();
+              return style.display !== 'none' && style.visibility !== 'hidden'
+                && rect.width > 0 && rect.height > 0;
+            });
             return {
               viewport:{width:innerWidth,height:innerHeight},
               toolbar, zoom, sidebar:rect('sidebar'), elevation, primaryMini,
+              mapStage:mapStage ? {left:mapStage.left,top:mapStage.top,right:mapStage.right,bottom:mapStage.bottom,width:mapStage.width,height:mapStage.height} : null,
+              activityRail:activityRail ? {left:activityRail.left,top:activityRail.top,right:activityRail.right,bottom:activityRail.bottom,width:activityRail.width,height:activityRail.height} : null,
+              bottomDock:bottomDock ? {left:bottomDock.left,top:bottomDock.top,right:bottomDock.right,bottom:bottomDock.bottom,width:bottomDock.width,height:bottomDock.height} : null,
               toolbarElevationOverlap:overlaps(toolbar, elevation),
               toolbarZoomOverlap:overlaps(toolbar, zoom),
               toolbarOutOfViewport:!toolbar || toolbar.left < 0 || toolbar.right > innerWidth || toolbar.top < 0 || toolbar.bottom > innerHeight,
@@ -207,12 +257,30 @@ try:
               bodyOverflowX:document.documentElement.scrollWidth > innerWidth,
               buttonOverflow:buttons.some(button => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight),
               appRuntime:!!HTM_APP,
-              mobileResetClosesSidebar:innerWidth > 760 || document.getElementById('sidebar')?.classList.contains('collapsed'),
-              primaryMiniCompact:innerWidth > 760 || (!!primaryMini && primaryMini.width <= 224 && primaryMini.height <= 90),
-              primaryMiniInsideMap:innerWidth > 760 || inside(primaryMini, map),
+              mobileResetClosesSidebar:!mobileWorkbench || document.getElementById('sidebar')?.classList.contains('collapsed'),
+              primaryMiniCompact:!mobileWorkbench || (!!primaryMini && primaryMini.width <= 224 && primaryMini.height <= 90),
+              primaryMiniInsideMap:!mobileWorkbench || inside(primaryMini, map),
+              mobileBottomNavValid:!mobileWorkbench || (
+                !!activityRail && !!mapStage
+                && activityRail.top >= mapStage.bottom - .5
+                && activityRail.bottom <= innerHeight + .5
+              ),
+              mapDockSeparated:!!map && !!bottomDock && map.bottom <= bottomDock.top + .5,
+              touchTargetsValid:!mobileWorkbench || visibleTouchTargets.every(node => {
+                const target = node.getBoundingClientRect();
+                return target.width >= 44 && target.height >= 44;
+              }),
+              touchTargetFailures:visibleTouchTargets
+                .map(node => {
+                  const target = node.getBoundingClientRect();
+                  return {id:node.id || node.className, width:target.width, height:target.height};
+                })
+                .filter(target => target.width < 44 || target.height < 44),
+              touchTargetCount:visibleTouchTargets.length,
             };
           })()
         """)
+        metrics["dragFeedbackValid"] = bool(drag_feedback)
         metrics["name"] = f"{width}x{height}"
         report.append(metrics)
         hide_transient_ui()
@@ -573,6 +641,19 @@ try:
     cdp("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
     evaluate("toggleSidebar(true)")
     time.sleep(0.4)
+    sheet_state = evaluate("""
+      (() => {
+        const sidebar = document.getElementById('sidebar')?.getBoundingClientRect();
+        const rail = document.querySelector('.studio-activity-rail')?.getBoundingClientRect();
+        const heading = document.querySelector('#sidebar .sidebar-heading')?.getBoundingClientRect();
+        const close = document.getElementById('sidebar-close')?.getBoundingClientRect();
+        return !!sidebar && !!rail && !!heading && !!close
+          && sidebar.left >= 0 && sidebar.right <= innerWidth
+          && sidebar.bottom <= rail.top + .5
+          && heading.top >= sidebar.top && heading.bottom <= sidebar.bottom
+          && close.width >= 44 && close.height >= 44;
+      })()
+    """)
     hide_transient_ui()
     wait_for_map_tiles()
     sheet = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
@@ -611,7 +692,7 @@ try:
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
     time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"] or not item["primaryMiniCompact"] or not item["primaryMiniInsideMap"]]
+    invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"] or not item["primaryMiniCompact"] or not item["primaryMiniInsideMap"] or not item["mobileBottomNavValid"] or not item["mapDockSeparated"] or not item["touchTargetsValid"] or not item["dragFeedbackValid"]]
     elevation_collapse_valid = all([
         elevation_collapse_state.get("collapsed"),
         elevation_collapse_state.get("expanded") == "false",
@@ -628,7 +709,7 @@ try:
         measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
     ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid:
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
@@ -642,6 +723,7 @@ try:
             "stitchDialog":bool(stitch_dialog_state),
             "toast":toast_state,
             "mobileDialog":bool(mobile_dialog_state),
+            "mobileSheet":bool(sheet_state),
             "elevationCollapse":elevation_collapse_valid,
         }, ensure_ascii=False))
         raise RuntimeError(f"Visual layout contract failed: {', '.join(invalid)}")

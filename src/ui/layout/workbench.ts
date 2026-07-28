@@ -118,8 +118,15 @@ export interface WorkbenchLayoutController {
 
 export type WorkbenchLanguage = 'zh' | 'en';
 
-export function shouldCloseSidebarForFit(viewportWidth: number, sidebarCollapsed: boolean): boolean {
-  return viewportWidth <= 760 && !sidebarCollapsed;
+export function shouldCloseSidebarForFit(
+  viewportWidth: number,
+  sidebarCollapsed: boolean,
+  viewportHeight = Number.POSITIVE_INFINITY,
+  coarsePointer = false,
+): boolean {
+  const overlaySidebar = viewportWidth <= 1024
+    || (coarsePointer && viewportHeight <= 520);
+  return overlaySidebar && !sidebarCollapsed;
 }
 
 function localizedLabel(definition: ControlDefinition, language: WorkbenchLanguage): string {
@@ -296,6 +303,7 @@ function prepareSidebarHeading(
   document: Document,
   sidebar: HTMLElement,
   primaryCard: HTMLElement | null,
+  language: WorkbenchLanguage,
 ): HTMLElement | null {
   const existing = sidebar.querySelector<HTMLElement>('.sidebar-heading');
   if(existing) return existing.querySelector<HTMLElement>('strong');
@@ -305,7 +313,7 @@ function prepareSidebarHeading(
   const eyebrow = createElement(document, 'small', 'sidebar-heading-eyebrow');
   const title = createElement(document, 'strong', 'sidebar-heading-title');
   const status = createElement(document, 'span', 'sidebar-status');
-  eyebrow.textContent = 'ROUTE LIBRARY';
+  eyebrow.textContent = language === 'zh' ? '路线资料库' : 'ROUTE LIBRARY';
   title.textContent = '路线与行程';
   status.setAttribute('aria-hidden', 'true');
   copy.append(eyebrow, title);
@@ -415,7 +423,12 @@ export function upgradeWorkbenchLayout(
 
   let language: WorkbenchLanguage = document.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'zh';
   const cleanups: Array<() => void> = [];
-  const sidebarTitle = prepareSidebarHeading(document, sidebar, document.getElementById('primary-card'));
+  const sidebarTitle = prepareSidebarHeading(
+    document,
+    sidebar,
+    document.getElementById('primary-card'),
+    language,
+  );
   const sidebarHeading = sidebarTitle?.closest<HTMLElement>('.sidebar-heading') ?? null;
   const sidebarClose = document.getElementById('sidebar-close');
   if(sidebarHeading && sidebarClose) sidebarHeading.appendChild(sidebarClose);
@@ -611,6 +624,8 @@ export function upgradeWorkbenchLayout(
     analysisDock.setAttribute('aria-label', language === 'zh' ? '海拔分析' : 'Elevation analysis');
     analysisDock.querySelector<HTMLElement>('[data-analysis-panel="elevation"]')
       ?.setAttribute('aria-label', language === 'zh' ? '海拔剖面' : 'Elevation profile');
+    const sidebarEyebrow = sidebarElement.querySelector<HTMLElement>('.sidebar-heading-eyebrow');
+    if(sidebarEyebrow) sidebarEyebrow.textContent = language === 'zh' ? '路线资料库' : 'ROUTE LIBRARY';
     if(sidebarTitle) {
       const activity = ACTIVITY_DEFINITIONS.find(item => item.key === sidebarElement.dataset.activity);
       sidebarTitle.textContent = activity?.key === 'groups'

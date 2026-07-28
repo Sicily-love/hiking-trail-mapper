@@ -24,6 +24,7 @@ function fixture() {
   const style = {};
   const handle = {
     addEventListener(type, listener) { (listeners[type] ||= []).push(listener); },
+    setAttribute(name, value) { this[name] = value; },
     setPointerCapture() {},
     releasePointerCapture() {},
   };
@@ -77,7 +78,7 @@ test('reset removes persistence and restores the configured CSS defaults', () =>
 });
 
 test('binding is idempotent and exposes apply/reset hooks to the panel', () => {
-  const {controller, element, listeners} = fixture();
+  const {controller, element, handle, listeners} = fixture();
   const options = {storageKey:'panel', mode:'viewport', handleSelector:'[data-panel-drag]'};
   controller.bind(element, options);
   controller.bind(element, options);
@@ -86,6 +87,7 @@ test('binding is idempotent and exposes apply/reset hooks to the panel', () => {
   assert.strictEqual(listeners.dblclick.length, 1);
   assert.strictEqual(typeof element._applyFloatingPosition, 'function');
   assert.strictEqual(typeof element._resetFloatingPosition, 'function');
+  assert.strictEqual(handle['aria-grabbed'], 'false');
 });
 
 console.log(`\nResult: ${passed}/${passed} passed`);

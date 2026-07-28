@@ -52,7 +52,7 @@ export interface ProjectArchive<TTrail extends ProjectArchiveTrail = ProjectArch
 export interface ProjectArchiveStateInput {
   activeTrails: Iterable<string>;
   activeGroup: string | null;
-  primaryByGroup: Record<string, string | null | undefined>;
+  primaryByGroup: Readonly<Record<string, string | null | undefined>>;
   mode?: ProjectArchiveMapMode;
   modeVisibleTags?: Partial<Record<ProjectArchiveMapMode, Iterable<string>>>;
   waypointModeTags?: Iterable<string>;

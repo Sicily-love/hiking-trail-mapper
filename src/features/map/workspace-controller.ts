@@ -37,6 +37,10 @@ export interface WorkspaceControllerDependencies<TTrail extends WorkspaceTrail> 
   renderStats: {fit: {requested: number; applied: number; superseded: number; lastEpoch: number; lastResetEpoch: number}};
   shouldCloseSidebar: () => boolean;
   closeSidebar: () => void;
+  resolveFitPadding?: (basePadding: number) => {
+    paddingTopLeft: [number, number];
+    paddingBottomRight: [number, number];
+  };
   prefersReducedMotion: boolean;
   schedule?: (callback: () => void, delayMs: number) => unknown;
 }
@@ -120,10 +124,23 @@ export function createWorkspaceController<TTrail extends WorkspaceTrail>(
     }
     const apply = () => {
       if(request.closeOverlay) dependencies.map.invalidateSize({pan:false, animate:false});
+      const requestedPadding = Array.isArray(request.options.padding)
+        ? request.options.padding as number[]
+        : null;
+      const basePadding = Number(requestedPadding?.[0] ?? 40);
+      const resolvedPadding = dependencies.resolveFitPadding?.(basePadding);
+      const fitOptions = resolvedPadding && !request.options.paddingTopLeft && !request.options.paddingBottomRight
+        ? {...request.options, padding:undefined, ...resolvedPadding}
+        : request.options;
+      const topLeft = fitOptions.paddingTopLeft as number[] | undefined;
+      const bottomRight = fitOptions.paddingBottomRight as number[] | undefined;
+      const zoomPadding = topLeft && bottomRight
+        ? dependencies.leaflet.point(topLeft[0] + bottomRight[0], topLeft[1] + bottomRight[1])
+        : dependencies.leaflet.point(basePadding * 2, basePadding * 2);
       const targetZoom = dependencies.map.getBoundsZoom(
         request.bounds,
         false,
-        dependencies.leaflet.point(80, 80),
+        zoomPadding,
       );
       const transition = planResetTransition({
         gesture:request.gesture,
@@ -131,7 +148,7 @@ export function createWorkspaceController<TTrail extends WorkspaceTrail>(
         targetZoom,
         reducedMotion:dependencies.prefersReducedMotion,
       });
-      dependencies.map.fitBounds(request.bounds, {...request.options, ...transition});
+      dependencies.map.fitBounds(request.bounds, {...fitOptions, ...transition});
     };
     if(!request.closeOverlay) {
       apply();

@@ -125,6 +125,7 @@ export function createFloatingPanelPositionController(
       : element;
     if(!handle) return;
     bound.add(element);
+    handle.setAttribute('aria-grabbed', 'false');
     element._applyFloatingPosition = () => apply(element, options);
     element._resetFloatingPosition = () => reset(element, options);
     environment.disablePropagation?.(element);
@@ -151,6 +152,8 @@ export function createFloatingPanelPositionController(
         top:rect.top - bounds.top,
         moved:false,
       };
+      handle.setAttribute('aria-grabbed', 'true');
+      element.classList.add('floating-drag-ready');
       try { handle.setPointerCapture(event.pointerId); } catch {}
       event.preventDefault();
       event.stopPropagation();
@@ -172,6 +175,8 @@ export function createFloatingPanelPositionController(
       if(!drag || event.pointerId !== drag.id) return;
       const moved = drag.moved;
       drag = null;
+      handle.setAttribute('aria-grabbed', 'false');
+      element.classList.remove('floating-drag-ready');
       element.classList.remove('floating-dragging');
       try { handle.releasePointerCapture(event.pointerId); } catch {}
       event.preventDefault();

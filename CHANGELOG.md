@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.2.8 — 2026-07-28
+
+**中文**
+
+- 应用状态快照改为稳定只读视图，阻止 Set 和分组记录绕过 typed actions 直接写入。
+- 将语言、测距面板、侧栏收放、工作区标题和版本徽标迁入独立 UI owner，并增加架构回归测试。
+
+**English**
+
+- Expose application-state snapshots as stable read-only views so Sets and group records cannot bypass typed actions.
+- Move localization, measurement presentation, sidebar collapse, workspace title, and version badge into dedicated UI owners with architecture regression tests.
+
 ## v2.2.7 — 2026-07-28
 
 **中文**

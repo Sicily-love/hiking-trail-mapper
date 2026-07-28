@@ -5,6 +5,7 @@ export {
   type AppStateChangedEvent,
   type AppStateCommand,
   type AppStateListener,
+  type AppStateSnapshot,
   type DisplayOption,
 } from './state-store.ts';
 export {
@@ -245,6 +246,13 @@ export {
   type StorageInfoSnapshot,
 } from '../features/localization/storage-content.ts';
 export { shouldCloseSidebarForFit } from '../ui/layout/workbench.ts';
+export {
+  calculateMapSafePadding,
+  createMapSafeAreaController,
+  type LayoutRect,
+  type MapSafeAreaController,
+  type MapSafePadding,
+} from '../ui/layout/map-safe-area.ts';
 export {
   createAppStateSelectors,
   trailGroupOf,

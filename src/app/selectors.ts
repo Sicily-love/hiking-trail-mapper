@@ -1,4 +1,4 @@
-import type { AppState } from './state.ts';
+import type { AppStateSnapshot } from './state-store.ts';
 
 export interface GroupedTrail {
   id: string;
@@ -6,7 +6,7 @@ export interface GroupedTrail {
 }
 
 export interface AppStateSelectors<TTrail extends GroupedTrail> {
-  snapshot(): Readonly<AppState>;
+  snapshot(): AppStateSnapshot;
   activeGroup(): string | null;
   primaryTrailId(): string | null;
   primaryTrail(trails: readonly TTrail[]): TTrail | null;
@@ -15,14 +15,14 @@ export interface AppStateSelectors<TTrail extends GroupedTrail> {
   activeTrailIds(): ReadonlySet<string>;
   isTrailActive(trail: TTrail): boolean;
   isPrimaryTrail(trail: TTrail): boolean;
-  mode(): AppState['mode'];
+  mode(): AppStateSnapshot['mode'];
   visibleTags(): ReadonlySet<string>;
   waypointModeTags(): ReadonlySet<string>;
   batchSelected(): ReadonlySet<string>;
   expandedTrails(): ReadonlySet<string>;
   primaryForGroup(group: string): string | null;
   autoGenerateEscape(): boolean;
-  display(): Readonly<Pick<AppState, 'showTrack' | 'showLabel' | 'showHighPoint'>>;
+  display(): Readonly<Pick<AppStateSnapshot, 'showTrack' | 'showLabel' | 'showHighPoint'>>;
   activeEscape(): string | null;
   baseLayer(): string;
 }
@@ -33,7 +33,7 @@ export function trailGroupOf(trail: GroupedTrail): string {
 
 /** Provides read-only, derived access to application state for feature runtimes. */
 export function createAppStateSelectors<TTrail extends GroupedTrail>(
-  read: () => Readonly<AppState>,
+  read: () => AppStateSnapshot,
 ): AppStateSelectors<TTrail> {
   const activeGroup = () => read().activeGroup;
   const primaryTrailId = () => read().primaryTrailId;

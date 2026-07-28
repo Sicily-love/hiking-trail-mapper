@@ -47,6 +47,7 @@ def main() -> int:
     release_html_path = ROOT / "hiking-trail-mapper.html"
     version_path = ROOT / "src" / "app" / "version.ts"
     studio_runtime_path = ROOT / "src" / "app" / "runtime" / "studio.ts"
+    version_badge_path = ROOT / "src" / "ui" / "version-badge.ts"
     bootstrap_path = ROOT / "src" / "app" / "bootstrap.ts"
     changelog_path = ROOT / "src" / "features" / "localization" / "changelog.ts"
     package_path = ROOT / "package.json"
@@ -63,6 +64,7 @@ def main() -> int:
     release_html = read_text(release_html_path)
     version_source = read_text(version_path)
     studio_runtime = read_text(studio_runtime_path)
+    version_badge = read_text(version_badge_path)
     bootstrap = read_text(bootstrap_path)
     changelog_source = read_text(changelog_path)
     package_json = json.loads(read_text(package_path))
@@ -224,7 +226,10 @@ def main() -> int:
     runner.check("Studio runtime has no composer markers", "@runtime-slice" not in studio_runtime and "@runtime-fragment" not in studio_runtime)
     runner.check(
         "floating version tag binds the version module",
-        'id="version-tag-link"' in studio_runtime and "${APP_VERSION}</a>" in studio_runtime,
+        "createVersionBadgeController({" in studio_runtime
+        and "version:APP_VERSION" in studio_runtime
+        and "link.id = 'version-tag-link'" in version_badge
+        and "link.textContent = version" in version_badge,
     )
     runner.check("browser tests are grouped", (ROOT / "tests/browser/test_v1_31.py").exists())
     runner.check("release HTML remains tracked", "hiking-trail-mapper.html" not in gitignore_entries)

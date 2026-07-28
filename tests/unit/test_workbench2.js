@@ -368,13 +368,28 @@ test('toast feedback is semantic, high contrast, and avoids the bottom dock', ()
   assert.strictEqual(runtimeSource.includes('background:rgba(20,24,32,0.96)'), false);
 });
 
-test('Studio CSS owns all four responsive contracts', () => {
+test('Studio CSS owns desktop, tablet, phone, and coarse-pointer landscape contracts', () => {
   [1440, 1024, 390, 320]
     .forEach(width => assert.ok(css.includes(`@media (max-width: ${width}px)`), `${width}px`));
-  assert.ok(css.includes('grid-template-columns:repeat(6,minmax(0,1fr));'));
+  assert.ok(css.includes('grid-template-columns:repeat(5,minmax(0,1fr));'));
+  assert.ok(css.includes('(max-height:520px) and (pointer:coarse)'));
+  assert.ok(css.includes('--studio-safe-bottom:env(safe-area-inset-bottom,0px)'));
+  assert.ok(css.includes('height:min(68dvh,620px);'));
   assert.ok(css.includes("#measure-panel.studio-elevation-measure-actions"));
   assert.strictEqual(css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
   assert.ok(css.includes("html[data-workbench='2'] [hidden]"));
+});
+
+test('map fitting closes tablet overlays and mobile bottom sheets', () => {
+  if(workbenchModule) {
+    assert.strictEqual(workbenchModule.shouldCloseSidebarForFit(390, false, 844, true), true);
+    assert.strictEqual(workbenchModule.shouldCloseSidebarForFit(844, false, 390, true), true);
+    assert.strictEqual(workbenchModule.shouldCloseSidebarForFit(844, false, 390, false), true);
+    assert.strictEqual(workbenchModule.shouldCloseSidebarForFit(1100, false, 800, false), false);
+    assert.strictEqual(workbenchModule.shouldCloseSidebarForFit(390, true, 844, true), false);
+  } else {
+    assert.ok(workbenchSource.includes('viewportWidth <= 1024'));
+  }
 });
 
 test('new UI sources contain no Emoji glyphs or negative letter spacing', () => {

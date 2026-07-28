@@ -67,7 +67,7 @@ print("\n▸ 关键函数")
 required_funcs = [
     'buildTrailList', 'buildPrimaryMini', 'drawElevBar', 'rebuildAll',
     'showExportMenu', 'exportGroupKML', 'exportItineraryMD',
-    'saveToStorage', 'loadFromStorage', 'setLang', 'applyI18n',
+    'saveToStorage', 'loadFromStorage', 'createLocalizationRuntime',
     'haversine', 'reverseTrail',
 ]
 for fn in required_funcs:
@@ -76,6 +76,12 @@ for fn in required_funcs:
         SOURCE_GRAPH,
     ))
     check(f"函数 {fn}", found)
+check(
+    "语言 owner 提供 setLanguage/apply",
+    "const setLanguage =" in SOURCE_GRAPH
+    and "setLanguage," in SOURCE_GRAPH
+    and "apply," in SOURCE_GRAPH,
+)
 
 print("\n▸ 关键状态字段")
 required_state = ['batchMode', 'batchSelected', 'activeGroup', 'primaryTrailId',

@@ -61,14 +61,17 @@ test('runtime has no fragment slots or dynamic script execution', () => {
 test('browser capabilities have one explicit module owner', () => {
   const sidebar = read('src/ui/sidebar/runtime-owner.ts');
   const importer = read('src/ui/import/runtime-owner.ts');
+  const localization = read('src/features/localization/runtime-owner.ts');
   const workspace = read('src/features/map/workspace-controller.ts');
   const interaction = read('src/app/runtime/interaction-owner.ts');
   for(const functionName of [
     'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar',
-    'setLang', 'measureEnter', 'addEscapeEnter',
+    'measureEnter', 'addEscapeEnter',
     'segmentEnter', 'addManualWaypointAt',
   ]) assert.strictEqual((runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
   assert.strictEqual((interaction.match(/export function createRuntimeInteractionOwner</g) || []).length, 1);
+  assert.strictEqual((localization.match(/export function createLocalizationRuntime\(/g) || []).length, 1);
+  assert.strictEqual(runtimeSource.includes('function setLang('), false);
   assert.match(runtimeSource, /const beginRuntimeInteraction = interactionRuntime\.begin/);
   assert.strictEqual(runtimeSource.includes('function beginRuntimeInteraction('), false);
   for(const functionName of ['buildTrailList', 'showDaySegmentPreview']) {
@@ -86,6 +89,28 @@ test('browser capabilities have one explicit module owner', () => {
   assert.match(runtimeSource, /const openLightbox = .*lightboxController\.open/);
   assert.match(lightbox, /container\.addEventListener\('touchstart'/);
   assert.doesNotMatch(runtimeSource, /lightboxEl\.addEventListener/);
+});
+
+test('cross-feature UI state is owned outside the runtime composition root', () => {
+  const localization = read('src/features/localization/runtime-owner.ts');
+  const measurePanel = read('src/ui/measure-panel.ts');
+  const sidebarCollapse = read('src/ui/sidebar/collapse-controller.ts');
+  const workspaceTitle = read('src/ui/workspace-title.ts');
+  const versionBadge = read('src/ui/version-badge.ts');
+  assert.match(runtimeSource, /createLocalizationRuntime\(/);
+  assert.match(runtimeSource, /createMeasurePanelController\(/);
+  assert.match(runtimeSource, /createSidebarCollapseController\(/);
+  assert.match(runtimeSource, /createWorkspaceTitleController\(/);
+  assert.match(runtimeSource, /createVersionBadgeController\(/);
+  assert.doesNotMatch(runtimeSource, /querySelectorAll\(['"]\[data-i18n/);
+  assert.doesNotMatch(runtimeSource, /getElementById\(['"]measure-distance/);
+  assert.doesNotMatch(runtimeSource, /getElementById\(['"]app-title/);
+  assert.doesNotMatch(runtimeSource, /getElementById\(['"]version-tag-link/);
+  assert.match(localization, /let current =/);
+  assert.match(measurePanel, /mapContainer\.classList\.add\('measure-active'\)/);
+  assert.match(sidebarCollapse, /const isCollapsed =/);
+  assert.match(workspaceTitle, /const rename = async/);
+  assert.match(versionBadge, /const reposition =/);
 });
 
 test('production runtime does not publish mutable business globals', () => {

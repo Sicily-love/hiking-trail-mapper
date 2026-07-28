@@ -68,7 +68,7 @@ T('sidebar becomes a mobile bottom sheet', () => {
 T('reset closes mobile sidebar before fitting trail bounds', () => {
   assert.ok(runtime.includes('workspaceController.fitBounds'));
   assert.ok(runtime.includes("HTM_APP.shouldCloseSidebarForFit"));
-  assert.ok(runtime.includes("toggleSidebar(false)"));
+  assert.ok(runtime.includes("closeSidebar:sidebarCollapseController.close"));
   assert.ok(workspace.includes("dependencies.map.invalidateSize({pan:false, animate:false})"));
   assert.ok(visual.includes('mobileResetClosesSidebar'));
 });

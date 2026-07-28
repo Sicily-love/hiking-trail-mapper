@@ -26,7 +26,7 @@ function hasOwn(obj: object, key: string): boolean {
 }
 
 export function normalizePrimaryByGroup(
-  primaryByGroup: Record<string, string | null | undefined> | null | undefined,
+  primaryByGroup: Readonly<Record<string, string | null | undefined>> | null | undefined,
 ): Record<string, string | null> {
   const result: Record<string, string | null> = {};
   if(!primaryByGroup || typeof primaryByGroup !== 'object') return result;
@@ -53,7 +53,7 @@ export function normalizeActiveTrailIds(
 
 export function primaryTrailIdForGroup(
   activeGroup: string | null | undefined,
-  primaryByGroup: Record<string, string | null | undefined>,
+  primaryByGroup: Readonly<Record<string, string | null | undefined>>,
 ): string | null {
   if(activeGroup == null) return null;
   const value = primaryByGroup[activeGroup];
@@ -179,7 +179,7 @@ export function restoreStorageSnapshot<TTrail extends StorageTrailLike>(
 
 export function removeTrailFromPrimaryByGroup<TTrail extends StorageTrailLike>(
   trailsAfterRemoval: TTrail[],
-  primaryByGroup: Record<string, string | null | undefined>,
+  primaryByGroup: Readonly<Record<string, string | null | undefined>>,
   removedTrailId: string,
 ): Record<string, string | null> {
   const next = normalizePrimaryByGroup(primaryByGroup);

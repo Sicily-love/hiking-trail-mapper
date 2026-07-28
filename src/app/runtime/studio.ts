@@ -9,9 +9,14 @@ import {
   sanitizeImageSource,
 } from '../../ui/safe-content.ts';
 import { createFloatingPanelPositionController } from '../../ui/floating-panel.ts';
+import { createMeasurePanelController } from '../../ui/measure-panel.ts';
+import { createSidebarCollapseController } from '../../ui/sidebar/collapse-controller.ts';
 import { createToastController } from '../../ui/toast.ts';
+import { createVersionBadgeController } from '../../ui/version-badge.ts';
+import { createWorkspaceTitleController } from '../../ui/workspace-title.ts';
 import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
+import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
 import { createRuntimeInteractionOwner } from './interaction-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
@@ -109,43 +114,34 @@ export function startStudioRuntime(
 
   const APP_VERSION = STUDIO_VERSION;
   /* ============ i18n ============ */
-  let currentLang = (() => {
-    try { return HTM_APP.resolveLocalizationLanguage(localStorage.getItem('hiking_lang') || (navigator.language && navigator.language.startsWith('en') ? 'en' : 'zh')); }
-    catch(e) { return 'zh'; }
-  })();
-  function t(key: any) {
-    return HTM_APP.translateMessage(currentLang, key);
-  }
-  function setLang(lang: any) {
-    currentLang = HTM_APP.resolveLocalizationLanguage(lang);
-    try { localStorage.setItem('hiking_lang', currentLang); } catch(e) {}
-    if(typeof rebuildAll === 'function') rebuildAll({fit: false});
-    applyI18n();  // 必须在 rebuildAll 之后再次调用，因为重建后 DOM 是新的中文默认
-    // 海拔图、主轨迹小卡、模式标注点筛选标题用 JS 拼接，无 data-i18n，需手动刷新
-    if(typeof refreshElevBar === 'function') refreshElevBar();
-    if(typeof buildPrimaryMini === 'function') buildPrimaryMini();
-    if(typeof renderPrimaryCard === 'function') renderPrimaryCard();
-    if(typeof updateModeTagTitle === 'function') updateModeTagTitle();
-  }
-  function applyI18n() {
-    document.documentElement.lang = currentLang === 'en' ? 'en' : 'zh-CN';
-    document.title = t('app.title');
-    document.querySelectorAll('[data-i18n]').forEach((el: any) => {
-      el.textContent = t(el.dataset.i18n);
-    });
-    document.querySelectorAll('[data-i18n-title]').forEach((el: any) => {
-      el.title = t(el.dataset.i18nTitle);
-    });
-    window.dispatchEvent(new CustomEvent('studio:language-changed', {
-      detail:{language:currentLang},
-    }));
-  }
+  let syncWorkspaceTitle = () => {};
+  const localizationRuntime = createLocalizationRuntime({
+    document,
+    storage:(() => {
+      try { return window.localStorage; } catch { return null; }
+    })(),
+    browserLanguage:window.navigator.language,
+    resolveLanguage:HTM_APP.resolveLocalizationLanguage,
+    translate:HTM_APP.translateMessage,
+    rebuild:() => rebuildAll({fit:false}),
+    refresh:() => {
+      refreshElevBar();
+      buildPrimaryMini();
+      renderPrimaryCard();
+      updateModeTagTitle();
+      syncWorkspaceTitle();
+    },
+  });
+  const getCurrentLang = localizationRuntime.language;
+  const t = localizationRuntime.translate;
+  const setLang = localizationRuntime.setLanguage;
+  const applyI18n = localizationRuntime.apply;
 
   /* ============ Changelog ============ */
 
   function showChangelog() {
     return studioDialogs.content(HTM_APP.buildChangelogDialogModel(
-      currentLang,
+      getCurrentLang(),
       t('changelog.title'),
       t('changelog.close'),
     ));
@@ -168,7 +164,7 @@ export function startStudioRuntime(
       snapshot = {...snapshot, error:error instanceof Error ? error.message : String(error)};
     }
 
-    const action = await studioDialogs.content(HTM_APP.buildStorageDialogModel(currentLang, snapshot));
+    const action = await studioDialogs.content(HTM_APP.buildStorageDialogModel(getCurrentLang(), snapshot));
     if(action !== 'persist' || !storageApi || !storageApi.persist) return;
     try {
       const persisted = await storageApi.persist();
@@ -177,14 +173,14 @@ export function startStudioRuntime(
         return showStorageInfo();
       }
       await studioDialogs.info({
-        title:currentLang === 'zh' ? '无法持久化存储' : 'Persistent storage unavailable',
-        message:currentLang === 'zh'
+        title:getCurrentLang() === 'zh' ? '无法持久化存储' : 'Persistent storage unavailable',
+        message:getCurrentLang() === 'zh'
           ? '请求被拒绝。部分浏览器需要先将站点加入书签或提高访问频率。'
           : 'The request was denied. Some browsers require bookmarking or repeated site use first.',
       });
     } catch(error) {
       await studioDialogs.info({
-        title:currentLang === 'zh' ? '存储请求失败' : 'Storage request failed',
+        title:getCurrentLang() === 'zh' ? '存储请求失败' : 'Storage request failed',
         message:error instanceof Error ? error.message : String(error),
         danger:true,
       });
@@ -205,7 +201,7 @@ export function startStudioRuntime(
     primaryTrailId:() => selectors.primaryTrailId(),
     sameOwner:HTM_APP.sameInteractionOwner,
     notifyBlocked:() => showToast(
-      currentLang === 'zh'
+      getCurrentLang() === 'zh'
         ? '请先应用或退出当前分段修改'
         : 'Apply or discard the current segment changes first',
       'info',
@@ -386,43 +382,20 @@ export function startStudioRuntime(
   const primaryPointerType = window.matchMedia?.('(pointer: coarse)').matches ? 'touch' : 'mouse';
   const interactionMarkerHitSize = HTM_CORE.interactionHitTargetSize(primaryPointerType);
   const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  const measurePanelController = createMeasurePanelController({
+    document,
+    mapContainer:map.getContainer(),
+  });
   // 把版本号塞进 Leaflet attribution prefix，与 Leaflet/Esri 同一行同一基线
   // 版本号独立浮层（独立背景框 + 与 Leaflet attribution 完全同款样式）
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank">Leaflet</a>');
-  (function(){
-    const tag = document.createElement('div');
-    // 关键：套上 leaflet-control-attribution 类，自动继承同款 background/font-size/padding/line-height
-    tag.className = 'leaflet-control-attribution';
-    tag.id = 'version-tag-float';
-    tag.innerHTML = `<a href="javascript:void(0)" id="version-tag-link" title="点击查看更新日志">${APP_VERSION}</a>`;
-    // 仅覆盖定位相关；样式继承自 .leaflet-control-attribution
-    tag.style.position = 'absolute';
-    tag.style.zIndex = '600';
-    tag.style.pointerEvents = 'auto';
-    setTimeout(() => {
-      const map_el = document.getElementById('map');
-      if(!map_el) return;
-      map_el.appendChild(tag);
-      const reposition = () => {
-        const attr = map_el.querySelector('.leaflet-control-attribution:not(#version-tag-float)');
-        if(!attr) return;
-        const mapRect = map_el.getBoundingClientRect();
-        const attrRect = attr.getBoundingClientRect();
-        const attrRightOffset = mapRect.right - attrRect.left;
-        tag.style.right = (attrRightOffset + 6) + 'px';  // 与 attribution 间隔 6px
-        tag.style.bottom = (mapRect.bottom - attrRect.bottom) + 'px';
-      };
-      reposition();
-      setTimeout(reposition, 200);
-      setTimeout(reposition, 600);
-      const attr = map_el.querySelector('.leaflet-control-attribution:not(#version-tag-float)');
-      if(attr) new MutationObserver(reposition).observe(attr, {childList:true, subtree:true, characterData:true});
-      window.addEventListener('resize', reposition);
-      document.getElementById('version-tag-link').addEventListener('click', (e: any) => {
-        e.preventDefault(); showChangelog();
-      });
-    }, 100);
-  })();
+  createVersionBadgeController({
+    document,
+    mapContainer:map.getContainer(),
+    version:APP_VERSION,
+    title:'点击查看更新日志',
+    onActivate:() => { void showChangelog(); },
+  });
   // v1.14.1：撤销 v1.13.3 的 ctrl/meta+wheel 放行
   //   原因：trackpad pinch-zoom 被浏览器映射成 ctrl+wheel；放行后双指捏合在地图上触发的是
   //   浏览器整页缩放而不是地图缩放，反而把"地图缩放"功能搞坏了。
@@ -609,7 +582,7 @@ export function startStudioRuntime(
   }
   function showHelp() {
     return studioDialogs.content(HTM_APP.buildHelpDialogModel(
-      currentLang,
+      getCurrentLang(),
       APP_VERSION,
       t('help.title'),
       t('changelog.close'),
@@ -763,7 +736,7 @@ export function startStudioRuntime(
     selectors, projectActions, projectSelectors,
     buildEscapeRoutes:(...args: any[]) => kmlProjectBuilder.buildEscapeRoutes(...args),
     parseAndProcessKml:(...args: any[]) => kmlProjectBuilder.parseAndProcessKml(...args),
-    escapeUiText, t, studioDialogs, getCurrentLang:() => currentLang,
+    escapeUiText, t, studioDialogs, getCurrentLang,
   });
   const {
     addBtn, addModal, addCancel, addStatus, kmlDrop, kmlFile, kmlList,
@@ -1163,25 +1136,16 @@ export function startStudioRuntime(
     }
     if(!measureState.layer) measureState.layer = L.layerGroup().addTo(map);
     clearMeasureLayer();
-    const measurePanel = document.getElementById('measure-panel');
-    measurePanel.style.display = 'block';
-    if(measurePanel._applyFloatingPosition) measurePanel._applyFloatingPosition();
+    measurePanelController.enter();
     resetMeasureElevReadout('在主轨迹上点击起点，再点击终点。');
-    // 改鼠标样式
-    map.getContainer().style.cursor = 'crosshair';
-    // v1.30.0：加 measure-active 类，让 CSS 关闭所有 SVG path 的命中测试（消除 O(n) 命中检测的浏览器层瓶颈）
-    map.getContainer().classList.add('measure-active');
   }
 
   function measureExit(opts: any = {}) {
     if(!opts.fromManager && cancelRuntimeInteraction('measure', opts.reason || 'cancelled')) return;
     measureController.exit();
     clearMeasureLayer();
-    document.getElementById('measure-panel').style.display = 'none';
+    measurePanelController.exit();
     hideMeasureElevReadout();
-    map.getContainer().style.cursor = '';
-    // v1.30.0：移除 measure-active 类，恢复 SVG path 的命中检测
-    map.getContainer().classList.remove('measure-active');
     // 恢复完整主轨迹海拔图
     if(typeof refreshElevBar === 'function') refreshElevBar();
     // v1.30.0：取消自动复位到主轨迹（用户不希望测距退出后视图跳走）
@@ -1232,31 +1196,19 @@ export function startStudioRuntime(
   }
 
   function showMeasureElevReadout() {
-    const dist = document.getElementById('measure-distance');
-    const hint = document.getElementById('measure-hint');
-    if(dist) dist.classList.add('active');
-    if(hint) hint.classList.add('active');
+    measurePanelController.showReadout();
   }
 
   function hideMeasureElevReadout() {
-    const dist = document.getElementById('measure-distance');
-    const hint = document.getElementById('measure-hint');
-    if(dist) dist.classList.remove('active');
-    if(hint) hint.classList.remove('active');
+    measurePanelController.hideReadout();
   }
 
   function setMeasureElevHint(html: any) {
-    const hint = document.getElementById('measure-hint');
-    if(hint) hint.innerHTML = html;
-    if(hint) hint.classList.toggle('active', !!html);
+    measurePanelController.setHint(html);
   }
 
   function resetMeasureElevReadout(hintText: any) {
-    const dist = document.getElementById('measure-distance');
-    const distText = document.getElementById('m-dist');
-    if(dist) dist.classList.remove('active');
-    if(distText) distText.textContent = '-';
-    setMeasureElevHint(hintText || '在主轨迹上点击起点，再点击终点。');
+    measurePanelController.reset(hintText || '在主轨迹上点击起点，再点击终点。');
   }
 
 
@@ -1283,21 +1235,12 @@ export function startStudioRuntime(
   function updateMeasureReadout(loading: any = false) {
     const a = measureState.ptA, b = measureState.ptB;
     if(!a || !b) return;
-    const dist_el = document.getElementById('m-dist');
-    const ascEl = document.getElementById('elev-stat-asc');
-    const descEl = document.getElementById('elev-stat-desc');
-    showMeasureElevReadout();
     if(loading) {
-      if(dist_el) dist_el.textContent = '⋯';
-      if(ascEl) ascEl.textContent = '↑⋯';
-      if(descEl) descEl.textContent = '↓⋯';
+      measurePanelController.update(null, true);
       return;
     }
     const stats = computeMeasureStats(a, b);
-    if(!stats) return;
-    if(dist_el) dist_el.textContent = stats.distKm.toFixed(2) + ' km';
-    if(ascEl) ascEl.textContent = '↑' + stats.asc + 'm';
-    if(descEl) descEl.textContent = '↓' + stats.desc + 'm';
+    measurePanelController.update(stats);
   }
 
   function queueMeasureLiveUpdate() {
@@ -1367,7 +1310,7 @@ export function startStudioRuntime(
     const label = document.createElement('label');
     label.className = 'form-label';
     label.htmlFor = 'addescape-trail-select';
-    label.textContent = currentLang === 'zh' ? '依据轨迹：' : 'Reference trail:';
+    label.textContent = getCurrentLang() === 'zh' ? '依据轨迹：' : 'Reference trail:';
     select = document.createElement('select');
     select.id = 'addescape-trail-select';
     select.className = 'form-input';
@@ -1380,14 +1323,14 @@ export function startStudioRuntime(
     const select = ensureEscapeTrailSelector();
     if(!select) return;
     const label = select.previousElementSibling;
-    if(label) label.textContent = currentLang === 'zh' ? '依据轨迹：' : 'Reference trail:';
+    if(label) label.textContent = getCurrentLang() === 'zh' ? '依据轨迹：' : 'Reference trail:';
     const selectedId = addEscapeState.referenceTrailId || selectors.primaryTrailId() || '';
     select.replaceChildren();
     escapeReferenceTrails().forEach((trail: any) => {
       const option = document.createElement('option');
       option.value = trail.id;
       option.textContent = trail.name + (trail.id === selectors.primaryTrailId()
-        ? (currentLang === 'zh' ? '（主轨迹）' : ' (Primary)')
+        ? (getCurrentLang() === 'zh' ? '（主轨迹）' : ' (Primary)')
         : '');
       option.selected = trail.id === selectedId;
       select.append(option);
@@ -1398,7 +1341,7 @@ export function startStudioRuntime(
   function resetEscapeSelectionHint() {
     const hint = document.getElementById('addescape-hint');
     if(!hint) return;
-    hint.innerHTML = currentLang === 'zh'
+    hint.innerHTML = getCurrentLang() === 'zh'
       ? '在所选依据轨迹上点击 <b style="color:#22c55e">起点 A</b>，再点击 <b style="color:#ef4444">终点 B</b>。<br><span style="font-size:10px">A/B 只会吸附到当前选择的轨迹。</span>'
       : 'Click <b style="color:#22c55e">point A</b>, then <b style="color:#ef4444">point B</b> on the selected reference trail.<br><span style="font-size:10px">A/B snap only to that trail.</span>';
   }
@@ -1431,7 +1374,7 @@ export function startStudioRuntime(
     if(event.type !== 'tap') return;
     const hit = escapeController.nearestPoint(event.latlng.lat, event.latlng.lng);
     if(!hit) {
-      showToast(currentLang === 'zh' ? '请点击所选依据轨迹附近（2km 内）' : 'Click within 2 km of the selected reference trail', 'error');
+      showToast(getCurrentLang() === 'zh' ? '请点击所选依据轨迹附近（2km 内）' : 'Click within 2 km of the selected reference trail', 'error');
       return;
     }
     if(session.phase === 'select-a') {
@@ -1736,13 +1679,13 @@ export function startStudioRuntime(
     if(!segmentController.isDirty()) return Promise.resolve(finish());
     if(segmentExitPrompt) return segmentExitPrompt;
     segmentExitPrompt = studioDialogs.confirm({
-      title:currentLang === 'zh' ? '存在未应用修改' : 'Unapplied segment changes',
-      message:currentLang === 'zh'
+      title:getCurrentLang() === 'zh' ? '存在未应用修改' : 'Unapplied segment changes',
+      message:getCurrentLang() === 'zh'
         ? '当前分段边界或营地信息尚未应用。确定放弃这些修改并退出吗？'
         : 'Segment boundaries or camp details have not been applied. Discard these changes and exit?',
       danger:true,
-      confirmLabel:currentLang === 'zh' ? '放弃并退出' : 'Discard and exit',
-      cancelLabel:currentLang === 'zh' ? '继续编辑' : 'Keep editing',
+      confirmLabel:getCurrentLang() === 'zh' ? '放弃并退出' : 'Discard and exit',
+      cancelLabel:getCurrentLang() === 'zh' ? '继续编辑' : 'Keep editing',
     }).then((confirmed: any) => confirmed ? finish() : false).finally(() => { segmentExitPrompt = null; });
     return segmentExitPrompt;
   }
@@ -1751,7 +1694,7 @@ export function startStudioRuntime(
     const indicator = document.getElementById('segment-dirty-indicator');
     if(!indicator) return;
     indicator.hidden = !segmentController.isDirty();
-    indicator.textContent = currentLang === 'zh' ? '存在未应用修改' : 'Unapplied changes';
+    indicator.textContent = getCurrentLang() === 'zh' ? '存在未应用修改' : 'Unapplied changes';
   }
 
   function segmentUndo() {
@@ -2154,7 +2097,7 @@ export function startStudioRuntime(
     dayPalette,
     renderDayChart:(points: any, color: any, label: any) =>
       HTM_APP.renderDayElevationChart(document, points, color, label),
-    getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
+    getLanguage:() => getCurrentLang() === 'en' ? 'en' : 'zh',
     schedule:(callback: any, delayMs: any) => setTimeout(callback, delayMs),
     onEvent:handleFileExportEvent,
   });
@@ -2162,7 +2105,7 @@ export function startStudioRuntime(
   const projectRuntimeController:any = HTM_APP.createProjectRuntimeController(runtimeContext, {
     files:browserFileAdapter,
     appVersion:APP_VERSION,
-    getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
+    getLanguage:() => getCurrentLang() === 'en' ? 'en' : 'zh',
     commitArchive:() => applyChange({fit:false}),
     resetArchiveView:() => {
       setMapMode(selectors.mode());
@@ -2191,7 +2134,7 @@ export function startStudioRuntime(
       status:addStatus,
       dialogs:studioDialogs,
       archive:projectArchiveController,
-      getLanguage:() => currentLang === 'en' ? 'en' : 'zh',
+      getLanguage:() => getCurrentLang() === 'en' ? 'en' : 'zh',
       beforeRestore:() => {
         if(interactionManager.current.kind !== 'idle') interactionManager.cancel('project-restore');
       },
@@ -2226,13 +2169,13 @@ export function startStudioRuntime(
   async function clearAllTrails() {
     if(!projectSelectors.trails().length) return;
     const confirmed = await studioDialogs.confirm({
-      title:currentLang === 'zh' ? '清空项目' : 'Clear project',
-      message:currentLang === 'zh'
+      title:getCurrentLang() === 'zh' ? '清空项目' : 'Clear project',
+      message:getCurrentLang() === 'zh'
         ? `确定清除全部 ${projectSelectors.trails().length} 条轨迹？可通过“编辑 → 撤销”恢复。`
         : `Clear all ${projectSelectors.trails().length} trails? You can restore them with Edit → Undo.`,
       danger:true,
-      confirmLabel:currentLang === 'zh' ? '全部清除' : 'Clear all',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
+      confirmLabel:getCurrentLang() === 'zh' ? '全部清除' : 'Clear all',
+      cancelLabel:getCurrentLang() === 'zh' ? '取消' : 'Cancel',
     });
     if(!confirmed) return false;
     return recordProjectEdit('清空项目', 'Clear project', () => trailController.clearTrails());
@@ -2283,17 +2226,17 @@ export function startStudioRuntime(
         icon: '📦',
         label: t('export.kmlZip'),
         desc: selectors.activeGroup()
-          ? (currentLang === 'zh'
+          ? (getCurrentLang() === 'zh'
             ? `当前组「${selectors.activeGroup()}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
             : `${activeCount} active trails in “${selectors.activeGroup()}” · ready for cross-device import`)
-          : (currentLang === 'zh' ? '未选中任何分组 · 请先切换到一个分组' : 'No group selected · select a group first'),
+          : (getCurrentLang() === 'zh' ? '未选中任何分组 · 请先切换到一个分组' : 'No group selected · select a group first'),
         disabled: activeCount === 0,
         handler: () => { popup.remove(); exportGroupKML(); },
       },
       {
         icon: '📄',
         label: t('export.itineraryMarkdown'),
-        desc: currentLang === 'zh'
+        desc: getCurrentLang() === 'zh'
           ? '按天数、爬升、扎营点和下撤方案生成行程表'
           : 'Build an itinerary from days, ascent, camps, and escape routes',
         handler: () => { popup.remove(); exportItineraryMD(); },
@@ -2484,38 +2427,36 @@ export function startStudioRuntime(
     return {restored, resetPerformed};
   }
   applyI18n();
-  const appTitle = document.getElementById('app-title');
-  if(appTitle) {
-    appTitle.dataset.commandId = STUDIO_COMMANDS.APP_RENAME;
-    appTitle.addEventListener('dblclick', () => dispatchStudioCommand(STUDIO_COMMANDS.APP_RENAME));
-    try { const s = localStorage.getItem('hiking_title'); if(s) { appTitle.textContent = s; document.title = s; } } catch(e) {}
-  }
-  const langBtn = document.getElementById('lang-btn');
-  if(langBtn) {
-    langBtn.textContent = currentLang === 'zh' ? '🌐 EN' : '🌐 中';
-  }
+  const workspaceTitleController = createWorkspaceTitleController({
+    document,
+    dialogs:studioDialogs,
+    language:getCurrentLang,
+    dispatchCommand:() => dispatchStudioCommand(STUDIO_COMMANDS.APP_RENAME),
+    commandId:STUDIO_COMMANDS.APP_RENAME,
+    storage:(() => {
+      try { return window.localStorage; } catch { return null; }
+    })(),
+  });
+  syncWorkspaceTitle = workspaceTitleController.syncDocumentTitle;
   const storageBtn = document.getElementById('storage-btn');
   if(storageBtn) storageBtn.addEventListener('click', showStorageInfo);
 
-  // Sidebar collapse remains a UI concern; map fitting consumes it through callbacks.
-  const _sidebar = document.getElementById("sidebar");
-  const _sbClose = document.getElementById("sidebar-close");
-  function toggleSidebar(open: any) {
-    if(open === undefined) open = _sidebar.classList.contains("collapsed");
-    _sidebar.classList.toggle("collapsed", !open);
-    setTimeout(() => {
+  let renderCollapsedPrimary = () => false;
+  let positionCollapsedPrimary = () => {};
+  const sidebarCollapseController = createSidebarCollapseController({
+    document,
+    onLayoutChanged:() => {
       map?.invalidateSize();
       refreshElevBar?.();
-    }, 280);
-    const mini = document.getElementById("primary-mini");
-    if(!mini) return;
-    if(_sidebar.classList.contains("collapsed")) {
-      const hasPrimary = buildPrimaryMini?.() || false;
-      mini.style.display = hasPrimary ? "block" : "none";
-      if(hasPrimary) schedulePrimaryMiniPositionApply?.();
-    } else mini.style.display = "none";
-  }
-  if(_sbClose) _sbClose.addEventListener("click", () => toggleSidebar(false));
+    },
+    renderCollapsedPrimary:() => renderCollapsedPrimary(),
+    positionCollapsedPrimary:() => positionCollapsedPrimary(),
+  });
+  const toggleSidebar = (open?: boolean) => sidebarCollapseController.toggle(open);
+  const mapSafeAreaController = HTM_APP.createMapSafeAreaController({
+    document,
+    mapElement:map.getContainer(),
+  });
 
   workspaceController = HTM_APP.createWorkspaceController({
     trails:() => projectSelectors.trails(),
@@ -2535,9 +2476,12 @@ export function startStudioRuntime(
     renderStats:renderRuntimeStats,
     shouldCloseSidebar:() => HTM_APP.shouldCloseSidebarForFit(
       window.innerWidth,
-      !_sidebar || _sidebar.classList.contains("collapsed"),
+      sidebarCollapseController.isCollapsed(),
+      window.innerHeight,
+      window.matchMedia?.('(pointer:coarse)').matches ?? false,
     ),
-    closeSidebar:() => toggleSidebar(false),
+    closeSidebar:sidebarCollapseController.close,
+    resolveFitPadding:(basePadding: number) => mapSafeAreaController.resolve(basePadding),
     prefersReducedMotion,
   });
   const cachedTrailBounds = (trail: any) => workspaceController.cachedTrailBounds(trail);
@@ -2550,7 +2494,7 @@ export function startStudioRuntime(
     STUDIO_COMMANDS, TAG_RULES_JS, applyChange, baseLayers,
     beginRuntimeInteraction, cancelRuntimeInteraction, clearEscape, commandRegistry,
     createFloatingPanelPositionController, createWorkbenchIcon,
-    getCurrentLang:() => currentLang, dayPalette, deleteTrail, t,
+    getCurrentLang, dayPalette, deleteTrail, t,
     stateActions, selectors, projectActions, projectSelectors, dispatchStudioCommand, downloadTrailKML, drawTracks, drawWaypoints,
     escapeController, escapeUiText, fitWorkspaceBounds,
     getCurrentBase:() => currentBase,
@@ -2578,6 +2522,8 @@ export function startStudioRuntime(
     applyEscapeFilters, appendEscapeRoutesForDay, buildLegend, activateSidebarTab,
     setMapMode, enterInteractionRenderMode, buildWaypointModeTagGrid, syncDisplayControls,
   } = sidebarRuntime;
+  renderCollapsedPrimary = buildPrimaryMini;
+  positionCollapsedPrimary = schedulePrimaryMiniPositionApply;
 
   elevationRuntime = createElevationRuntime({
     document, window, leaflet:L, map, app:HTM_APP, core:HTM_CORE,
@@ -2623,22 +2569,22 @@ export function startStudioRuntime(
       if(!file) { resolve(''); return; }
       const allowedTypes = new Set(['image/png','image/jpeg','image/gif','image/webp','image/avif']);
       if(!allowedTypes.has(file.type.toLowerCase())) {
-        reject(new Error(currentLang === 'zh' ? '请选择 PNG、JPEG、GIF、WebP 或 AVIF 图片' : 'Choose a PNG, JPEG, GIF, WebP, or AVIF image'));
+        reject(new Error(getCurrentLang() === 'zh' ? '请选择 PNG、JPEG、GIF、WebP 或 AVIF 图片' : 'Choose a PNG, JPEG, GIF, WebP, or AVIF image'));
         return;
       }
       if(file.size > 5 * 1024 * 1024) {
-        reject(new Error(currentLang === 'zh' ? '图片不能超过 5 MB' : 'Image must be 5 MB or smaller'));
+        reject(new Error(getCurrentLang() === 'zh' ? '图片不能超过 5 MB' : 'Image must be 5 MB or smaller'));
         return;
       }
       const reader = new FileReader();
       reader.addEventListener('load', () => resolve(typeof reader.result === 'string' ? reader.result : ''));
-      reader.addEventListener('error', () => reject(new Error(currentLang === 'zh' ? '图片读取失败' : 'Could not read image')));
+      reader.addEventListener('error', () => reject(new Error(getCurrentLang() === 'zh' ? '图片读取失败' : 'Could not read image')));
       reader.readAsDataURL(file);
     });
   }
 
   function openWaypointEditorDialog() {
-    const isZh = currentLang === 'zh';
+    const isZh = getCurrentLang() === 'zh';
     return studioDialogs.openCustom({
       title:isZh ? '新增标注点' : 'Add waypoint',
       size:'wide',
@@ -2900,7 +2846,7 @@ export function startStudioRuntime(
     studioDialogs, interactionManager, selectors, projectSelectors,
     beginRuntimeInteraction, setRuntimeInteractionPhase, fitWorkspaceBounds,
     stitchTrails, generateNextTrailId, recordProjectEdit, fileImportController,
-    showToast, requestSegmentExit, trailGroup, getCurrentLang:() => currentLang,
+    showToast, requestSegmentExit, trailGroup, getCurrentLang,
   });
   const stitchState = stitchRuntime.state;
   const stitchLayer = stitchRuntime.layer;
@@ -2911,32 +2857,12 @@ export function startStudioRuntime(
   async function reversePrimaryTrailCommand() {
     if(!selectors.primaryTrailId()) {
       await studioDialogs.info({
-        title:currentLang === 'zh' ? '无法反向' : 'Cannot reverse',
+        title:getCurrentLang() === 'zh' ? '无法反向' : 'Cannot reverse',
         message:t('reverse.noPrimary') || '无主轨迹',
       });
       return false;
     }
     reverseTrail(selectors.primaryTrailId());
-    return true;
-  }
-
-  async function renameApplicationCommand() {
-    const title = document.getElementById('app-title');
-    if(!title) return false;
-    const value = await studioDialogs.prompt({
-      title:currentLang === 'zh' ? '修改标题' : 'Rename workspace',
-      inputLabel:currentLang === 'zh' ? '标题' : 'Title',
-      value:title.textContent || '',
-      required:true,
-      selectOnOpen:true,
-      confirmLabel:currentLang === 'zh' ? '保存' : 'Save',
-      cancelLabel:currentLang === 'zh' ? '取消' : 'Cancel',
-    });
-    const next = value && value.trim();
-    if(!next) return false;
-    title.textContent = next;
-    document.title = next;
-    try { localStorage.setItem('hiking_title', next); } catch(e) {}
     return true;
   }
 
@@ -3004,11 +2930,9 @@ export function startStudioRuntime(
       register(STUDIO_COMMANDS.MAP_RESET, () => resetView({restoreActive:true, gesture:true}), {enabled:hasTrails}),
       register(STUDIO_COMMANDS.HELP_OPEN, showHelp),
       register(STUDIO_COMMANDS.LANGUAGE_TOGGLE, () => {
-        setLang(currentLang === 'zh' ? 'en' : 'zh');
-        const button = document.getElementById('lang-btn');
-        if(button) button.textContent = currentLang === 'zh' ? '🌐 EN' : '🌐 中';
+        setLang(getCurrentLang() === 'zh' ? 'en' : 'zh');
       }),
-      register(STUDIO_COMMANDS.APP_RENAME, renameApplicationCommand),
+      register(STUDIO_COMMANDS.APP_RENAME, workspaceTitleController.rename),
       register(STUDIO_COMMANDS.INTERACTION_CANCEL, cancelActiveCommand),
       register(STUDIO_COMMANDS.MODE_ELEVATION, () => setMapMode('elev'), {
         checked:() => selectors.mode() === 'elev',

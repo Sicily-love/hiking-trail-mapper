@@ -18,7 +18,12 @@ RUNTIME_SOURCE_FILES = [
     ROOT / "src/app/runtime/studio.ts",
     ROOT / "src/app/runtime/interaction-owner.ts",
     ROOT / "src/ui/sidebar/runtime-owner.ts",
+    ROOT / "src/ui/sidebar/collapse-controller.ts",
+    ROOT / "src/ui/measure-panel.ts",
+    ROOT / "src/ui/workspace-title.ts",
+    ROOT / "src/ui/version-badge.ts",
     ROOT / "src/ui/import/runtime-owner.ts",
+    ROOT / "src/features/localization/runtime-owner.ts",
     ROOT / "src/features/map/workspace-controller.ts",
     ROOT / "src/features/elevation/runtime-owner.ts",
 ]
@@ -510,7 +515,8 @@ try:
           evalj("typeof primaryMiniController === 'object' && typeof primaryMiniController.savePosition === 'function' && primaryMiniController.storageKey === 'hiking_primary_mini_pos'"))
     check("主轨迹浮动小卡在侧栏收起后延迟套用位置",
           evalj("typeof primaryMiniController.schedulePositionApply === 'function'")
-          and source_has('function toggleSidebar', 'schedulePrimaryMiniPositionApply'))
+          and source_has('createSidebarCollapseController', 'positionCollapsedPrimary?.()',
+                         'positionCollapsedPrimary = schedulePrimaryMiniPositionApply'))
     check("地图标注点显示分段 D 天数",
           evalj("""
             (() => {
@@ -591,7 +597,9 @@ try:
                     && annotations.every(item => !item.text.startsWith('高 ') && !item.text.startsWith('低 '));
                 })();
             })()
-          """) and source_has('function measureReverse', 'measureController.reverse', 'elev-stat-asc', 'elev-stat-desc', "stats.distKm.toFixed(2) + ' km'", 'buildElevationCanvasScene', 'measureMode:true'))
+          """) and source_has('function measureReverse', 'measureController.reverse',
+                              'createMeasurePanelController', 'measurePanelController.update(stats)',
+                              'buildElevationCanvasScene', 'measureMode:true'))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
           evalj("""
             (() => {

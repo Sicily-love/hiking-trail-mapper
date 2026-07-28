@@ -44,10 +44,11 @@ T('elevation dock state toggles immutably', () => {
   assert.notStrictEqual(next, state);
   assert.strictEqual(next.collapsed, true);
 });
-T('workspace fit plan closes only an open mobile sidebar', () => {
+T('workspace fit plan closes open tablet overlays and mobile sheets', () => {
   assert.strictEqual(app.shouldCloseSidebarForFit(390, false), true);
   assert.strictEqual(app.shouldCloseSidebarForFit(390, true), false);
-  assert.strictEqual(app.shouldCloseSidebarForFit(1024, false), false);
+  assert.strictEqual(app.shouldCloseSidebarForFit(1024, false), true);
+  assert.strictEqual(app.shouldCloseSidebarForFit(1025, false), false);
 });
 T('Leaflet adapter updates existing lines without recreating them', () => {
   let nextLatLngs = null;
