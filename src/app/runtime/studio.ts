@@ -2083,7 +2083,7 @@ export function startStudioRuntime(
     if(event.type === 'export.progress') {
       showToast('⏳ 生成行程图…');
     } else if(event.type === 'export.fallback') {
-      showToast(`ZIP 库未加载，将下载 ${event.downloadCount} 个 KML 文件（首个为合并版）…`, 'info', 4000);
+      showToast(`ZIP 不可用，改为下载 ${event.downloadCount} 个 KML 文件（首个为合并版）…`, 'info', 4000);
     } else if(event.type === 'export.completed') {
       if(event.kind === 'trail-kml') showToast('✓ KML 已下载：' + event.filename.replace(/\.kml$/i, ''));
       else if(event.kind === 'group-zip') showToast(`✓ 已导出 ${event.trailCount} 条轨迹 → ${event.filename}`);

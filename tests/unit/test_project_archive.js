@@ -113,6 +113,30 @@ function stateInput(overrides = {}) {
     assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed.archive.project.trails[0], '__proto__'), false);
   });
 
+  await T('accepts dense multi-track projects while retaining configurable node protection', () => {
+    assert.ok(core.PROJECT_ARCHIVE_DEFAULT_LIMITS.maxNodes >= 8_000_000);
+    assert.ok(Math.floor(core.PROJECT_ARCHIVE_DEFAULT_LIMITS.maxNodes / 7) > 1_000_000);
+    const dense = trail('dense', 'A');
+    dense.track = Array.from({length:30_000}, (_, index) => [
+      30 + (index % 500) / 100_000,
+      100 + (index % 700) / 100_000,
+      1000 + index % 800,
+      index / 100,
+      index,
+      1 + Math.floor(index / 6000),
+    ]);
+    const archive = core.createProjectArchive({
+      project:{title:'Dense project', trails:[dense]},
+      state:stateInput(), appVersion:'v2.2.8',
+    });
+    const text = core.serializeProjectArchive(archive);
+    assert.strictEqual(core.parseProjectArchive(text).ok, true);
+    const limited = core.parseProjectArchive(text, {maxNodes:100_000});
+    assert.strictEqual(limited.ok, false);
+    assert.strictEqual(limited.code, 'unsafe-value');
+    assert.match(limited.message, /too many values/);
+  });
+
   await T('migrates schema 1 archives without losing nested route data', () => {
     const legacy = JSON.parse(JSON.stringify(core.createProjectArchive({
       project:{title:'Legacy', trails:[trail()]}, state:stateInput(), appVersion:'v2.1.0',

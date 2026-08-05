@@ -5,9 +5,11 @@ export const PROJECT_ARCHIVE_EXTENSION = '.ors-project.json' as const;
 export const PROJECT_ARCHIVE_MIME = 'application/vnd.outdoor-route-studio.project+json;charset=utf-8' as const;
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
-const DEFAULT_MAX_BYTES = 128 * 1024 * 1024;
-const DEFAULT_MAX_DEPTH = 64;
-const DEFAULT_MAX_NODES = 2_000_000;
+export const PROJECT_ARCHIVE_DEFAULT_LIMITS = Object.freeze({
+  maxBytes:128 * 1024 * 1024,
+  maxDepth:64,
+  maxNodes:8_000_000,
+});
 
 export type ProjectArchiveMapMode = 'day' | 'elev' | 'waypoint';
 export type ProjectArchiveJson = null | boolean | number | string | ProjectArchiveJson[] | {
@@ -239,8 +241,8 @@ function normalizeArchive(
   try {
     project = cloneSafeJson(normalizedValue.project, 'project', 0, {
       nodes:0,
-      maxNodes:options.maxNodes ?? DEFAULT_MAX_NODES,
-      maxDepth:options.maxDepth ?? DEFAULT_MAX_DEPTH,
+      maxNodes:options.maxNodes ?? PROJECT_ARCHIVE_DEFAULT_LIMITS.maxNodes,
+      maxDepth:options.maxDepth ?? PROJECT_ARCHIVE_DEFAULT_LIMITS.maxDepth,
     }) as Record<string, ProjectArchiveJson>;
   } catch(error) {
     return {ok:false, code:'unsafe-value', message:error instanceof Error ? error.message : String(error)};
@@ -307,7 +309,7 @@ export function parseProjectArchive(
 ): ProjectArchiveParseResult {
   if(typeof text !== 'string') return {ok:false, code:'invalid-json', message:'Project archive must be text'};
   const bytes = new TextEncoder().encode(text).byteLength;
-  if(bytes > (options.maxBytes ?? DEFAULT_MAX_BYTES)) {
+  if(bytes > (options.maxBytes ?? PROJECT_ARCHIVE_DEFAULT_LIMITS.maxBytes)) {
     return {ok:false, code:'too-large', message:'Project archive is too large'};
   }
   try {

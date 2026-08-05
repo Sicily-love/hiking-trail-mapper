@@ -680,6 +680,31 @@ try:
     print("\n▸ 需求 3：KML.zip 导入")
     check("fflate.unzipSync 可用",
           evalj("typeof fflate === 'object' && typeof fflate.unzipSync === 'function'"))
+    zip_export = evalj("""
+      (async () => {
+        try {
+          const adapter = HTM_APP.createFileArchiveAdapter(fflate);
+          const bytes = await adapter.zipTextFiles({
+            '轨迹/浏览器测试.kml':'<kml>路线</kml>',
+            'README.txt':'single-file release',
+          });
+          const entries = fflate.unzipSync(bytes);
+          return {
+            available:adapter.available,
+            names:Object.keys(entries).sort(),
+            kml:fflate.strFromU8(entries['轨迹/浏览器测试.kml']),
+          };
+        } catch(error) {
+          return {error:error.message};
+        }
+      })()
+    """)
+    check("单文件发布可真实生成并解压 ZIP",
+          isinstance(zip_export, dict)
+          and zip_export.get('available') is True
+          and zip_export.get('names') == ['README.txt', '轨迹/浏览器测试.kml']
+          and zip_export.get('kml') == '<kml>路线</kml>',
+          str(zip_export))
 
     result = evalj(f"""
       (async () => {{

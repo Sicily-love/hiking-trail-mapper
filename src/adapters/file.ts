@@ -4,7 +4,11 @@ import type { TrackTuple } from '../core/types.ts';
 export interface FflateCodec {
   unzipSync: (bytes: Uint8Array) => Record<string, Uint8Array>;
   strToU8: (text: string) => Uint8Array;
-  zip: (
+  zipSync?: (
+    files: Record<string, Uint8Array>,
+    options: {level: number},
+  ) => Uint8Array;
+  zip?: (
     files: Record<string, Uint8Array>,
     options: {level: number},
     callback: (error: Error | null, data: Uint8Array | null) => void,
@@ -22,7 +26,7 @@ export function createFileArchiveAdapter(codec: FflateCodec | null | undefined):
   const available = !!codec
     && typeof codec.unzipSync === 'function'
     && typeof codec.strToU8 === 'function'
-    && typeof codec.zip === 'function';
+    && (typeof codec.zipSync === 'function' || typeof codec.zip === 'function');
   return Object.freeze({
     available,
     unzip(bytes: Uint8Array) {
@@ -37,8 +41,13 @@ export function createFileArchiveAdapter(codec: FflateCodec | null | undefined):
       const encoded = Object.fromEntries(
         Object.entries(files).map(([name, text]) => [name, codec.strToU8(text)]),
       );
+      if(typeof codec.zipSync === 'function') {
+        // The vendored async worker factory can be rewritten by single-file bundlers.
+        // zipSync is deterministic and does not depend on Worker/CommonJS detection.
+        return Promise.resolve().then(() => codec.zipSync!(encoded, {level:6}));
+      }
       return new Promise<Uint8Array>((resolve, reject) => {
-        codec.zip(encoded, {level:6}, (error, data) => {
+        codec.zip!(encoded, {level:6}, (error, data) => {
           if(error) reject(error);
           else if(!data) reject(new Error('ZIP returned no data'));
           else resolve(data);

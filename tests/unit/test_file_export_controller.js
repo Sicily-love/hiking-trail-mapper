@@ -141,6 +141,32 @@ function createHarness(trails, overrides = {}) {
     assert.deepStrictEqual(calls.zipped.options, {level:6});
   });
 
+  await T('archive adapter prefers the worker-free synchronous ZIP path', async () => {
+    let asyncZipCalled = false;
+    let syncInput = null;
+    const codec = {
+      unzipSync:bytes => ({'archive.bin':bytes}),
+      strToU8:text => new TextEncoder().encode(text),
+      zipSync:(files, options) => {
+        syncInput = {files, options};
+        return new Uint8Array([5, 4, 3]);
+      },
+      zip:() => { asyncZipCalled = true; throw new Error('async worker path must not run'); },
+    };
+    const adapter = app.createFileArchiveAdapter(codec);
+    const archive = await adapter.zipTextFiles({
+      '轨迹/主轨迹.kml':'<kml>路线</kml>',
+      'README.txt':'offline export',
+    });
+    assert.strictEqual(asyncZipCalled, false);
+    assert.deepStrictEqual([...archive], [5, 4, 3]);
+    assert.deepStrictEqual(syncInput.options, {level:6});
+    assert.strictEqual(
+      new TextDecoder().decode(syncInput.files['轨迹/主轨迹.kml']),
+      '<kml>路线</kml>',
+    );
+  });
+
   await T('browser adapter owns Blob URLs and picker fallback', async () => {
     const effects = {clicks:0, revoked:[], blobs:[], writes:0};
     class FakeBlob {
@@ -204,6 +230,21 @@ function createHarness(trails, overrides = {}) {
     });
     assert.deepStrictEqual(effects.charts.map(item => item.label), ['D1', 'D2']);
     assert.match(effects.saves[0].text, /# Main Itinerary/);
+  });
+
+  await T('controller falls back to KML files when ZIP creation fails', async () => {
+    const archive = {
+      available:true, unzip:() => ({}), decode:() => '',
+      zipTextFiles:async () => { throw new Error('worker unavailable'); },
+    };
+    const {controller, effects} = createHarness([trail()], {archive});
+    assert.deepStrictEqual(await controller.exportGroupKml(), {status:'fallback', downloadCount:2});
+    assert.deepStrictEqual(effects.downloads.map(item => item.filename), [
+      '_A_合并导入.kml', 'Main.kml',
+    ]);
+    assert.ok(effects.events.some(event =>
+      event.type === 'export.error' && event.reason === 'archive-failed'));
+    assert.ok(effects.events.some(event => event.type === 'export.fallback'));
   });
 
   await T('direct runtime keeps only DOM wrappers around typed file adapters', () => {

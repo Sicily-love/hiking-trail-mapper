@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.2.9 — 2026-07-29
+
+**中文**
+
+- 修复单文件发布中 ZIP 工作线程不兼容导致的轨迹组导出失败，并在压缩失败时自动降级下载 KML。
+- 提高项目备份的安全节点容量以支持大型密集多轨迹项目，同时保留文件大小、嵌套深度和数据有效性保护。
+
+**English**
+
+- Fix group export failures caused by ZIP worker incompatibility in the single-file release and automatically fall back to KML downloads when compression fails.
+- Increase the safe project-archive node capacity for large dense multi-trail projects while preserving byte-size, nesting-depth, and data-validity protections.
+
 ## v2.2.8 — 2026-07-28
 
 **中文**

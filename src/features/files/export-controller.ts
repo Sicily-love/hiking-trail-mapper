@@ -86,7 +86,6 @@ export function createFileExportController(
         return {status:'exported', filename};
       } catch(error) {
         emit({type:'export.error', reason:'archive-failed', error});
-        return {status:'failed', error};
       }
     }
 
