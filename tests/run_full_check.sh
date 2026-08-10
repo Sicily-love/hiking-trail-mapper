@@ -94,6 +94,16 @@ else
   fail "找不到 tests/browser/test_v1_*.py"
 fi
 
+PERF_OUTPUT=$(run_python_with_websocket "$ROOT/tests/browser/test_large_project_performance.py") || {
+  echo "$PERF_OUTPUT"; fail "大项目性能测试失败"
+}
+echo "$PERF_OUTPUT" | grep -q "结果: 8/8 passed" || {
+  echo "$PERF_OUTPUT"; fail "大项目性能测试缺少结果汇总"
+}
+PERF_METRICS=$(echo "$PERF_OUTPUT" | grep '^Metrics:' | tail -1 || true)
+ok "  12 条轨迹 / 21.6 万点真实 Chrome 性能通过"
+[ -z "$PERF_METRICS" ] || echo "    ${PERF_METRICS#Metrics: }"
+
 PWA_OUTPUT=$(HTM_PWA_DIST="$ROOT/.vite-build" run_python_with_websocket "$ROOT/tests/browser/test_pwa.py") || {
   echo "$PWA_OUTPUT"; fail "PWA 离线启动测试失败"
 }
@@ -126,6 +136,9 @@ run_python_with_websocket "$ROOT/tests/visual/capture_workbench.py" "$TMP_CHECK_
 }
 [ -f "$TMP_CHECK_DIR/visual/workbench-project-restore.png" ] || {
   cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归缺少项目恢复预检截图"
+}
+[ -f "$TMP_CHECK_DIR/visual/workbench-waypoint-card.png" ] || {
+  cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归缺少标注点信息卡截图"
 }
 ok "  桌面、移动端与核心交互截图通过"
 

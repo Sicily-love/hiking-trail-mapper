@@ -111,7 +111,7 @@ npm run check:generated
 
 ### Phase 5：真实 Chrome 功能
 
-`tests/browser/test_v1_31.py` 在真实浏览器中检查启动、导入、DOM 更新和核心交互。Milestone 6 相关断言应等待 `window.__OUTDOOR_ROUTE_STUDIO__.ready`，避免把启动中的中间状态当作失败。
+`tests/browser/test_v1_31.py` 在真实浏览器中检查启动、导入、DOM 更新和核心交互。随后 `test_large_project_performance.py` 加载 12 条轨迹、21.6 万点和 96 个标注，验证首帧合并、Leaflet 图层上限、Marker 稳定复用、海拔降采样、复位耗时和堆内存保护。Milestone 6 相关断言应等待 `window.__OUTDOOR_ROUTE_STUDIO__.ready`，避免把启动中的中间状态当作失败。
 
 重点覆盖：
 
@@ -133,7 +133,7 @@ E2E 以用户结果为准，不直接依赖 manager 私有字段。manager 内�
 
 ### Phase 7：真实 Chrome 视觉回归
 
-`tests/visual/capture_workbench.py` 使用同一份临时发布物和真实示例轨迹，检查 1440、1024、390 与 320 像素布局，并覆盖轨迹组、长名称、Day、测距、分段、拼接、标注对话框、海拔收放和提示条。几何断言或截图状态缺失都会使完整检查失败。
+`tests/visual/capture_workbench.py` 使用同一份临时发布物和真实示例轨迹，检查 1440、1024、390 与 320 像素布局，并覆盖轨迹组、长名称、Day、测距、分段、拼接、标注对话框、标注信息卡、海拔收放和提示条。几何断言或截图状态缺失都会使完整检查失败。
 
 七个阶段结束后，脚本还会做只读发布一致性检查：
 

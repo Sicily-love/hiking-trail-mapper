@@ -198,6 +198,20 @@ const test = async (name, fn) => {
     assert.strictEqual(values.get('hiking_title'), 'Renamed workspace');
   });
 
+  await test('map overlays own tooltip and waypoint-card DOM outside the main runtime', () => {
+    const runtime = fs.readFileSync(path.join(root, 'src/app/runtime/studio.ts'), 'utf8');
+    const owner = fs.readFileSync(path.join(root, 'src/ui/map-overlays.ts'), 'utf8');
+    assert.ok(runtime.includes("createMapOverlayController"));
+    assert.ok(runtime.includes('mapOverlayController.showTooltip(rows'));
+    assert.ok(runtime.includes('mapOverlayController.showWaypointCard({'));
+    assert.ok(!runtime.includes("const tooltipEl = document.getElementById('tooltip')"));
+    assert.ok(!runtime.includes("const wpPhotoEl = document.getElementById('wp-photo-tip')"));
+    assert.ok(!runtime.includes('wpPhotoEl.innerHTML'));
+    assert.ok(owner.includes("tooltip.replaceChildren(...fragments)"));
+    assert.ok(owner.includes("waypointCard.replaceChildren()"));
+    assert.ok(owner.includes('sanitizeImageSource(model.photo)'));
+  });
+
   console.log(`\nResult: ${passed}/${passed} passed`);
 })().catch(error => {
   console.error(error);

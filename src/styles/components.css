@@ -125,13 +125,73 @@
   position:fixed;
   z-index:5000;
   display:none;
+  width:min(280px,calc(100vw - 20px));
   max-width:280px;
-  padding:5px;
+  padding:12px;
   pointer-events:none;
-  background:rgba(20,24,32,.96);
-  border:1px solid #555;
+  background:rgba(22,30,25,.97);
+  border:1px solid rgba(199,214,204,.48);
   border-radius:6px;
-  box-shadow:0 4px 16px rgba(0,0,0,.5);
+  box-shadow:0 12px 30px rgba(0,0,0,.38);
+  color:#F4F7F5;
+  backdrop-filter:blur(10px);
+}
+.waypoint-card__close {
+  position:absolute;
+  top:6px;
+  right:6px;
+  display:grid;
+  width:28px;
+  height:28px;
+  place-items:center;
+  padding:0;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:4px;
+  background:rgba(0,0,0,.24);
+  color:#FFFFFF;
+  cursor:pointer;
+}
+.waypoint-card__trail {
+  max-width:calc(100% - 32px);
+  margin-bottom:7px;
+  overflow:hidden;
+  font-size:10px;
+  font-weight:650;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.waypoint-card__image {
+  display:block;
+  width:100%;
+  max-height:190px;
+  object-fit:cover;
+  border-radius:4px;
+  cursor:zoom-in;
+}
+.waypoint-card__title {
+  min-width:0;
+  color:#F4F7F5;
+  font-size:11px;
+}
+.waypoint-card__title.has-photo { margin-top:8px; }
+.waypoint-card__icon { display:grid; flex:0 0 16px; place-items:center; }
+.waypoint-card__name {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.waypoint-card__meta { flex:0 0 auto; color:#CBD7CF; }
+.waypoint-card__description {
+  margin-top:6px;
+  color:#DCE5DF;
+  font-size:10px;
+  line-height:1.45;
+}
+.waypoint-card__hint {
+  margin-top:6px;
+  color:#9FB0A5;
+  font-size:9px;
 }
 
 .image-lightbox {

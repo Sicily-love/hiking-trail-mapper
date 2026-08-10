@@ -88,7 +88,7 @@ index.html
 - `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
 - `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏、撤销/重做和快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
 
-`v2.0.0` 删除了 classic 启动桥；当前进一步把 `studio.ts` 从约 6200 行压到约 3170 行。KML 项目构建、复位/fit、侧栏/行程、导入、轨迹拼接和海拔 Canvas 已有独立 owner，全部 TypeScript 源码通过严格检查且不再使用 `@ts-nocheck`。主 runtime 与 typed feature 只通过 project/state actions 和 selectors 交换数据。仅真实浏览器测试通过 `?studio-test=1` 启用深只读 inspector，测试写入走专用 `testDriver`；正常发布不暴露业务 globals。
+`v2.0.0` 删除了 classic 启动桥；当前进一步把 `studio.ts` 从约 6200 行压到约 2950 行。KML 项目构建、复位/fit、侧栏/行程、导入、轨迹拼接、地图悬浮信息和海拔 Canvas 已有独立 owner，全部 TypeScript 源码通过严格检查且不再使用 `@ts-nocheck`。主 runtime 与 typed feature 只通过 project/state actions 和 selectors 交换数据。仅真实浏览器测试通过 `?studio-test=1` 启用深只读 inspector，测试写入走专用 `testDriver`；正常发布不暴露业务 globals。
 
 ## 开发与测试
 
@@ -100,7 +100,7 @@ npm run build
 npm run test:visual:capture
 ```
 
-完整测试默认包含真实 Chrome 功能、端到端和视觉布局回归；`test:visual:capture` 可单独生成截图，便于人工检查具体界面状态。
+完整测试默认包含真实 Chrome 功能、12 条轨迹 / 21.6 万点性能基准、PWA 离线重开、端到端和视觉布局回归；`test:visual:capture` 可单独生成截图，便于人工检查具体界面状态。
 
 `npm run build` 以小壳 `index.html` 为 Vite 入口，将 JavaScript 和 CSS 内联到 `dist/index.html`，并生成兼容别名 `dist/hiking-trail-mapper.html`、`dist/release.json`、PWA 清单、Service Worker 与应用图标。两个 HTML 名称指向同一份自包含发布内容，不是两套源码。
 

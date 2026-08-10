@@ -318,7 +318,8 @@ try:
           && getComputedStyle(node).whiteSpace === 'nowrap'
           && node.scrollWidth > node.clientWidth;
         return {
-          valid:Math.abs((sidebar?.getBoundingClientRect().width || 0) - 310) < 1
+          valid:(sidebar?.getBoundingClientRect().width || 0) >= 300
+            && (sidebar?.getBoundingClientRect().width || 0) <= 320
             && ellipsized(cardName) && ellipsized(primaryName),
           sidebarWidth:sidebar?.getBoundingClientRect().width || 0,
           cardEllipsized:ellipsized(cardName),
@@ -502,6 +503,29 @@ try:
     waypoint_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
     (OUTPUT / "workbench-waypoint-types.png").write_bytes(base64.b64decode(waypoint_dialog_shot["result"]["data"]))
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__actions .workbench-dialog__button:not([type=\"submit\"])')?.click()")
+    time.sleep(0.1)
+
+    waypoint_card_state = evaluate("""
+      (() => {
+        const marker = Object.values(wpMarkers)[0];
+        if(!marker) return false;
+        marker.fire('click', {
+          originalEvent:{clientX:innerWidth * .58, clientY:innerHeight * .34, stopPropagation(){}},
+        });
+        const card = document.getElementById('wp-photo-tip');
+        const rect = card?.getBoundingClientRect();
+        return !!card && !!rect
+          && getComputedStyle(card).display !== 'none'
+          && !!card.querySelector('.waypoint-card__close')
+          && !!card.querySelector('.waypoint-card__title')
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight;
+      })()
+    """)
+    wait_for_map_tiles()
+    waypoint_card_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-waypoint-card.png").write_bytes(base64.b64decode(waypoint_card_shot["result"]["data"]))
+    evaluate("document.querySelector('#wp-photo-tip .waypoint-card__close')?.click()")
     time.sleep(0.1)
 
     evaluate("""
@@ -746,7 +770,7 @@ try:
         measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
     ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not waypoint_card_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
@@ -756,6 +780,7 @@ try:
             "measure":measure_state,
             "segment":bool(segment_state),
             "waypointDialog":bool(waypoint_dialog_state),
+            "waypointCard":bool(waypoint_card_state),
             "dialog":bool(dialog_state),
             "restoreDialog":bool(restore_dialog_state),
             "stitchDialog":bool(stitch_dialog_state),

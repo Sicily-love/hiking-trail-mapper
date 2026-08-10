@@ -7,6 +7,7 @@
 - a Day-card state with real itinerary data;
 - a measurement state with A/B points and elevation readout;
 - a two-day segmentation state with the segment editor visible;
+- a waypoint information card opened through a real Leaflet marker click;
 - `report.json` with viewport, overflow, overlap, runtime, and mobile-reset assertions.
 
 Run outside the Codex seatbelt sandbox:

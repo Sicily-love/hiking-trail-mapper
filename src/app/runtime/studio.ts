@@ -6,7 +6,6 @@ import {
   escapeHtmlText,
   sanitizeExternalHttpUrl,
   sanitizeHexColor,
-  sanitizeImageSource,
 } from '../../ui/safe-content.ts';
 import { createFloatingPanelPositionController } from '../../ui/floating-panel.ts';
 import { createMeasurePanelController } from '../../ui/measure-panel.ts';
@@ -15,6 +14,7 @@ import { createToastController } from '../../ui/toast.ts';
 import { createVersionBadgeController } from '../../ui/version-badge.ts';
 import { createWorkspaceTitleController } from '../../ui/workspace-title.ts';
 import { createExportMenuController } from '../../ui/export-menu.ts';
+import { createMapOverlayController } from '../../ui/map-overlays.ts';
 import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
 import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
@@ -601,7 +601,6 @@ export function startStudioRuntime(
   }
 
   /* ============ Tooltip ============ */
-  const tooltipEl = document.getElementById('tooltip');
   const formatCoordinate = HTM_APP.formatCoordinate;
   const formatTrackPointCoordinates = HTM_APP.formatTrackPointCoordinates;
   const trackPointInspector = HTM_APP.createTrackPointInspectionController({
@@ -610,50 +609,35 @@ export function startStudioRuntime(
   });
 
   /* ============ Waypoint Photo Hover ============ */
-  const wpPhotoEl = document.getElementById('wp-photo-tip');
   const escapeUiText = escapeHtmlText;
+  const mapOverlayController = createMapOverlayController({
+    document,
+    viewport:window,
+    openImage:(source, caption) => openLightbox(source, caption),
+  });
   function pinWpCard(e: any, wp: any, trail: any) {
-    // 点击标注点 → 固定显示卡片，卡片中图片可点击放大
-    const photoSrc = sanitizeImageSource(wp.photo) || '';
-    const iconMarkup = waypointIconMarkup(wp);
-    const photoHtml = photoSrc ? `<img id="pin-card-img" src="${photoSrc}" loading="lazy" style="display:block;max-width:260px;max-height:200px;border-radius:4px;cursor:zoom-in" onerror="this.style.display='none'">` : '';
-    const trailLine = trail ? `<div style="color:${sanitizeHexColor(trail.color, '#aaaaaa')};font-size:10px;font-weight:600;margin-bottom:3px">${t('popup.trailLabel')}: ${escapeUiText(trail.name)}</div>` : '';
     const description = wp.description || (wp.name && wp.name !== wp.label ? wp.name : '');
-    const descLine = description ? `<div style="color:#cfd6e0;font-size:10px;margin-top:3px;line-height:1.4;max-width:260px">${escapeUiText(description)}</div>` : '';
-    wpPhotoEl.innerHTML = `
-      <button id="pin-card-close" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.4);border:none;color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>
-      ${trailLine}
-      ${photoHtml}
-      <div class="waypoint-card-title" style="color:#cfd6e0;font-size:11px;margin-top:${photoHtml ? '4px' : '0'};padding:0 2px">${iconMarkup}<b>${escapeUiText(wp.label)}</b><span>· ${wp.km}${t('header.km')} · ${wp.elev}m</span></div>
-      ${descLine}
-      ${photoSrc ? `<div style="color:var(--text-dim);font-size:9px;margin-top:3px">${t('popup.clickPhotoZoom')}</div>` : ''}
-    `;
-    wpPhotoEl.style.display = 'block';
-    wpPhotoEl.style.pointerEvents = 'auto';  // 卡片接收事件（关闭按钮+图片点击）
     const oe = e.originalEvent;
-    // 显示在地图视口中央偏上（避免被 marker 遮挡）
-    const x = Math.min(Math.max(oe.clientX - 140, 10), window.innerWidth - 290);
-    const y = Math.min(Math.max(oe.clientY + 20, 10), window.innerHeight - 280);
-    wpPhotoEl.style.left = x + 'px';
-    wpPhotoEl.style.top = y + 'px';
-
-    // 关闭按钮
-    const closeBtn = document.getElementById('pin-card-close');
-    if(closeBtn) closeBtn.addEventListener('click', (ev: any) => { ev.stopPropagation(); hideWpPhoto(); });
-    // 图片点击放大
-    const imgEl = document.getElementById('pin-card-img');
-    if(imgEl) imgEl.addEventListener('click', (ev: any) => {
-      ev.stopPropagation();
-      openLightbox(photoSrc, `${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`);
+    mapOverlayController.showWaypointCard({
+      iconHtml:waypointIconMarkup(wp),
+      label:String(wp.label || wp.name || ''),
+      meta:`· ${wp.km}${t('header.km')} · ${wp.elev}m`,
+      trailLabel:trail ? t('popup.trailLabel') : undefined,
+      trailName:trail?.name,
+      trailColor:trail?.color,
+      description,
+      photo:wp.photo,
+      photoHint:wp.photo ? t('popup.clickPhotoZoom') : undefined,
+      photoCaption:`${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`,
+    }, {
+      clientX:oe?.clientX ?? window.innerWidth / 2,
+      clientY:oe?.clientY ?? window.innerHeight / 2,
     });
-
-    // 阻止事件冒泡到地图（否则 map click 会立即关掉）
-    if(oe) oe.stopPropagation && oe.stopPropagation();
+    oe?.stopPropagation?.();
   }
 
   function hideWpPhoto() {
-    wpPhotoEl.style.display = 'none';
-    wpPhotoEl.style.pointerEvents = 'none';
+    mapOverlayController.hideWaypointCard();
   }
 
   // 点击地图空白处 → 关闭卡片
@@ -669,25 +653,23 @@ export function startStudioRuntime(
       const idx = trail.track ? trail.track.findIndex((p: any) => p[3] >= a[3]) : -1;
       if(idx >= 0 && trail._descCum[idx] !== undefined) descVal = Math.round(trail._descCum[idx]) + ' m';
     }
-    let html = `
-      <div class="row"><span class="lab">里程</span><span class="val">${a[3]} km</span></div>
-      <div class="row"><span class="lab">海拔</span><span class="val">${a[2]} m</span></div>
-      <div class="row"><span class="lab">爬升</span><span class="val">${a[4]} m</span></div>
-      <div class="row"><span class="lab">下降</span><span class="val">${descVal}</span></div>
-      <div class="row"><span class="lab">天数</span><span class="val">D${a[5]}</span></div>
-      <div class="row"><span class="lab">纬度</span><span class="val coordinate">${formatCoordinate(a[0])}</span></div>
-      <div class="row"><span class="lab">经度</span><span class="val coordinate">${formatCoordinate(a[1])}</span></div>
-      <div class="row"><span class="lab">轨迹</span><span style="color:${sanitizeHexColor(trail.color)}">${escapeUiText(trail.name)}</span></div>
-    `;
-    if(heat !== undefined) {
-      html += `<div class="row"><span class="lab">重合度</span><span class="val">${heat}x</span></div>`;
-    }
-    tooltipEl.innerHTML = html;
-    tooltipEl.style.display = 'block';
-    tooltipEl.style.left = e.originalEvent.clientX + 'px';
-    tooltipEl.style.top = e.originalEvent.clientY + 'px';
+    const rows = [
+      {label:'里程', value:`${a[3]} km`},
+      {label:'海拔', value:`${a[2]} m`},
+      {label:'爬升', value:`${a[4]} m`},
+      {label:'下降', value:descVal},
+      {label:'天数', value:`D${a[5]}`},
+      {label:'纬度', value:formatCoordinate(a[0]), coordinate:true},
+      {label:'经度', value:formatCoordinate(a[1]), coordinate:true},
+      {label:'轨迹', value:String(trail.name || ''), color:trail.color},
+    ];
+    if(heat !== undefined) rows.push({label:'重合度', value:`${heat}x`});
+    mapOverlayController.showTooltip(rows, {
+      clientX:e.originalEvent.clientX,
+      clientY:e.originalEvent.clientY,
+    });
   }
-  function hideTooltip() { tooltipEl.style.display = 'none'; }
+  function hideTooltip() { mapOverlayController.hideTooltip(); }
 
   function inspectTrackPoint(event: any, trail: any) {
     return trackPointInspector.inspect(event, trail);
@@ -2270,11 +2252,12 @@ export function startStudioRuntime(
     );
     // 自动定位（仅 fit=true 时）
     if(opts.fit && projectSelectors.trails().length) {
-      const allLatLngs:any[] = [];
-      projectSelectors.trails().forEach((t: any) => t.track.forEach((p: any) => allLatLngs.push([p[0], p[1]])));
-      if(allLatLngs.length) {
-        fitWorkspaceBounds(L.latLngBounds(allLatLngs), {padding:[40,40]}, {source:'rebuild'});
+      const bounds = L.latLngBounds([]);
+      for(const trail of projectSelectors.trails()) {
+        const trailBounds = workspaceController?.cachedTrailBounds(trail);
+        if(trailBounds) bounds.extend(trailBounds);
       }
+      if(bounds.isValid()) fitWorkspaceBounds(bounds, {padding:[40,40]}, {source:'rebuild'});
     }
   }
 

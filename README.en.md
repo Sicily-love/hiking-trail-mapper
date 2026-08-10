@@ -88,7 +88,7 @@ index.html
 - `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
 - `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, Undo/Redo, and keyboard shortcuts. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
 
-`v2.0.0` removed the classic startup bridge; the main `studio.ts` is now down from roughly 6,200 to roughly 3,170 lines. KML project building, reset/fit, sidebar/itinerary, import, trail stitching, and elevation Canvas now have explicit owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime and typed features exchange data only through project/state actions and selectors. A deeply read-only inspector is available only under `?studio-test=1`, while fixture writes use a dedicated `testDriver`; normal releases expose no business globals.
+`v2.0.0` removed the classic startup bridge; the main `studio.ts` is now down from roughly 6,200 to roughly 2,950 lines. KML project building, reset/fit, sidebar/itinerary, import, trail stitching, transient map overlays, and elevation Canvas now have explicit owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime and typed features exchange data only through project/state actions and selectors. A deeply read-only inspector is available only under `?studio-test=1`, while fixture writes use a dedicated `testDriver`; normal releases expose no business globals.
 
 ## Development and Tests
 
@@ -99,6 +99,8 @@ npm run build
 ./tests/run_full_check.sh
 npm run test:visual:capture
 ```
+
+The full check includes real-Chrome behavior, a 12-trail / 216,000-point performance budget, PWA offline reopen, end-to-end workflows, and responsive visual regression.
 
 `npm run build` uses the small `index.html` shell as the Vite entry, inlines JavaScript and CSS into `dist/index.html`, and emits the compatibility alias `dist/hiking-trail-mapper.html`, `dist/release.json`, the PWA manifest, Service Worker, and application icon. The two HTML names contain the same self-contained release; they are not separate sources.
 

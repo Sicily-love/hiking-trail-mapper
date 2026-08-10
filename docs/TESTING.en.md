@@ -111,7 +111,7 @@ This phase validates only and must not rewrite business source.
 
 ### Phase 5: Real-Chrome Functionality
 
-`tests/browser/test_v1_31.py` checks startup, imports, DOM updates, and core interactions in a real browser. Milestone 6 assertions should await `window.__OUTDOOR_ROUTE_STUDIO__.ready` so an intermediate boot state is not treated as failure.
+`tests/browser/test_v1_31.py` checks startup, imports, DOM updates, and core interactions in a real browser. It is followed by `test_large_project_performance.py`, which loads 12 trails, 216,000 points, and 96 waypoints to guard first-frame coalescing, Leaflet layer bounds, stable Marker reuse, elevation downsampling, reset latency, and heap use. Milestone 6 assertions should await `window.__OUTDOOR_ROUTE_STUDIO__.ready` so an intermediate boot state is not treated as failure.
 
 Key coverage:
 
@@ -133,7 +133,7 @@ E2E tests assert user outcomes instead of manager private fields. Phase 2 protec
 
 ### Phase 7: Real-Chrome Visual Regression
 
-`tests/visual/capture_workbench.py` uses the same temporary release and real sample trail to validate 1440, 1024, 390, and 320 pixel layouts. It covers trail groups, long names, Day, measure, segment, stitch, waypoint dialogs, elevation collapse, and toast feedback. Missing screenshot states or failed geometry assertions fail the full check.
+`tests/visual/capture_workbench.py` uses the same temporary release and real sample trail to validate 1440, 1024, 390, and 320 pixel layouts. It covers trail groups, long names, Day, measure, segment, stitch, waypoint dialogs and information cards, elevation collapse, and toast feedback. Missing screenshot states or failed geometry assertions fail the full check.
 
 After all seven phases, the script performs a read-only release-consistency check:
 

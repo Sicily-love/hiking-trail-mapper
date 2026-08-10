@@ -5,10 +5,10 @@ Outdoor Route Studio 的测试目录与分层。 / Test directories and layers f
 ## 中文
 
 - `unit/`：core、app、四个 manager、Workbench、入口和发布契约的确定性 Node 测试。
-- `browser/`：小壳、direct TypeScript runtime 和生成单 HTML 的真实 Chrome 静态/功能检查。
+- `browser/`：小壳、direct TypeScript runtime、生成单 HTML 的真实 Chrome 静态/功能检查，以及 12 条轨迹 / 21.6 万点性能基准。
 - `e2e/`：导入、分组、测距、分段、存储、导出与 `file://` 用户流程。
 - `visual/`：真实 KML、桌面七项侧栏、移动五项底栏、侧栏/bottom sheet、海拔坞和 dialog 的截图与几何断言。
-- `run_full_check.sh`：本地与发布准备共用的完整入口，包含真实 Chrome 功能、端到端和视觉布局回归。
+- `run_full_check.sh`：本地与发布准备共用的完整入口，包含真实 Chrome 功能、大项目性能、PWA 离线、端到端和视觉布局回归。
 
 常用命令：
 
@@ -21,6 +21,7 @@ node tests/unit/test_render_scheduler.js
 node tests/unit/test_render_runtime.js
 node tests/unit/test_performance_core.js
 node tests/unit/test_command_dialog.js
+uv run --with websocket-client python3 tests/browser/test_large_project_performance.py
 ./tests/run_full_check.sh
 npm run test:visual:capture
 ```
@@ -36,10 +37,10 @@ npm run test:visual:capture
 ## English
 
 - `unit/`: deterministic Node tests for core, app, all four managers, Workbench, entry, and release contracts.
-- `browser/`: real-Chrome static/functional checks for the small shell, direct TypeScript runtime, and generated single HTML.
+- `browser/`: real-Chrome static/functional checks for the small shell, direct TypeScript runtime, generated single HTML, and a 12-trail / 216,000-point performance budget.
 - `e2e/`: user workflows for import, groups, measurement, segmentation, persistence, export, and `file://`.
 - `visual/`: real-KML screenshots and geometry assertions for four focused desktop/mobile activities, sidebar panels, the elevation dock, and dialogs.
-- `run_full_check.sh`: shared full entrypoint for local and release preparation, including real-Chrome functional, end-to-end, and visual layout regression.
+- `run_full_check.sh`: shared full entrypoint for local and release preparation, including real-Chrome functionality, large-project performance, PWA offline startup, end-to-end, and visual layout regression.
 
 Common commands:
 
