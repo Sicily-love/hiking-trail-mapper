@@ -30,7 +30,11 @@ function fixture() {
     createElement:() => ({
       id:'', textContent:'', dataset:{}, attributes,
       style:{setProperty:(name, value) => { properties[name] = value; }},
-      classList:{add:name => classes.add(name), remove:name => classes.delete(name)},
+      classList:{
+        add:name => classes.add(name),
+        remove:name => classes.delete(name),
+        contains:name => classes.has(name),
+      },
       setAttribute:(name, value) => { attributes[name] = value; },
     }),
     querySelector:selector => selector === '.studio-map-stage'
@@ -68,6 +72,16 @@ test('error feedback is assertive and the timer hides it', () => {
   assert.strictEqual(state.getToast().dataset.tone, 'error');
   state.runTimer();
   assert.strictEqual(state.classes.has('is-visible'), false);
+});
+
+test('visible errors are not replaced by background info feedback', () => {
+  const state = fixture();
+  const toast = state.controller.show('Failed', 'error', 5000);
+  state.controller.show('Autosaved', 'info', 2400);
+  assert.strictEqual(toast.textContent, 'Failed');
+  assert.strictEqual(toast.dataset.tone, 'error');
+  assert.strictEqual(state.attributes.role, 'alert');
+  assert.strictEqual(state.attributes['aria-live'], 'assertive');
 });
 
 test('dispose is idempotent and rejects later messages', () => {

@@ -60,6 +60,9 @@ export function createToastController(options: ToastControllerOptions): ToastCon
   const show = (message: string, tone: ToastTone = 'info', durationMs = 2400) => {
     if(disposed) throw new Error('ToastController is disposed');
     const toast = element();
+    if(tone === 'info' && toast.dataset.tone === 'error' && toast.classList.contains('is-visible')) {
+      return toast;
+    }
     toast.textContent = message;
     toast.dataset.tone = tone;
     toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
