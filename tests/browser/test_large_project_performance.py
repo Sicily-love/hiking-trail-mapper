@@ -46,6 +46,7 @@ port = free_port()
 process = subprocess.Popen([
     chrome, "--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox",
     "--disable-crash-reporter", "--enable-precise-memory-info", "--remote-allow-origins=*",
+    "--window-size=1440,1000",
     f"--remote-debugging-port={port}", f"--user-data-dir={profile}",
     f"file://{HTML}?studio-test=1",
 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -178,6 +179,11 @@ try:
         const settleFrames = await settle();
         const firstRenderMs = performance.now() - renderStarted;
         const afterFirst = snapshotStats();
+
+        // Project replacement can leave a mobile-sidebar fit callback in flight on slower CI.
+        // Keep that setup work outside the reset measurement and assert the final explicit fit.
+        await new Promise(resolve => setTimeout(resolve, 250));
+        await settle();
 
         const resetStarted = performance.now();
         const resetApplied = await resetView({gesture:false});
