@@ -666,6 +666,25 @@ try:
           appVersion:APP_VERSION,
           exportedAt:'2026-07-21T12:00:00.000Z',
         });
+        const incomplete = archive.project.trails[0];
+        if(incomplete?.track?.length >= 2) {
+          incomplete.track.forEach(point => { point[3] = 999; point[4] = 999; });
+          incomplete.stats = {distance_km:-1, ascent_m:-1};
+          incomplete.day_meta = [{d:1, i_start:0, i_end:incomplete.track.length - 1, camp:'Compatibility camp'}];
+          const middleIndex = Math.floor(incomplete.track.length / 2);
+          const middle = incomplete.track[middleIndex];
+          incomplete.waypoints = [{
+            id:'compat-waypoint', name:'Compatibility water', label:'Compatibility water', tag:'water',
+            lat:middle[0], lng:middle[1],
+          }];
+          incomplete.escape_routes = [{
+            id:'compat-escape', name:'Compatibility escape', desc:'', days:[1],
+            _anchor:{trailId:incomplete.id, trailName:incomplete.name},
+            line:[[incomplete.track[0][0], incomplete.track[0][1]], [incomplete.track.at(-1)[0], incomplete.track.at(-1)[1]]],
+          }];
+        }
+        archive.schemaVersion = 1;
+        delete archive.project.calc_method;
         const text = HTM_CORE.serializeProjectArchive(archive);
         const parsed = projectArchiveController.parse(text);
         if(!parsed.ok) return {ok:false, error:parsed.message};
@@ -681,6 +700,9 @@ try:
         stateActions.clearWorkspace();
         const result = projectArchiveController.restore(parsed.archive);
         await new Promise(resolve => setTimeout(resolve, 500));
+        const restoredTrail = DATA.trails[0];
+        buildDaysTab();
+        const itineraryText = document.getElementById('tab-days')?.textContent || '';
         return {
           ok:true,
           status:result.status,
@@ -693,17 +715,32 @@ try:
           },
           schema:parsed.archive.schemaVersion,
           format:parsed.archive.format,
+          migratedFrom:parsed.migratedFrom,
+          derived:restoredTrail
+            && ['distance_km','ascent_m','descent_m','max_elev','min_elev']
+              .every(key => Number.isFinite(restoredTrail.stats?.[key]))
+            && restoredTrail.track[0][3] === 0
+            && ['gps_idx','km','elev','day']
+              .every(key => Number.isFinite(restoredTrail.waypoints?.[0]?.[key]))
+            && Number.isFinite(restoredTrail.escape_routes?.[0]?.distance_km)
+            && Number.isFinite(restoredTrail.escape_routes?.[0]?.drop_m),
+          itinerarySafe:!itineraryText.includes('undefined') && !itineraryText.includes('NaN'),
         };
       })()
     """)
     check("项目归档 schema 与格式标识正确",
           archive_roundtrip.get("ok") == True
           and archive_roundtrip.get("schema") == 2
+          and archive_roundtrip.get("migratedFrom") == 1
           and archive_roundtrip.get("format") == "outdoor-route-studio-project",
           f"{archive_roundtrip}")
     check("清空内存后可完整恢复项目与组/主轨迹选择",
           archive_roundtrip.get("status") == "restored"
           and archive_roundtrip.get("actual") == archive_roundtrip.get("expected"),
+          f"{archive_roundtrip}")
+    check("旧归档恢复后派生数据完整且行程文本安全",
+          archive_roundtrip.get("derived") == True
+          and archive_roundtrip.get("itinerarySafe") == True,
           f"{archive_roundtrip}")
 
     # ═══════════════════════════════════════════════════════════════

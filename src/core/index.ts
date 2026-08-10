@@ -224,6 +224,8 @@ export {
   type ProjectArchiveWorkspace,
 } from './projectArchive.ts';
 
+export { rebuildProjectDerivedData } from './projectDerivations.ts';
+
 export {
   DEFAULT_ELEVATION_BAND_COUNT,
   buildElevationPolylineSegments,

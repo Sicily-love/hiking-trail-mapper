@@ -152,6 +152,61 @@ function stateInput(overrides = {}) {
     assert.deepStrictEqual(parsed.archive.project.trails[0].escape_routes[0].days, [1]);
   });
 
+  await T('rebuilds missing derived trail, Day, waypoint, and escape fields immutably', () => {
+    const incomplete = {
+      id:'legacy', name:'Incomplete legacy trail', group:'A', color:'#2F674B',
+      track:[
+        [30, 100, 1000, 88, 999, 1],
+        [30.01, 100, 1120, 88, 999, 1],
+        [30.02, 100, 1080, 88, 999, 2],
+        [30.03, 100, 1250, 88, 999, 2],
+      ],
+      day_meta:[
+        {d:1, i_start:0, i_end:1, km:'missing', asc:'missing', camp:'Ridge camp'},
+        {d:2, i_start:1, i_end:3, desc:'missing', seg:'Second day'},
+      ],
+      waypoints:[
+        {id:'camp', name:'Ridge camp', tag:'camp', lat:30.0101, lng:100},
+        {id:'water', label:'Water', tag:'water', gps_idx:2},
+      ],
+      escape_routes:[{
+        id:'legacy-escape', name:'Legacy escape', desc:'', days:[2],
+        _anchor:{trailId:'legacy', trailName:'Incomplete legacy trail'},
+        line:[[30.02, 100], [30.03, 100]],
+      }],
+      stats:{distance_km:-1, ascent_m:-1},
+    };
+    const project = {title:'Compatibility', trails:[incomplete], calc_method:{threshold:10}};
+    const before = JSON.stringify(project);
+    const rebuilt = core.rebuildProjectDerivedData(project);
+    const restored = rebuilt.trails[0];
+
+    assert.strictEqual(JSON.stringify(project), before);
+    assert.notStrictEqual(restored, incomplete);
+    assert.strictEqual(restored.track[0][3], 0);
+    assert.ok(restored.track.at(-1)[3] > 3);
+    assert.ok(restored.stats.distance_km > 3);
+    assert.strictEqual(restored.stats.ascent_m, 290);
+    assert.strictEqual(restored.stats.descent_m, 40);
+    assert.strictEqual(restored.days, 2);
+    assert.deepStrictEqual(restored.day_meta.map(meta => [meta.d, meta.i_start, meta.i_end]), [
+      [1, 0, 1], [2, 1, 3],
+    ]);
+    assert.ok(restored.day_meta.every(meta =>
+      ['km','asc','desc','max','min','camp_elev'].every(key => Number.isFinite(meta[key]))));
+    assert.strictEqual(restored.day_meta[0].camp, 'Ridge camp');
+    assert.strictEqual(restored.day_meta[1].seg, 'Second day');
+    assert.strictEqual(restored.waypoints[0].gps_idx, 1);
+    assert.strictEqual(restored.waypoints[0].km, +restored.track[1][3].toFixed(1));
+    assert.strictEqual(restored.waypoints[0].day, 1);
+    assert.strictEqual(restored.waypoints[1].lat, restored.track[2][0]);
+    assert.strictEqual(restored.waypoints[1].day, 2);
+    assert.ok(Number.isFinite(restored.escape_routes[0].distance_km));
+    assert.ok(restored.escape_routes[0].distance_km > 0);
+    assert.strictEqual(restored.escape_routes[0].drop_m, -170);
+    assert.strictEqual(restored.escape_routes[0].direction, 'forward');
+  });
+
   await T('controller exports and atomically restores project plus workspace', async () => {
     const original = trail('old', 'Old');
     const store = app.createAppStateStore({trails:[original]});
@@ -185,12 +240,24 @@ function stateInput(overrides = {}) {
       state:stateInput(),
       appVersion:'v2.1.0',
     });
+    incoming.project.trails[0].track.forEach(point => { point[3] = 99; point[4] = 99; });
+    incoming.project.trails[0].stats.distance_km = -1;
+    delete incoming.project.trails[0].waypoints[0].gps_idx;
+    delete incoming.project.trails[0].waypoints[0].km;
+    delete incoming.project.trails[0].escape_routes[0].distance_km;
+    delete incoming.project.trails[0].escape_routes[0].drop_m;
     const oldArray = context.projectSelectors.trails();
     const result = controller.restore(incoming);
     assert.strictEqual(result.trailCount, 1);
     assert.strictEqual(context.projectSelectors.trails(), oldArray);
     assert.strictEqual(context.projectSelectors.trails()[0].id, 'main');
     assert.strictEqual(context.projectSelectors.title(), 'Restored');
+    assert.strictEqual(context.projectSelectors.trails()[0].stats.distance_km, 0);
+    assert.strictEqual(context.projectSelectors.trails()[0].track[0][3], 0);
+    assert.strictEqual(context.projectSelectors.trails()[0].waypoints[0].gps_idx, 1);
+    assert.ok(Number.isFinite(context.projectSelectors.trails()[0].waypoints[0].km));
+    assert.ok(Number.isFinite(context.projectSelectors.trails()[0].escape_routes[0].distance_km));
+    assert.ok(Number.isFinite(context.projectSelectors.trails()[0].escape_routes[0].drop_m));
     assert.strictEqual(store.snapshot().activeGroup, 'A');
     assert.strictEqual(store.snapshot().mode, 'waypoint');
     assert.strictEqual(effects.commits, 1);

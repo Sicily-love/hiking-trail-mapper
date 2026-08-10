@@ -917,7 +917,7 @@ try:
 
     project_archive_flow = evalj("""
       (async () => {
-        const source = DATA.trails[0];
+        const source = DATA.trails[0] ? JSON.parse(JSON.stringify(DATA.trails[0])) : null;
         if(!source) return {error:'missing trail'};
         const invalid = projectArchiveController.parse('{"format":"wrong"}');
         showExportMenu();
@@ -941,7 +941,24 @@ try:
           appVersion:APP_VERSION,
           exportedAt:'2026-07-21T12:00:00.000Z',
         });
+        const incomplete = archive.project.trails[0];
+        incomplete.track.forEach(point => { point[3] = 999; point[4] = 999; });
+        incomplete.stats = {distance_km:-1, ascent_m:-1};
+        for(const meta of incomplete.day_meta || []) {
+          delete meta.km; delete meta.asc; delete meta.desc; delete meta.max; delete meta.min; delete meta.camp_elev;
+        }
+        for(const waypoint of incomplete.waypoints || []) {
+          delete waypoint.gps_idx; delete waypoint.km; delete waypoint.elev; delete waypoint.day;
+        }
+        const routeLine = incomplete.track.length >= 2
+          ? [[incomplete.track[0][0], incomplete.track[0][1]], [incomplete.track.at(-1)[0], incomplete.track.at(-1)[1]]]
+          : [];
+        incomplete.escape_routes = [{
+          id:'archive-compat-route', name:'Archive compatibility route', desc:'', days:[1],
+          _anchor:{trailId:incomplete.id, trailName:incomplete.name}, line:routeLine,
+        }];
         const legacyArchive = {...archive, schemaVersion:1};
+        delete legacyArchive.project.calc_method;
         const beforeFit = renderRuntimeStats.fit.requested;
         const pending = restoreProjectFile(new File(
           [JSON.stringify(legacyArchive)],
@@ -957,6 +974,9 @@ try:
         dialog?.querySelector('.workbench-dialog__button--danger,.workbench-dialog__button--primary')?.click();
         const restored = await pending;
         await new Promise(resolve => setTimeout(resolve, 650));
+        const restoredTrail = DATA.trails[0];
+        buildDaysTab();
+        const itineraryText = document.getElementById('tab-days')?.textContent || '';
         return {
           invalidRejected:invalid.ok === false && invalid.code === 'invalid-format',
           exportMenuReady:exportMenuText.includes('完整项目备份'),
@@ -973,6 +993,17 @@ try:
           dayMetaPreserved:Array.isArray(DATA.trails[0]?.day_meta),
           waypointsPreserved:Array.isArray(DATA.trails[0]?.waypoints),
           escapePreserved:Array.isArray(DATA.trails[0]?.escape_routes),
+          derivedStats:['distance_km','ascent_m','descent_m','max_elev','min_elev']
+            .every(key => Number.isFinite(restoredTrail?.stats?.[key])),
+          derivedTrack:restoredTrail?.track?.[0]?.[3] === 0
+            && Number(restoredTrail?.track?.at(-1)?.[3]) > 0,
+          derivedDays:(restoredTrail?.day_meta || []).every(meta =>
+            ['km','asc','desc','max','min','camp_elev'].every(key => Number.isFinite(meta[key]))),
+          derivedWaypoints:(restoredTrail?.waypoints || []).every(waypoint =>
+            ['gps_idx','km','elev','day'].every(key => Number.isFinite(waypoint[key]))),
+          derivedEscape:(restoredTrail?.escape_routes || []).every(route =>
+            Number.isFinite(route.distance_km) && Number.isFinite(route.drop_m) && route.line?.length >= 2),
+          itinerarySafe:!itineraryText.includes('undefined') && !itineraryText.includes('NaN'),
         };
       })()
     """)
@@ -994,6 +1025,15 @@ try:
           and project_archive_flow.get('dayMetaPreserved') is True
           and project_archive_flow.get('waypointsPreserved') is True
           and project_archive_flow.get('escapePreserved') is True,
+          str(project_archive_flow))
+    check("旧归档缺失派生字段时自动重建且行程界面无无效数值",
+          isinstance(project_archive_flow, dict)
+          and project_archive_flow.get('derivedStats') is True
+          and project_archive_flow.get('derivedTrack') is True
+          and project_archive_flow.get('derivedDays') is True
+          and project_archive_flow.get('derivedWaypoints') is True
+          and project_archive_flow.get('derivedEscape') is True
+          and project_archive_flow.get('itinerarySafe') is True,
           str(project_archive_flow))
     check("项目恢复只请求一次最终视图复位",
           isinstance(project_archive_flow, dict) and project_archive_flow.get('fitDelta') == 1,

@@ -11,6 +11,7 @@ import {
   type ProjectArchiveTrail,
 } from '../../core/projectArchive.ts';
 import { sanitizeExportFilename } from '../../core/export.ts';
+import { rebuildProjectDerivedData } from '../../core/projectDerivations.ts';
 import type {ProjectMutationReason} from '../../app/project-store.ts';
 
 export type ProjectArchiveEvent =
@@ -43,7 +44,7 @@ export function applyProjectArchive<TTrail extends ProjectArchiveTrail>(
   archive: ProjectArchive<TTrail>,
   reason: ProjectMutationReason = 'archive.restore',
 ): void {
-  context.projectActions.replaceProject(archive.project, reason);
+  context.projectActions.replaceProject(rebuildProjectDerivedData(archive.project), reason);
   const workspace = archive.workspace;
   context.stateActions.restoreWorkspace({
     activeTrails:workspace.activeTrails,

@@ -63,6 +63,7 @@ T('exports expected pure functions', () => {
     'moveSegmentBoundary',
     'buildDayMetaFromSegments',
     'buildDayMetaFromTrackDays',
+    'rebuildProjectDerivedData',
   ].forEach(name => assert.strictEqual(typeof core[name], 'function', name));
 });
 

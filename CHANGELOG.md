@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.2.10 — 2026-08-10
+
+**中文**
+
+- 完整项目恢复现在统一重建轨迹累计里程、海拔统计、Day 指标、标注点吸附信息和下撤路线指标，避免旧备份显示 undefined 或 NaN。
+- 新增 schema 1 与缺失派生字段的单元、端到端和真实 Chrome 恢复回归，确保恢复、回滚和历史应用共享同一兼容路径。
+
+**English**
+
+- Complete-project restore now rebuilds cumulative track values, elevation statistics, Day metrics, waypoint attachment data, and escape-route metrics so older backups never render undefined or NaN values.
+- Add unit, end-to-end, and real-Chrome recovery regressions for schema 1 archives with missing derived fields, keeping restore, rollback, and history application on one compatibility path.
+
 ## v2.2.9 — 2026-07-29
 
 **中文**
