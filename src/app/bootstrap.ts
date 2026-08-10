@@ -10,6 +10,7 @@ import {
   type WorkbenchLayoutController,
   type WorkbenchStorage,
 } from '../ui/layout/workbench.ts';
+import {registerStudioServiceWorker} from '../adapters/pwa.ts';
 
 declare global {
   interface Window {
@@ -22,6 +23,7 @@ declare global {
       commands: app.CommandRegistry<void>;
       dialogs: app.DialogController;
       workbench: WorkbenchLayoutController;
+      offline: Promise<ServiceWorkerRegistration | null>;
     };
   }
 }
@@ -49,6 +51,10 @@ export async function bootstrapOutdoorRouteStudio(document: Document = window.do
     commands,
   );
   if(!workbench) throw new Error('Outdoor Route Studio could not mount the Workbench layout');
+  const offline = registerStudioServiceWorker(window);
+  void offline.then(registration => {
+    document.documentElement.dataset.offlineShell = registration ? 'registered' : 'unavailable';
+  });
 
   window.__OUTDOOR_ROUTE_STUDIO__ = {
     version: STUDIO_VERSION,
@@ -57,6 +63,7 @@ export async function bootstrapOutdoorRouteStudio(document: Document = window.do
     commands,
     dialogs,
     workbench,
+    offline,
   };
   return ready;
 }

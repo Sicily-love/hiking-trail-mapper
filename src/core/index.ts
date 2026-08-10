@@ -213,6 +213,7 @@ export {
   createProjectArchive,
   parseProjectArchive,
   serializeProjectArchive,
+  summarizeProjectArchive,
   type CreateProjectArchiveInput,
   type ProjectArchive,
   type ProjectArchiveErrorCode,
@@ -220,6 +221,7 @@ export {
   type ProjectArchiveParseOptions,
   type ProjectArchiveParseResult,
   type ProjectArchiveStateInput,
+  type ProjectArchiveSummary,
   type ProjectArchiveTrail,
   type ProjectArchiveWorkspace,
 } from './projectArchive.ts';

@@ -115,6 +115,10 @@ T('temporary release contains one self-contained HTML payload', () => {
   assert.ok(!/<script type="module"[^>]+src=/.test(html));
   assert.ok(!/<link rel="stylesheet"[^>]+href=/.test(html));
   assert.ok(!fs.existsSync(path.join(root, '.vite-build/assets')));
+  ['manifest.webmanifest', 'service-worker.js', 'icons/app-icon.svg']
+    .forEach(name => assert.ok(fs.existsSync(path.join(root, '.vite-build', name)), name));
+  assert.ok(html.includes('rel="manifest" href="./manifest.webmanifest"'));
+  assert.ok(html.includes('viewport-fit=cover'));
 });
 
 T('release.json can verify its own HTML payload', () => {
@@ -125,6 +129,7 @@ T('release.json can verify its own HTML payload', () => {
   assert.match(manifest.buildDate, /^\d{4}-\d{2}-\d{2}$/);
   assert.strictEqual(manifest.sourceEntry, 'index.html');
   assert.deepStrictEqual(manifest.entrypoints, ['index.html', 'hiking-trail-mapper.html']);
+  assert.deepStrictEqual(manifest.offlineAssets, ['manifest.webmanifest', 'service-worker.js', 'icons/app-icon.svg']);
   assert.strictEqual(manifest.bytes, index.byteLength);
   assert.strictEqual(manifest.sha256, crypto.createHash('sha256').update(index).digest('hex'));
 });
@@ -161,6 +166,7 @@ T('release preparation syncs, verifies, builds, and validates dist', () => {
   assert.deepStrictEqual(positions.slice().sort((a, b) => a - b), positions);
   assert.ok(script.includes("createHash('sha256')"));
   assert.ok(script.includes('manifest.bytes !== index.byteLength'));
+  assert.ok(script.includes("'service-worker.js'"));
 });
 
 T('version bump supports semantic levels, bilingual changelog, and dry run', () => {

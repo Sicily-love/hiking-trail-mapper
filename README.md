@@ -20,6 +20,8 @@ open hiking-trail-mapper.html
 
 `hiking-trail-mapper.html` 可通过 `file://` 直接打开；除在线地图瓦片外，应用代码、样式、Leaflet 和压缩库都已内联。根目录 `index.html` 是源码入口壳，应通过 Vite 使用，不是离线发布文件。
 
+GitHub Pages 版本同时提供可安装 PWA：首次在线打开后，可从浏览器菜单安装到 Android 或桌面，并在断网时重新启动完整工作台。轨迹、行程与工作区缓存仍保存在浏览器 IndexedDB 中；卫星底图来自在线服务，未访问过的地图区域在离线状态下不会显示。直接下载单个 `hiking-trail-mapper.html` 仍可离线使用，但不包含 PWA 安装与自动更新能力。
+
 本地开发：
 
 ```bash
@@ -100,7 +102,7 @@ npm run test:visual:capture
 
 完整测试默认包含真实 Chrome 功能、端到端和视觉布局回归；`test:visual:capture` 可单独生成截图，便于人工检查具体界面状态。
 
-`npm run build` 以小壳 `index.html` 为 Vite 入口，将 JavaScript 和 CSS 内联到 `dist/index.html`，并生成兼容别名 `dist/hiking-trail-mapper.html` 与 `dist/release.json`。两个 HTML 名称指向同一份自包含发布内容，不是两套源码。
+`npm run build` 以小壳 `index.html` 为 Vite 入口，将 JavaScript 和 CSS 内联到 `dist/index.html`，并生成兼容别名 `dist/hiking-trail-mapper.html`、`dist/release.json`、PWA 清单、Service Worker 与应用图标。两个 HTML 名称指向同一份自包含发布内容，不是两套源码。
 
 `npm run release:prepare` 用于正式发布：同步生成物、运行完整验证、构建单文件并检查发布元数据。详细命令与分层见 [测试指南](docs/TESTING.md) 和 [贡献指南](docs/CONTRIBUTING.md)。
 
@@ -129,7 +131,7 @@ ogr2ogr -f KML output.kml input.gpx
 
 ## 版本策略
 
-版本：v2.2.10
+版本：v2.3.0
 
 - `PATCH`：修复、文档、测试、兼容性和小型交互优化。
 - `MINOR`：新增用户可见能力、数据字段或主要工作流。
@@ -153,6 +155,7 @@ hiking-trail-mapper/
 │   ├── styles/                   全局与 vendor 样式入口
 │   └── vendor/                   构建时内联的浏览器依赖
 ├── scripts/                      build、release 与 maintenance 工具
+├── public/                       PWA 清单、Service Worker 与应用图标
 ├── tests/                        unit、browser、e2e 与 visual
 ├── docs/                         中英文功能、架构、测试和贡献说明
 ├── dist/                         Vite 生成的 Pages 发布目录
@@ -161,7 +164,7 @@ hiking-trail-mapper/
 
 ## 部署
 
-`.github/workflows/pages.yml` 在 pull request 上验证，在 `main` 推送时运行 `npm run release:prepare`、上传 `dist/` 并部署 GitHub Pages。Pages 入口是构建后的自包含 `dist/index.html`；根目录小壳不直接作为部署产物。
+`.github/workflows/pages.yml` 在 pull request 上验证，在 `main` 推送时运行 `npm run release:prepare`、上传 `dist/` 并部署 GitHub Pages。Pages 入口是构建后的自包含 `dist/index.html`，并由同目录 Service Worker 提供应用壳离线启动；根目录小壳不直接作为部署产物。
 
 ## License
 

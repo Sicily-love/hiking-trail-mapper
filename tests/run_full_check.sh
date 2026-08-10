@@ -50,6 +50,7 @@ if(scripts.length !== 1) throw new Error(`expected one inline module, found ${sc
 fs.writeFileSync(output, scripts[0][1]);
 NODE
 node --check "$TMP_CHECK_DIR/inline-release.mjs" || fail "发布物 JavaScript 语法错误"
+node --check "$ROOT/.vite-build/service-worker.js" || fail "PWA Service Worker 语法错误"
 ok "  TypeScript + Vite 单文件发布通过"
 
 # Phase 2: all Node unit and source/artifact contract tests.
@@ -88,10 +89,18 @@ if [ -n "$LATEST_FUNC" ]; then
   [ -n "$RESULT_LINE" ] || {
     cat "$TMP_CHECK_DIR/test_func.log"; fail "功能测试缺少结果汇总"
   }
-  ok "  $RESULT_LINE  ($LATEST_FUNC)"
+ok "  $RESULT_LINE  ($LATEST_FUNC)"
 else
   fail "找不到 tests/browser/test_v1_*.py"
 fi
+
+PWA_OUTPUT=$(HTM_PWA_DIST="$ROOT/.vite-build" run_python_with_websocket "$ROOT/tests/browser/test_pwa.py") || {
+  echo "$PWA_OUTPUT"; fail "PWA 离线启动测试失败"
+}
+echo "$PWA_OUTPUT" | grep -q "结果: 2/2 passed" || {
+  echo "$PWA_OUTPUT"; fail "PWA 离线启动测试缺少结果汇总"
+}
+ok "  PWA 在线安装与离线重开通过"
 
 # Phase 6: end-to-end suite against the same temporary artifact.
 skip "Phase 6 · 端到端测试"
@@ -114,6 +123,9 @@ run_python_with_websocket "$ROOT/tests/visual/capture_workbench.py" "$TMP_CHECK_
 }
 [ -f "$TMP_CHECK_DIR/visual/workbench-toast.png" ] || {
   cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归缺少提示条截图"
+}
+[ -f "$TMP_CHECK_DIR/visual/workbench-project-restore.png" ] || {
+  cat "$TMP_CHECK_DIR/visual.log"; fail "视觉回归缺少项目恢复预检截图"
 }
 ok "  桌面、移动端与核心交互截图通过"
 

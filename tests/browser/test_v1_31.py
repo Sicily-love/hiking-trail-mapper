@@ -922,7 +922,7 @@ try:
         const invalid = projectArchiveController.parse('{"format":"wrong"}');
         showExportMenu();
         const exportMenuText = document.getElementById('export-menu-popup')?.textContent || '';
-        document.getElementById('export-menu-popup')?.remove();
+        showExportMenu();
         const archive = HTM_CORE.createProjectArchive({
           project:{title:'Browser archive restored', trails:[source], calc_method:{threshold:10}},
           state:{
@@ -969,8 +969,10 @@ try:
         const dialog = document.querySelector('dialog.workbench-dialog[open]');
         const confirmationReady = !!dialog
           && dialog.textContent.includes('Browser archive restored')
-          && dialog.textContent.includes(`${archive.project.trails.length} 条轨迹`)
-          && dialog.textContent.includes('schema 1');
+          && dialog.textContent.includes('轨迹 / 轨迹点')
+          && dialog.textContent.includes('每日行程 / 下撤方案')
+          && dialog.textContent.includes('schema 1 → 2')
+          && !!dialog.querySelector('.workbench-dialog__button--danger');
         dialog?.querySelector('.workbench-dialog__button--danger,.workbench-dialog__button--primary')?.click();
         const restored = await pending;
         await new Promise(resolve => setTimeout(resolve, 650));

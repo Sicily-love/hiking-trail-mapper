@@ -101,6 +101,7 @@ T('visual fixtures cover real Day, measurement, and segmentation states', () => 
   assert.ok(visual.includes('workbench-measure.png'));
   assert.ok(visual.includes('workbench-segment.png'));
   assert.ok(visual.includes('workbench-elevation-collapsed.png'));
+  assert.ok(visual.includes('workbench-project-restore.png'));
   assert.ok(visual.includes('toolbarZoomOverlap'));
   assert.ok(visual.includes('primaryMiniCompact'));
 });

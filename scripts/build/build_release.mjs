@@ -71,6 +71,7 @@ await writeFile(path.join(outDir, 'release.json'), `${JSON.stringify({
   bytes,
   sourceEntry: 'index.html',
   entrypoints: ['index.html', 'hiking-trail-mapper.html'],
+  offlineAssets: ['manifest.webmanifest', 'service-worker.js', 'icons/app-icon.svg'],
 }, null, 2)}\n`);
 
 const rootRelease = path.join(root, 'hiking-trail-mapper.html');

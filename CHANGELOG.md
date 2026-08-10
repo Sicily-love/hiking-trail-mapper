@@ -4,6 +4,20 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.3.0 — 2026-08-10
+
+**中文**
+
+- 完整项目恢复新增结构化预检、分阶段反馈与等待保存及地图复位完成的原子流程，并以 18 万轨迹点压力样例覆盖旧归档迁移和派生数据重建。
+- GitHub Pages 新增可安装 PWA 与应用外壳离线启动，保留单 HTML 发布，并明确卫星底图仍需网络。
+- 导出菜单迁入 typed UI owner，主 runtime 收缩至约 2960 行；新增 360×800 移动端与恢复预检视觉回归。
+
+**English**
+
+- Add structured project-restore preflight, staged feedback, and an atomic flow that waits for persistence and map reset, backed by a 180,000-point archive migration and derived-data stress regression.
+- Ship GitHub Pages as an installable PWA with offline application-shell startup while preserving the standalone single-HTML release; satellite imagery still requires a network.
+- Move the export menu into a typed UI owner, reduce the main runtime to about 2,960 lines, and add 360×800 mobile plus restore-preflight visual regressions.
+
 ## v2.2.10 — 2026-08-10
 
 **中文**

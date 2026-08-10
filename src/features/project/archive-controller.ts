@@ -32,10 +32,10 @@ export interface ProjectArchiveControllerDependencies {
 export interface ProjectArchiveController<TTrail extends ProjectArchiveTrail> {
   exportProject: () => Promise<{status:'exported'; filename: string} | {status:'failed'; error: unknown}>;
   parse: (text: string) => ProjectArchiveParseResult<TTrail>;
-  restore: (archive: ProjectArchive<TTrail>) =>
+  restore: (archive: ProjectArchive<TTrail>) => Promise<
     | {status:'restored'; trailCount: number}
-    | {status:'failed'; error: unknown; rolledBack: boolean};
-  recoverLast: () => {status:'restored'; trailCount: number} | {status:'empty'};
+    | {status:'failed'; error: unknown; rolledBack: boolean}>;
+  recoverLast: () => Promise<{status:'restored'; trailCount: number} | {status:'empty'}>;
   readonly canRecover: boolean;
 }
 
@@ -113,12 +113,12 @@ export function createProjectArchiveController<TTrail extends ProjectArchiveTrai
     return result;
   };
 
-  const restore = (archive: ProjectArchive<TTrail>) => {
+  const restore = async (archive: ProjectArchive<TTrail>) => {
     const previous = capture();
     try {
       applyProjectArchive(context, archive);
       dependencies.commit();
-      void dependencies.resetView();
+      await dependencies.resetView();
       recoveryPoint = previous;
       emit({type:'project-archive.restored', title:archive.project.title, trailCount:archive.project.trails.length, recovered:false});
       return {status:'restored' as const, trailCount:archive.project.trails.length};
@@ -127,6 +127,7 @@ export function createProjectArchiveController<TTrail extends ProjectArchiveTrai
       try {
         applyProjectArchive(context, previous);
         dependencies.commit();
+        await dependencies.resetView();
         rolledBack = true;
         emit({type:'project-archive.rolled-back', message:error instanceof Error ? error.message : String(error)});
       } catch {
@@ -137,13 +138,13 @@ export function createProjectArchiveController<TTrail extends ProjectArchiveTrai
     }
   };
 
-  const recoverLast = () => {
+  const recoverLast = async () => {
     if(!recoveryPoint) return {status:'empty' as const};
     const archive = recoveryPoint;
     recoveryPoint = capture();
     applyProjectArchive(context, archive);
     dependencies.commit();
-    void dependencies.resetView();
+    await dependencies.resetView();
     emit({type:'project-archive.restored', title:archive.project.title, trailCount:archive.project.trails.length, recovered:true});
     return {status:'restored' as const, trailCount:archive.project.trails.length};
   };

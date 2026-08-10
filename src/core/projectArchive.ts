@@ -51,6 +51,18 @@ export interface ProjectArchive<TTrail extends ProjectArchiveTrail = ProjectArch
   workspace: ProjectArchiveWorkspace;
 }
 
+export interface ProjectArchiveSummary {
+  archiveBytes: number;
+  trailCount: number;
+  groupCount: number;
+  trackPointCount: number;
+  waypointCount: number;
+  waypointPhotoCount: number;
+  dayCount: number;
+  escapeRouteCount: number;
+  activeTrailCount: number;
+}
+
 export interface ProjectArchiveStateInput {
   activeTrails: Iterable<string>;
   activeGroup: string | null;
@@ -358,4 +370,42 @@ export function createProjectArchive<TTrail>(
 
 export function serializeProjectArchive(archive: ProjectArchive): string {
   return `${JSON.stringify(archive, null, 2)}\n`;
+}
+
+function nestedArrayLength(value: ProjectArchiveJson | undefined): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/** Produces a cheap, read-only preflight summary without rebuilding route data. */
+export function summarizeProjectArchive(
+  archive: ProjectArchive,
+  archiveBytes = 0,
+): ProjectArchiveSummary {
+  const groups = new Set<string>();
+  let trackPointCount = 0;
+  let waypointCount = 0;
+  let waypointPhotoCount = 0;
+  let dayCount = 0;
+  let escapeRouteCount = 0;
+  for(const trail of archive.project.trails) {
+    groups.add(trail.group);
+    trackPointCount += trail.track.length;
+    const waypoints = Array.isArray(trail.waypoints) ? trail.waypoints : [];
+    waypointCount += waypoints.length;
+    waypointPhotoCount += waypoints.filter(waypoint =>
+      isRecord(waypoint) && typeof waypoint.photo === 'string' && waypoint.photo.length > 0).length;
+    dayCount += nestedArrayLength(trail.day_meta);
+    escapeRouteCount += nestedArrayLength(trail.escape_routes);
+  }
+  return Object.freeze({
+    archiveBytes:Math.max(0, Math.floor(archiveBytes)),
+    trailCount:archive.project.trails.length,
+    groupCount:groups.size,
+    trackPointCount,
+    waypointCount,
+    waypointPhotoCount,
+    dayCount,
+    escapeRouteCount,
+    activeTrailCount:archive.workspace.activeTrails.length,
+  });
 }

@@ -23,6 +23,13 @@ if(manifest.sourceEntry !== 'index.html') throw new Error('release.json has an i
 if(JSON.stringify(manifest.entrypoints) !== JSON.stringify(['index.html', 'hiking-trail-mapper.html'])) {
   throw new Error('release.json has invalid entrypoints');
 }
+const offlineAssets = ['manifest.webmanifest', 'service-worker.js', 'icons/app-icon.svg'];
+if(JSON.stringify(manifest.offlineAssets) !== JSON.stringify(offlineAssets)) {
+  throw new Error('release.json has invalid offline assets');
+}
+offlineAssets.forEach(name => {
+  if(!fs.existsSync(path.join(dist, name))) throw new Error(`dist is missing ${name}`);
+});
 if(manifest.bytes !== index.byteLength) throw new Error('release.json byte count does not match index.html');
 if(manifest.sha256 !== crypto.createHash('sha256').update(index).digest('hex')) {
   throw new Error('release.json digest does not match index.html');

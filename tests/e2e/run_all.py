@@ -698,7 +698,7 @@ try:
         };
         testDriver.replaceProject({title:'Temporary', trails:[], calc_method:DATA.calc_method});
         stateActions.clearWorkspace();
-        const result = projectArchiveController.restore(parsed.archive);
+        const result = await projectArchiveController.restore(parsed.archive);
         await new Promise(resolve => setTimeout(resolve, 500));
         const restoredTrail = DATA.trails[0];
         buildDaysTab();

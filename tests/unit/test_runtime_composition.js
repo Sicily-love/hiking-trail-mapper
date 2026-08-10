@@ -97,20 +97,25 @@ test('cross-feature UI state is owned outside the runtime composition root', () 
   const sidebarCollapse = read('src/ui/sidebar/collapse-controller.ts');
   const workspaceTitle = read('src/ui/workspace-title.ts');
   const versionBadge = read('src/ui/version-badge.ts');
+  const exportMenu = read('src/ui/export-menu.ts');
   assert.match(runtimeSource, /createLocalizationRuntime\(/);
   assert.match(runtimeSource, /createMeasurePanelController\(/);
   assert.match(runtimeSource, /createSidebarCollapseController\(/);
   assert.match(runtimeSource, /createWorkspaceTitleController\(/);
   assert.match(runtimeSource, /createVersionBadgeController\(/);
+  assert.match(runtimeSource, /createExportMenuController\(/);
   assert.doesNotMatch(runtimeSource, /querySelectorAll\(['"]\[data-i18n/);
   assert.doesNotMatch(runtimeSource, /getElementById\(['"]measure-distance/);
   assert.doesNotMatch(runtimeSource, /getElementById\(['"]app-title/);
   assert.doesNotMatch(runtimeSource, /getElementById\(['"]version-tag-link/);
+  assert.doesNotMatch(runtimeSource, /style\.cssText/);
   assert.match(localization, /let current =/);
   assert.match(measurePanel, /mapContainer\.classList\.add\('measure-active'\)/);
   assert.match(sidebarCollapse, /const isCollapsed =/);
   assert.match(workspaceTitle, /const rename = async/);
   assert.match(versionBadge, /const reposition =/);
+  assert.match(exportMenu, /const onOutside =/);
+  assert.match(exportMenu, /createWorkbenchIcon/);
 });
 
 test('production runtime does not publish mutable business globals', () => {

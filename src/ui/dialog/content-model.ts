@@ -31,6 +31,7 @@ export interface ContentDialogAction {
 export interface ContentDialogOptions {
   title: string;
   message?: string;
+  danger?: boolean;
   closeLabel: string;
   size?: ContentDialogSize;
   sections: ContentDialogSection[];

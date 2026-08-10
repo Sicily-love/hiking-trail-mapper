@@ -1,1 +1,1 @@
-export const STUDIO_VERSION = 'v2.2.10';
+export const STUDIO_VERSION = 'v2.3.0';

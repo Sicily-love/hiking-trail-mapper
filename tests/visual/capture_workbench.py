@@ -163,6 +163,7 @@ try:
         (768, 1024),
         (430, 932),
         (390, 844),
+        (360, 800),
         (320, 568),
         (844, 390),
     ]
@@ -539,6 +540,42 @@ try:
 
     evaluate("""
       (() => {
+        const archive = HTM_CORE.createProjectArchive({
+          project:DATA,
+          state,
+          appVersion:APP_VERSION,
+          exportedAt:'2026-08-10T00:00:00.000Z',
+        });
+        const model = HTM_APP.buildProjectRestorePreview(archive, {
+          language:'zh', archiveBytes:16_252_928, migratedFrom:1,
+        });
+        window.__visualRestoreDialogPromise = window.__OUTDOOR_ROUTE_STUDIO__?.dialogs.content(model);
+        return true;
+      })()
+    """)
+    time.sleep(0.3)
+    restore_dialog_state = evaluate("""
+      (() => {
+        const dialog = document.querySelector('dialog.workbench-dialog[open]');
+        const surface = dialog?.querySelector('.workbench-dialog__surface');
+        const rows = [...(dialog?.querySelectorAll('.workbench-dialog__metrics') || [])];
+        const rect = surface?.getBoundingClientRect();
+        return !!dialog && !!surface && rows.length === 2
+          && dialog.textContent.includes('轨迹 / 轨迹点')
+          && dialog.textContent.includes('schema 1 → 2')
+          && !!dialog.querySelector('.workbench-dialog__button--danger')
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && surface.scrollWidth <= surface.clientWidth;
+      })()
+    """)
+    restore_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-project-restore.png").write_bytes(base64.b64decode(restore_dialog_shot["result"]["data"]))
+    evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
+    time.sleep(0.1)
+
+    evaluate("""
+      (() => {
         const source = DATA.trails[0];
         const fixture = JSON.parse(JSON.stringify(source));
         fixture.id = 'visual-stitch-fixture';
@@ -709,7 +746,7 @@ try:
         measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
     ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
@@ -720,6 +757,7 @@ try:
             "segment":bool(segment_state),
             "waypointDialog":bool(waypoint_dialog_state),
             "dialog":bool(dialog_state),
+            "restoreDialog":bool(restore_dialog_state),
             "stitchDialog":bool(stitch_dialog_state),
             "toast":toast_state,
             "mobileDialog":bool(mobile_dialog_state),

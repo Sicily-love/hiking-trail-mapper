@@ -170,6 +170,7 @@ export {
   bindProjectRestoreUi,
   type ProjectRestoreUiDependencies,
 } from '../ui/import/project-restore.ts';
+export {buildProjectRestorePreview} from '../ui/import/project-restore-model.ts';
 export {
   createWaypointController,
   type ManualWaypointAnchor,
@@ -290,3 +291,13 @@ export {
   createImportRuntime,
   type ImportRuntimeDependencies,
 } from '../ui/import/runtime-owner.ts';
+export {
+  createExportMenuController,
+  type ExportMenuController,
+  type ExportMenuItem,
+} from '../ui/export-menu.ts';
+export {
+  canRegisterStudioServiceWorker,
+  registerStudioServiceWorker,
+  type StudioServiceWorkerWindow,
+} from '../adapters/pwa.ts';

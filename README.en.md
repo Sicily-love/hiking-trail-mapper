@@ -20,6 +20,8 @@ open hiking-trail-mapper.html
 
 `hiking-trail-mapper.html` opens directly over `file://`. Application code, styles, Leaflet, and the compression library are inlined; only online map tiles require a network. Root `index.html` is a source entry shell for Vite, not the offline release file.
 
+The GitHub Pages build also ships as an installable PWA. After the first online visit, it can be installed from the browser menu on Android or desktop and can reopen the complete Workbench without a network. Trails, itineraries, and workspace caches remain in browser IndexedDB. Satellite imagery comes from an online service, so areas that have not been visited are unavailable offline. The standalone `hiking-trail-mapper.html` remains usable offline, but it does not provide PWA installation or automatic updates.
+
 Local development:
 
 ```bash
@@ -98,7 +100,7 @@ npm run build
 npm run test:visual:capture
 ```
 
-`npm run build` uses the small `index.html` shell as the Vite entry, inlines JavaScript and CSS into `dist/index.html`, and emits the compatibility alias `dist/hiking-trail-mapper.html` plus `dist/release.json`. The two HTML names contain the same self-contained release; they are not separate sources.
+`npm run build` uses the small `index.html` shell as the Vite entry, inlines JavaScript and CSS into `dist/index.html`, and emits the compatibility alias `dist/hiking-trail-mapper.html`, `dist/release.json`, the PWA manifest, Service Worker, and application icon. The two HTML names contain the same self-contained release; they are not separate sources.
 
 `npm run release:prepare` is the release entrypoint: it synchronizes generated artifacts, runs full verification, builds the single-file release, and validates metadata. See [Testing](docs/TESTING.en.md) and [Contributing](docs/CONTRIBUTING.en.md) for the complete workflow.
 
@@ -127,7 +129,7 @@ Future native GPX / GeoJSON support should normalize into the existing import mo
 
 ## Versioning
 
-Version: v2.2.10
+Version: v2.3.0
 
 - `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
 - `MINOR`: new user-visible capability, data fields, or a major workflow.
@@ -151,6 +153,7 @@ hiking-trail-mapper/
 │   ├── styles/                   Global and vendor style entries
 │   └── vendor/                   Browser dependencies inlined at build time
 ├── scripts/                      Build, release, and maintenance tools
+├── public/                       PWA manifest, Service Worker, and application icon
 ├── tests/                        Unit, browser, E2E, and visual checks
 ├── docs/                         Chinese and English feature, architecture, testing, and contribution docs
 ├── dist/                         Vite-generated Pages artifact
@@ -159,7 +162,7 @@ hiking-trail-mapper/
 
 ## Deployment
 
-`.github/workflows/pages.yml` verifies pull requests. On pushes to `main`, it runs `npm run release:prepare`, uploads `dist/`, and deploys GitHub Pages. Pages serves the built, self-contained `dist/index.html`; the root source shell is not deployed directly.
+`.github/workflows/pages.yml` verifies pull requests. On pushes to `main`, it runs `npm run release:prepare`, uploads `dist/`, and deploys GitHub Pages. Pages serves the built, self-contained `dist/index.html`, while the adjacent Service Worker provides offline application-shell startup; the root source shell is not deployed directly.
 
 ## License
 

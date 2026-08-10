@@ -14,6 +14,7 @@ import { createSidebarCollapseController } from '../../ui/sidebar/collapse-contr
 import { createToastController } from '../../ui/toast.ts';
 import { createVersionBadgeController } from '../../ui/version-badge.ts';
 import { createWorkspaceTitleController } from '../../ui/workspace-title.ts';
+import { createExportMenuController } from '../../ui/export-menu.ts';
 import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
 import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
@@ -2182,6 +2183,7 @@ export function startStudioRuntime(
   }
   /* ============ Toast ============ */
   const toastController = createToastController({document, viewport:window});
+  const exportMenuController = createExportMenuController(document);
 
   function showToast(msg: any, type: any='info', duration: any=2400) {
     return toastController.show(msg, type === 'error' ? 'error' : 'info', duration);
@@ -2193,109 +2195,37 @@ export function startStudioRuntime(
     showExportMenu();
   }
 
-  /* v1.14.1：导出选择菜单（悬浮在导出按钮下方） */
   function showExportMenu() {
-    // 已存在则先关闭（起到 toggle 效果）
-    const existing = document.getElementById('export-menu-popup');
-    if(existing) { existing.remove(); return; }
-
     const btn = document.getElementById('export-btn');
     if(!btn) { exportGroupKML(); return; }
-    const rect = btn.getBoundingClientRect();
-
-    const popup = document.createElement('div');
-    popup.id = 'export-menu-popup';
-    popup.style.cssText = `
-      position:fixed;
-      top:${rect.bottom + 6}px;
-      left:${Math.max(8, rect.right - 260)}px;
-      z-index:9999;
-      background:var(--bg-1, #fff);
-      border:1px solid var(--line, #ccc);
-      border-radius:6px;
-      box-shadow:0 6px 20px rgba(0,0,0,0.22);
-      min-width:260px;
-      padding:6px;
-      font-size:12px;
-      color:var(--text, #222);
-    `;
-
     const activeCount = projectSelectors.trails().filter((t: any) => isTrailActive(t)).length;
-    const items = [
+    exportMenuController.toggle(btn, [
       {
-        icon: '📦',
+        id:'group-kml', icon:'folder-tree',
         label: t('export.kmlZip'),
-        desc: selectors.activeGroup()
+        description: selectors.activeGroup()
           ? (getCurrentLang() === 'zh'
             ? `当前组「${selectors.activeGroup()}」叠加中 ${activeCount} 条 · 可跨设备一键导入`
             : `${activeCount} active trails in “${selectors.activeGroup()}” · ready for cross-device import`)
           : (getCurrentLang() === 'zh' ? '未选中任何分组 · 请先切换到一个分组' : 'No group selected · select a group first'),
         disabled: activeCount === 0,
-        handler: () => { popup.remove(); exportGroupKML(); },
+        run:exportGroupKML,
       },
       {
-        icon: '📄',
+        id:'itinerary', icon:'file',
         label: t('export.itineraryMarkdown'),
-        desc: getCurrentLang() === 'zh'
+        description: getCurrentLang() === 'zh'
           ? '按天数、爬升、扎营点和下撤方案生成行程表'
           : 'Build an itinerary from days, ascent, camps, and escape routes',
-        handler: () => { popup.remove(); exportItineraryMD(); },
+        run:exportItineraryMD,
       },
       {
-        icon: '▣',
+        id:'project', icon:'save',
         label: t('export.projectArchive'),
-        desc: t('export.projectArchiveDesc'),
-        handler: () => { popup.remove(); void projectArchiveController.exportProject(); },
+        description: t('export.projectArchiveDesc'),
+        run:() => projectArchiveController.exportProject(),
       },
-    ];
-
-    items.forEach((item: any) => {
-      const el = document.createElement('div');
-      el.style.cssText = `
-        padding:8px 10px;
-        border-radius:4px;
-        cursor:${item.disabled ? 'not-allowed' : 'pointer'};
-        opacity:${item.disabled ? 0.4 : 1};
-        display:flex;
-        align-items:flex-start;
-        gap:8px;
-        transition:background 0.12s;
-      `;
-      const icon = document.createElement('span');
-      const copy = document.createElement('div');
-      const label = document.createElement('div');
-      const description = document.createElement('div');
-      icon.style.cssText = 'font-size:16px;line-height:1';
-      copy.style.cssText = 'flex:1;min-width:0';
-      label.style.cssText = 'font-weight:600;line-height:1.3';
-      description.style.cssText = 'font-size:10.5px;color:var(--text-muted, #888);margin-top:2px;line-height:1.35';
-      icon.textContent = item.icon;
-      label.textContent = item.label;
-      description.textContent = item.desc;
-      copy.append(label, description);
-      el.append(icon, copy);
-      if(!item.disabled) {
-        el.addEventListener('mouseenter', () => el.style.background = 'var(--bg-0, rgba(0,0,0,0.04))');
-        el.addEventListener('mouseleave', () => el.style.background = '');
-        el.addEventListener('click', item.handler);
-      }
-      popup.appendChild(el);
-    });
-
-    document.body.appendChild(popup);
-
-    // 点外部关闭
-    const closeOnOutside = (e: any) => {
-      if(!popup.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
-        popup.remove();
-        document.removeEventListener('mousedown', closeOnOutside, true);
-        document.removeEventListener('touchstart', closeOnOutside, true);
-      }
-    };
-    setTimeout(() => {
-      document.addEventListener('mousedown', closeOnOutside, true);
-      document.addEventListener('touchstart', closeOnOutside, true);
-    }, 0);
+    ]);
   }
 
   function exportGroupKML() {
@@ -2876,11 +2806,7 @@ export function startStudioRuntime(
       openModal.classList.remove('open');
       return true;
     }
-    const exportPopup = document.getElementById('export-menu-popup');
-    if(exportPopup) {
-      exportPopup.remove();
-      return true;
-    }
+    if(exportMenuController.close()) return true;
     if(interactionManager.current.kind === 'segment') {
       void requestSegmentExit('escape-key');
       return true;

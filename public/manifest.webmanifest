@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "Outdoor Route Studio",
+  "short_name": "Route Studio",
+  "description": "Offline-capable hiking route planning, measurement, itinerary, waypoint, and escape-route workbench.",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAFAF8",
+  "theme_color": "#1E6F50",
+  "icons": [
+    {
+      "src": "./icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["navigation", "travel", "utilities"]
+}

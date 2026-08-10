@@ -247,7 +247,7 @@ function stateInput(overrides = {}) {
     delete incoming.project.trails[0].escape_routes[0].distance_km;
     delete incoming.project.trails[0].escape_routes[0].drop_m;
     const oldArray = context.projectSelectors.trails();
-    const result = controller.restore(incoming);
+    const result = await controller.restore(incoming);
     assert.strictEqual(result.trailCount, 1);
     assert.strictEqual(context.projectSelectors.trails(), oldArray);
     assert.strictEqual(context.projectSelectors.trails()[0].id, 'main');
@@ -263,12 +263,12 @@ function stateInput(overrides = {}) {
     assert.strictEqual(effects.commits, 1);
     assert.strictEqual(effects.resets, 1);
     assert.strictEqual(controller.canRecover, true);
-    assert.strictEqual(controller.recoverLast().status, 'restored');
+    assert.strictEqual((await controller.recoverLast()).status, 'restored');
     assert.strictEqual(context.projectSelectors.title(), 'Old project');
     assert.strictEqual(effects.commits, 2);
   });
 
-  await T('restore failure rolls back to its automatic recovery point', () => {
+  await T('restore failure rolls back to its automatic recovery point', async () => {
     const original = trail('old', 'Old');
     const store = app.createAppStateStore({trails:[original]});
     const context = createTestRuntimeContext(
@@ -290,7 +290,7 @@ function stateInput(overrides = {}) {
       project:{title:'Broken restore', trails:[trail('new', 'New')]},
       state:stateInput(), appVersion:'v2.2.0',
     });
-    const result = controller.restore(incoming);
+    const result = await controller.restore(incoming);
     assert.strictEqual(result.status, 'failed');
     assert.strictEqual(result.rolledBack, true);
     assert.strictEqual(context.projectSelectors.title(), 'Safe');
