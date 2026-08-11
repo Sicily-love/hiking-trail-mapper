@@ -34,7 +34,7 @@ src/
 │   ├── interaction-manager.ts    Map interaction sessions
 │   ├── render-scheduler.ts       Frame batching and last-fit wins
 │   ├── runtime-context.ts        Typed service context
-│   └── runtime/studio.ts         Startup glue and shared map orchestration (~3,170 lines)
+│   └── runtime/studio.ts         Startup glue and shared map orchestration (~2,700 lines)
 ├── core/                         DOM-free domain algorithms and render models
 ├── features/                     Vertical feature controllers and data
 ├── adapters/                     Leaflet, IndexedDB, file, and browser effects
@@ -47,7 +47,7 @@ src/
 
 ### Core
 
-`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, pointer policy, reset-transition planning, downsampling, marker diffs, revisions, and versioned project archives do not depend on the DOM, Leaflet, or storage handles. `projectArchive.ts` owns the schema migration chain, input budgets, and validation.
+`core/` accepts plain data and returns deterministic results. Distance, elevation, KML, measurement, segmentation, statistics, pointer policy, reset-transition planning, downsampling, marker diffs, revisions, and versioned project archives do not depend on the DOM, Leaflet, or storage handles. `project-archive.ts` owns the schema migration chain, input budgets, and validation.
 
 ### App
 
@@ -66,11 +66,11 @@ Trail, storage, file import/export, project archive/history runtime, waypoint, m
 - the IndexedDB adapter owns transactions and snapshots;
 - file/browser adapters own ZIP, Blob, ObjectURL, save-picker, and export-Canvas effects.
 
-`ui/` controllers own the Lightbox zoom/drag/touch lifecycle and the collapsed-sidebar primary card. `features/map/inspection-controller.ts` produces transient track-point inspection models, while the Leaflet adapter creates and removes their markers. `studio.ts` no longer retains these listeners, timers, or position state.
+`features/waypoint/runtime-owner.ts` owns the waypoint editor, image reads, right-click/long-press gestures, and unified interaction session. `ui/` controllers own the Lightbox zoom/drag/touch lifecycle and the collapsed-sidebar primary card. `features/map/inspection-controller.ts` produces transient track-point inspection models, while the Leaflet adapter creates and removes their markers. `studio.ts` no longer retains these listeners, timers, or position state.
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 3,170 lines. KML project building, reset/fit ownership, sidebar/itinerary DOM, import DOM, trail stitching, and elevation Canvas now have dedicated controllers or owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates a deeply read-only test inspector and a dedicated fixture driver.
+`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 2,700 lines. KML project building, reset/fit ownership, sidebar/itinerary DOM, import DOM, trail stitching, waypoint interaction, and elevation Canvas now have dedicated controllers or owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates a deeply read-only test inspector and a dedicated fixture driver.
 
 Real-browser tests receive a frozen, deeply read-only inspector only when the URL includes `?studio-test=1`; fixture changes enter `ProjectActions` through `testDriver`. Normal releases create neither test surface and do not expose `HikingTrailCore`, `HikingTrailApp`, command, or dialog classic globals.
 

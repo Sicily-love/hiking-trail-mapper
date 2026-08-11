@@ -18,6 +18,7 @@ import { createMapOverlayController } from '../../ui/map-overlays.ts';
 import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
 import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
+import { createWaypointRuntime } from '../../features/waypoint/runtime-owner.ts';
 import { createRuntimeInteractionOwner } from './interaction-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
@@ -2447,275 +2448,25 @@ export function startStudioRuntime(
   elevCanvas = elevationRuntime.canvas;
   elevationCanvasRenderer = elevationRuntime.renderer;
 
-  const waypointController:any = HTM_APP.createWaypointController(runtimeContext, {
-    iconForTag:waypointIcon,
-    markRevision:markTrailRevision,
-    renderWaypoints:drawWaypoints,
-    renderFilters:buildFilterGrid,
-    renderDays:buildDaysTab,
-    persist:saveToStorage,
-    notify:(message: any) => showToast(message),
+  const waypointRuntime = createWaypointRuntime({
+    document, leaflet:L, map, dialogs:studioDialogs, context:runtimeContext,
+    selectors, projectSelectors, language:getCurrentLang, translate:t, tagColors,
+    iconForTag:waypointIcon, iconMarkup:waypointIconMarkup,
+    nearestPrimary:nearestTrackIdxOnPrimary, distance:haversine,
+    markRevision:markTrailRevision, renderWaypoints:drawWaypoints,
+    renderFilters:buildFilterGrid, renderDays:buildDaysTab, persist:saveToStorage,
+    notify:showToast, recordEdit:recordProjectEdit,
+    beginInteraction:beginRuntimeInteraction, cancelInteraction:cancelRuntimeInteraction,
+    dispatchInteraction:dispatchRuntimeInteraction, ownerIsCurrent:runtimeInteractionOwnerIsCurrent,
   });
-  const addWaypointState = waypointController.state;
+  const waypointController = waypointRuntime.controller;
+  const addWaypointState = waypointRuntime.state;
+  const nextWaypointId = waypointRuntime.nextId;
+  const addManualWaypointAt = waypointRuntime.addManualWaypointAt;
+  const enterAddWaypointMode = waypointRuntime.enter;
+  const exitAddWaypointMode = waypointRuntime.exit;
+  const dispatchTransientWaypointTap = waypointRuntime.dispatchTransientTap;
 
-  function nextWaypointId(trail: any) {
-    return waypointController.nextId(trail);
-  }
-
-  function findWaypointAnchorOnPrimary(latlng: any, requireNear: any = false) {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) return null;
-    const hit = nearestTrackIdxOnPrimary(latlng.lat, latlng.lng);
-    if(hit) return hit;
-    if(requireNear) return null;
-    let bestI = 0, bestD = Infinity;
-    for(let i=0; i<main.track.length; i++) {
-      const p = main.track[i];
-      const d = haversine(latlng.lat, latlng.lng, p[0], p[1]);
-      if(d < bestD) { bestD = d; bestI = i; }
-    }
-    return { idx: bestI, point: main.track[bestI], dist: bestD, trail: main };
-  }
-
-  function readWaypointPhoto(file: any) {
-    return new Promise((resolve: any, reject: any) => {
-      if(!file) { resolve(''); return; }
-      const allowedTypes = new Set(['image/png','image/jpeg','image/gif','image/webp','image/avif']);
-      if(!allowedTypes.has(file.type.toLowerCase())) {
-        reject(new Error(getCurrentLang() === 'zh' ? '请选择 PNG、JPEG、GIF、WebP 或 AVIF 图片' : 'Choose a PNG, JPEG, GIF, WebP, or AVIF image'));
-        return;
-      }
-      if(file.size > 5 * 1024 * 1024) {
-        reject(new Error(getCurrentLang() === 'zh' ? '图片不能超过 5 MB' : 'Image must be 5 MB or smaller'));
-        return;
-      }
-      const reader = new FileReader();
-      reader.addEventListener('load', () => resolve(typeof reader.result === 'string' ? reader.result : ''));
-      reader.addEventListener('error', () => reject(new Error(getCurrentLang() === 'zh' ? '图片读取失败' : 'Could not read image')));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function openWaypointEditorDialog() {
-    const isZh = getCurrentLang() === 'zh';
-    return studioDialogs.openCustom({
-      title:isZh ? '新增标注点' : 'Add waypoint',
-      size:'wide',
-      initialFocus:'#manual-waypoint-name',
-      render:({form, body, actions, close, cancel}: any) => {
-        const createField = (labelText: any, control: any) => {
-          const label = document.createElement('label');
-          label.className = 'workbench-dialog__field';
-          const caption = document.createElement('span');
-          caption.className = 'workbench-dialog__label';
-          caption.textContent = labelText;
-          label.append(caption, control);
-          body.append(label);
-        };
-
-        const name = document.createElement('input');
-        name.id = 'manual-waypoint-name';
-        name.className = 'workbench-dialog__input';
-        name.type = 'text';
-        name.required = true;
-        name.maxLength = 80;
-        name.placeholder = isZh ? '例如：营地、水源、岔路口' : 'For example: camp, water, junction';
-        createField(isZh ? '名称' : 'Name', name);
-
-        const tag = document.createElement('select');
-        tag.id = 'manual-waypoint-tag';
-        tag.className = 'workbench-dialog__input workbench-dialog__select waypoint-type-select';
-        ['other','camp','water','supply','pass','fork','warn','shelter','village','bridge','river','start','end'].forEach((value: any) => {
-          const option = document.createElement('option');
-          option.value = value;
-          option.textContent = t('tag.'+value) || value;
-          tag.append(option);
-        });
-        tag.value = 'other';
-        const tagControl = document.createElement('div');
-        tagControl.className = 'waypoint-type-select-control';
-        const tagPreview = document.createElement('span');
-        tagPreview.className = 'waypoint-type-select-preview';
-        tagPreview.setAttribute('aria-hidden', 'true');
-        const updateTagPreview = () => {
-          tagPreview.style.color = (tagColors as Record<string, string>)[tag.value] || '#64748b';
-          tagPreview.innerHTML = waypointIconMarkup(tag.value);
-        };
-        tag.addEventListener('change', updateTagPreview);
-        tagControl.append(tagPreview, tag);
-        createField(isZh ? '图标与类型' : 'Icon and type', tagControl);
-        updateTagPreview();
-
-        const description = document.createElement('textarea');
-        description.id = 'manual-waypoint-description';
-        description.className = 'workbench-dialog__input workbench-dialog__textarea';
-        description.maxLength = 500;
-        description.placeholder = isZh ? '可选：路况、补给、注意事项等' : 'Optional: conditions, supplies, notes';
-        createField(isZh ? '文字描述（可选）' : 'Description (optional)', description);
-
-        const photo = document.createElement('input');
-        photo.id = 'manual-waypoint-photo';
-        photo.className = 'workbench-dialog__file';
-        photo.type = 'file';
-        photo.accept = 'image/*';
-        const preview = document.createElement('img');
-        preview.className = 'workbench-dialog__image-preview';
-        preview.alt = isZh ? '图片预览' : 'Image preview';
-        preview.hidden = true;
-        const photoWrap = document.createElement('div');
-        photoWrap.className = 'workbench-dialog__photo-field';
-        photoWrap.append(photo, preview);
-        createField(isZh ? '图片（可选，最大 5 MB）' : 'Image (optional, 5 MB max)', photoWrap);
-
-        const error = document.createElement('p');
-        error.className = 'workbench-dialog__error';
-        error.setAttribute('role', 'alert');
-        body.append(error);
-        let photoData = '';
-        let photoRead = Promise.resolve('');
-        photo.addEventListener('change', () => {
-          error.textContent = '';
-          photoData = '';
-          preview.hidden = true;
-          photoRead = readWaypointPhoto(photo.files && photo.files[0]).then((data: any) => {
-            photoData = data;
-            if(data) { preview.src = data; preview.hidden = false; }
-            return data;
-          }).catch((readError: any) => {
-            photo.value = '';
-            error.textContent = readError.message;
-            return '';
-          });
-        });
-
-        const cancelButton = document.createElement('button');
-        cancelButton.type = 'button';
-        cancelButton.className = 'workbench-dialog__button';
-        cancelButton.textContent = isZh ? '取消' : 'Cancel';
-        cancelButton.addEventListener('click', cancel);
-        const addButton = document.createElement('button');
-        addButton.type = 'submit';
-        addButton.className = 'workbench-dialog__button workbench-dialog__button--primary';
-        addButton.textContent = isZh ? '添加标注点' : 'Add waypoint';
-        actions.append(cancelButton, addButton);
-
-        form.addEventListener('submit', (event: any) => {
-          event.preventDefault();
-          const cleanName = name.value.trim();
-          if(!cleanName) {
-            error.textContent = isZh ? '请输入标注点名称' : 'Enter a waypoint name';
-            name.setAttribute('aria-invalid', 'true');
-            name.focus();
-            return;
-          }
-          addButton.disabled = true;
-          void photoRead.then(() => close({
-            name:cleanName,
-            tag:tag.value,
-            description:description.value.trim(),
-            photo:photoData,
-          }));
-        });
-        name.addEventListener('input', () => { error.textContent = ''; name.removeAttribute('aria-invalid'); });
-      },
-    });
-  }
-
-  async function addManualWaypointAt(latlng: any, opts: any = {}) {
-    const { requireNear = false, isCurrent = null } = opts;
-    const anchor = findWaypointAnchorOnPrimary(latlng, requireNear);
-    if(!anchor) {
-      showToast('请点击主轨迹附近（200m 内）', 'error');
-      return false;
-    }
-    const main = anchor.trail;
-    const input = await openWaypointEditorDialog();
-    if(!input) return false;
-    if(typeof isCurrent === 'function' && !isCurrent()) return false;
-    return !!recordProjectEdit('添加标注点', 'Add waypoint', () => waypointController.addManualWaypoint({
-      trailId:main.id,
-      trackIndex:anchor.idx,
-      point:anchor.point,
-    }, input));
-  }
-
-  function handleWaypointInteractionEvent(event: any, session: any) {
-    if(event.type !== 'tap') return;
-    if(!session.setPhase('committing')) return;
-    void addManualWaypointAt(event.latlng, {
-      requireNear:event.requireNear !== false,
-      isCurrent:() => session.isCurrent() && runtimeInteractionOwnerIsCurrent(session),
-    }).then((added: any) => {
-      if(!session.isCurrent()) return;
-      if(added) {
-        session.cancel('committed');
-        return;
-      }
-      if(event.transient) session.cancel('cancelled');
-      else session.setPhase('select');
-    }).catch((error: any) => {
-      console.error('Failed to add waypoint', error);
-      if(session.isCurrent()) session.setPhase('select');
-    });
-  }
-
-  function exitAddWaypointMode(opts: any = {}) {
-    if(!opts.fromManager && cancelRuntimeInteraction('waypoint', opts.reason || 'cancelled')) return;
-    waypointController.exit();
-    const btn = document.getElementById('add-waypoint-btn');
-    if(btn) btn.classList.remove('on');
-    map.getContainer().style.cursor = '';
-  }
-
-  function enterAddWaypointMode(opts: any = {}) {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) {
-      showToast('请先设置主轨迹', 'error');
-      return null;
-    }
-    const session = beginRuntimeInteraction('waypoint', 'select', main, {
-      onEvent: handleWaypointInteractionEvent,
-      onCancel: (cancelOpts: any) => exitAddWaypointMode(cancelOpts),
-    });
-    if(!waypointController.enter(main.id)) return null;
-    const btn = document.getElementById('add-waypoint-btn');
-    if(btn) btn.classList.add('on');
-    map.getContainer().style.cursor = 'crosshair';
-    if(opts.announce !== false) showToast('在主轨迹附近点击一次，添加手动标注点');
-    return session;
-  }
-
-  function dispatchTransientWaypointTap(latlng: any, source: any) {
-    const session = enterAddWaypointMode({announce:false});
-    if(!session) return false;
-    return dispatchRuntimeInteraction('waypoint', {
-      type:'tap', source, latlng, requireNear:false, transient:true,
-    });
-  }
-
-  // 右键/长按地图添加标注点
-  if(map) {
-    // 桌面端：右键 contextmenu
-    map.on('contextmenu', (e: any) => {
-      dispatchTransientWaypointTap(e.latlng, 'contextmenu');
-    });
-    // 移动端：长按 600ms
-    let longPressTimer:any = null;
-    map.getContainer().addEventListener('touchstart', (e: any) => {
-      if(e.touches.length === 1) {
-        const clientX = e.touches[0].clientX;
-        const clientY = e.touches[0].clientY;
-        longPressTimer = setTimeout(() => {
-          const rect = map.getContainer().getBoundingClientRect();
-          const pt = L.point(clientX - rect.left, clientY - rect.top);
-          const ll = map.containerPointToLatLng(pt);
-          dispatchTransientWaypointTap(ll, 'long-press');
-        }, 600);
-      }
-    }, {passive: true});
-    map.getContainer().addEventListener('touchend', () => { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }, {passive: true});
-    map.getContainer().addEventListener('touchmove', () => { if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } }, {passive: true});
-  }
   function hasPrimaryTrail() {
     const trail = selectors.primaryTrail(projectSelectors.trails());
     return Boolean(trail && trail.track && trail.track.length);

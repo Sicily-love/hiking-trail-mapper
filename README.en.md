@@ -1,28 +1,70 @@
 <div align="center">
 
-<p><a href="README.md">中文</a> | <a href="README.en.md">English</a></p>
+# Outdoor Route Studio
 
-<h1>Outdoor Route Studio</h1>
+**An offline-first KML workbench for hiking routes**
 
-**Single-file KML outdoor route workbench · import, compare, measure, segment, and export**
+[中文](README.md) · [Open online](https://sicily-love.github.io/hiking-trail-mapper/) · [Features](docs/FEATURES.en.md)
+
+![version](https://img.shields.io/badge/version-v2.3.1-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
+![license](https://img.shields.io/badge/license-MIT-green)
 
 </div>
 
-Outdoor Route Studio is a map-first KML route viewer and organizer. Application implementation is maintained only under `src/`: root `index.html` is a small Vite shell that loads `src/main.ts`, and Vite turns the complete module graph into an inlined, offline-capable single-HTML release.
+Outdoor Route Studio is a map-first tool for reviewing, comparing, and planning hiking tracks. It overlays KML routes, plans daily itineraries, measures partial segments, manages waypoints and escape routes, and exports routes or complete project backups.
 
-## Quick Start
+The project maintains one TypeScript source tree. Vite produces both the GitHub Pages site and a self-contained HTML file that opens directly offline.
 
-Open the generated release checked into the repository:
+## Use the app
 
-```bash
-open hiking-trail-mapper.html
-```
+### Online
 
-`hiking-trail-mapper.html` opens directly over `file://`. Application code, styles, Leaflet, and the compression library are inlined; only online map tiles require a network. Root `index.html` is a source entry shell for Vite, not the offline release file.
+Open [GitHub Pages](https://sicily-love.github.io/hiking-trail-mapper/). Android and desktop Chrome can install it as a PWA; the installed application shell starts without a network connection.
 
-The GitHub Pages build also ships as an installable PWA. After the first online visit, it can be installed from the browser menu on Android or desktop and can reopen the complete Workbench without a network. Trails, itineraries, and workspace caches remain in browser IndexedDB. Satellite imagery comes from an online service, so areas that have not been visited are unavailable offline. The standalone `hiking-trail-mapper.html` remains usable offline, but it does not provide PWA installation or automatic updates.
+### Standalone HTML
 
-Local development:
+Download and open [`hiking-trail-mapper.html`](hiking-trail-mapper.html). Application code, styles, and runtime libraries are embedded, so Node.js and a local server are not required.
+
+### Import routes
+
+Choose **Add trail**, or drop files onto the map:
+
+- `.kml`: import one or many files.
+- `.zip` / `.kml.zip`: extract contained KML files automatically.
+- `.ors-project.json`: restore a complete project backup.
+
+GPX and GeoJSON are not parsed directly yet; convert them to KML first.
+
+## Main features
+
+| Feature | What it does |
+|---|---|
+| Trail groups | Organize route alternatives, set a primary trail, and control overlays |
+| Measure | Select and drag A/B points on the primary trail to inspect distance, gain, loss, and elevation |
+| Itinerary | Drag segment boundaries and calculate daily distance, gain, loss, elevation range, and camp data |
+| Waypoints | Add a type, name, description, and optional image near the primary trail |
+| Escape routes | Select a partial route from the primary or another grouped trail and assign it to one or more Days |
+| Trail stitching | Trim, reverse, order, and join route parts without inventing distance or elevation across gaps |
+| Undo and redo | Revert durable edits to trails, segments, waypoints, escape routes, and stitched routes |
+| Export | Save trail KML, group ZIP, itinerary Markdown, or a complete project backup |
+
+See [Features](docs/FEATURES.en.md) for detailed workflows.
+
+## Offline use and data
+
+| Item | Offline behavior |
+|---|---|
+| Workbench and route tools | Available from the installed PWA or standalone HTML |
+| Imported trails, itinerary, and settings | Stored in the current browser's IndexedDB |
+| Satellite basemap | Requires a network; uncached areas are unavailable offline |
+| Complete project transfer | Export an `.ors-project.json` from **Export → Complete project backup** |
+
+The application does not upload routes to a project server. Export a complete project before clearing browser data, changing browsers, or moving devices. KML/ZIP is useful for exchanging routes with other map software, but it does not include the complete workspace state.
+
+## Local development
+
+Use Node.js 24 or another version compatible with the current GitHub Actions setup.
 
 ```bash
 git clone https://github.com/Sicily-love/hiking-trail-mapper.git
@@ -31,140 +73,48 @@ npm ci
 npm run dev
 ```
 
-Import routes:
-
-- Choose **Add trail** and select one or more `.kml` files.
-- You can also import `.zip` / `.kml.zip`; the app extracts KML files and skips macOS metadata.
-- Files can be dragged directly onto the workbench.
-- Newly added or stitched trails always enter the **Default** group and can be moved later from trail details.
-
-## Core Capabilities
-
-| Scenario | Capability |
-|----------|------------|
-| Compare routes | Overlay multiple routes, emphasize the current group's primary trail, and de-emphasize supporting trails |
-| Plan daily stages | Segment by day and produce daily distance, ascent, descent, elevation, and camp data |
-| Inspect a section | Pick A/B points on the primary trail, calculate along-track distance, ascent, and descent, and inspect section elevation |
-| Manage waypoints | Pick a primary-trail point, choose an icon and type, enter notes, and attach an optional image; filtering and renaming remain available |
-| Plan escapes | Choose a reference trail in the active group, select its A/B section, and save the result under the primary itinerary |
-| Stitch trails | Start with no selected sources, then crop, reverse, and reorder multiple parts on the map without inventing distance or elevation across gaps |
-| Edit safely | Global Undo/Redo in the Edit menu covers durable trail, segment, waypoint, escape, and stitch changes |
-| Move data | Export the current group as KML ZIP, export an itinerary as Markdown, or migrate the full project and workspace in a versioned project file |
-
-See [Features](docs/FEATURES.en.md) for interactions and [Architecture](docs/ARCHITECTURE.en.md) for implementation boundaries.
-
-## Workbench
-
-The Workbench adapts one command vocabulary to different screen sizes:
-
-- Desktop and mobile share four clear activities: Trails, Itinerary, Waypoints, and Settings.
-- Trails owns the route library and primary summary; saved escape routes appear directly in Itinerary.
-- The bottom area focuses on elevation analysis, Measure actions appear there when active, and Segment uses a focused editor.
-- Dedicated managers coordinate command state, pointer/keyboard interaction, render invalidation, and modal dialogs so DOM handlers do not each maintain separate state.
-
-## Data and Privacy
-
-Trails, waypoints, and group state are stored in the current browser's IndexedDB and are not uploaded to an application server. Before clearing browser data or changing browsers or devices, use **Export → Complete project backup** to create an `.ors-project.json` file. Restore validates its format and `schemaVersion`, migrates supported older schemas, and rolls back to a recovery snapshot if replacement fails. KML ZIP is better for route exchange with other map software and does not carry the full workspace state.
-
-## Architecture
-
-The current entry chain is:
-
-```text
-index.html
-  -> src/main.ts
-  -> bootstrapOutdoorRouteStudio()
-  -> mountAppShell()
-  -> vendor side-effect modules
-  -> startStudioRuntime({ document, commands, dialogs })
-  -> typed core / feature controllers / adapters
-```
-
-- `index.html` contains only metadata, `#app`, and `/src/main.ts`; it contains no business implementation.
-- `src/app/bootstrap.ts` mounts the Workbench DOM, loads vendors through the Vite module graph, and explicitly starts the Studio runtime. Business code is no longer executed as an injected script string.
-- `src/core` owns DOM-free calculations, parsing, versioned project archives, transformations, and render models.
-- `src/app` and `src/features` own state and interaction orchestration. `AppStateStore` and `ProjectStore` separately own workspace and project data; writes use typed actions and reads use selectors. Trail stitching and elevation Canvas orchestration have dedicated feature owners. `src/adapters` isolates Leaflet / IndexedDB; `src/ui` owns the Workbench, sidebar/import owners, and dialogs.
-- `InteractionManager` makes measure, segment, waypoint, escape, trail-stitch, and Day-preview sessions mutually exclusive.
-- `RenderScheduler` coalesces track, marker, sidebar, day, legend, chart, and fit invalidations through a dirty mask. Elevation Canvas rendering uses pixel-width min/max downsampling, tracks use at most 40 color bands, markers update by stable-key diff, and only the final consecutive reset may commit.
-- `CommandRegistry` unifies the top menu, desktop/mobile activity rail, bottom analysis bar, Undo/Redo, and keyboard shortcuts. `DialogController` replaces every native `alert`/`prompt`/`confirm` with shared focus restoration and danger confirmation.
-
-`v2.0.0` removed the classic startup bridge; the main `studio.ts` is now down from roughly 6,200 to roughly 2,950 lines. KML project building, reset/fit, sidebar/itinerary, import, trail stitching, transient map overlays, and elevation Canvas now have explicit owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime and typed features exchange data only through project/state actions and selectors. A deeply read-only inspector is available only under `?studio-test=1`, while fixture writes use a dedicated `testDriver`; normal releases expose no business globals.
-
-## Development and Tests
+Common commands:
 
 ```bash
-npm run test:unit
-npm run typecheck
-npm run build
-./tests/run_full_check.sh
+npm run typecheck          # Strict TypeScript checks
+npm run test:unit          # All Node unit suites
+npm run build              # Build dist/ and the standalone HTML
+npm run test:full          # Complete release verification
 npm run test:visual:capture
 ```
 
-The full check includes real-Chrome behavior, a 12-trail / 216,000-point performance budget, PWA offline reopen, end-to-end workflows, and responsive visual regression.
+`npm run test:full` covers the build, unit and static checks, real-Chrome behavior, a 216,000-point performance project, PWA offline reopen, end-to-end workflows, and responsive screenshot regression.
 
-`npm run build` uses the small `index.html` shell as the Vite entry, inlines JavaScript and CSS into `dist/index.html`, and emits the compatibility alias `dist/hiking-trail-mapper.html`, `dist/release.json`, the PWA manifest, Service Worker, and application icon. The two HTML names contain the same self-contained release; they are not separate sources.
-
-`npm run release:prepare` is the release entrypoint: it synchronizes generated artifacts, runs full verification, builds the single-file release, and validates metadata. See [Testing](docs/TESTING.en.md) and [Contributing](docs/CONTRIBUTING.en.md) for the complete workflow.
-
-## Milestones
-
-| Milestone | Status | Result |
-|-----------|--------|--------|
-| Milestone 1: Test guardrails | Complete | Unit, static, real-Chrome, E2E, visual, and release checks form one verification chain |
-| Milestone 2: Engineering skeleton | Complete | Vite, TypeScript, `src/`, and type checking are part of daily development |
-| Milestone 3: Core modularization | Complete | Core math, KML, storage, measurement, itinerary, and elevation models use TypeScript as their source of truth |
-| Milestone 4: UI systemization | Complete | The Workbench unifies desktop, mobile, sidebar, bottom bar, elevation dock, and bottom sheets |
-| Milestone 5: Release pipeline | Complete | Vite single-file builds, release metadata, full checks, and GitHub Pages deployment are fixed |
-| Milestone 6: Architecture & UX 2.0 | Complete | Classic bridge/composer removed; direct module boot, shared managers, Workbench, and single-HTML release pipeline finalized |
-
-Milestone 6 establishes the Architecture 2.0 baseline: production boot contains no runtime string injection, fragment composer, or dual execution path. Future releases focus on typed features, performance, and new import formats rather than another boot-architecture rewrite.
-
-## GPX / GeoJSON
-
-The app currently parses KML directly. Convert GPX first:
-
-```bash
-ogr2ogr -f KML output.kml input.gpx
-```
-
-Future native GPX / GeoJSON support should normalize into the existing import model in `src/core`, keeping storage, measurement, segmentation, and rendering independent of source format.
-
-## Versioning
-
-Version: v2.3.0
-
-- `PATCH`: fixes, docs, tests, compatibility work, and small interaction improvements.
-- `MINOR`: new user-visible capability, data fields, or a major workflow.
-- `MAJOR`: incompatible data migration or export-format change.
-
-Use `npm run version:bump` to update release metadata together instead of editing version stamps manually.
-
-## Repository Layout
+## Code structure
 
 ```text
-hiking-trail-mapper/
-├── index.html                    Small Vite source-entry shell
-├── hiking-trail-mapper.html      Generated offline single-file release
-├── src/
-│   ├── main.ts                   Browser module entry
-│   ├── app/                      Bootstrap, state, commands, interaction and render coordination
-│   ├── core/                     DOM-free calculations and data models
-│   ├── features/                 Feature controllers
-│   ├── adapters/                 Leaflet / IndexedDB boundaries
-│   ├── ui/                       Workbench, layout, and dialogs
-│   ├── styles/                   Global and vendor style entries
-│   └── vendor/                   Browser dependencies inlined at build time
-├── scripts/                      Build, release, and maintenance tools
-├── public/                       PWA manifest, Service Worker, and application icon
-├── tests/                        Unit, browser, E2E, and visual checks
-├── docs/                         Chinese and English feature, architecture, testing, and contribution docs
-├── dist/                         Vite-generated Pages artifact
-└── .github/workflows/pages.yml   Verification and GitHub Pages deployment
+src/
+├── app/          Bootstrap, state, commands, interactions, and render scheduling
+├── core/         DOM-free calculations, parsers, and data models
+├── features/     Measure, segment, waypoint, itinerary, and escape owners
+├── adapters/     Leaflet, IndexedDB, file, and browser boundaries
+├── ui/           Workbench layout, sidebar, panels, and dialogs
+├── styles/       Components, layout, and theme
+└── vendor/       Browser libraries embedded at build time
 ```
 
-## Deployment
+The entry chain is `index.html → src/main.ts → bootstrap → studio runtime → typed feature/controller`. `src/app/runtime/studio.ts` only composes cross-feature dependencies. Writes use typed actions and reads use selectors. Production has no classic bridge, string-executed scripts, or duplicate HTML business implementation.
 
-`.github/workflows/pages.yml` verifies pull requests. On pushes to `main`, it runs `npm run release:prepare`, uploads `dist/`, and deploys GitHub Pages. Pages serves the built, self-contained `dist/index.html`, while the adjacent Service Worker provides offline application-shell startup; the root source shell is not deployed directly.
+Further reading:
+
+- [Architecture](docs/ARCHITECTURE.en.md)
+- [Testing](docs/TESTING.en.md)
+- [Contributing](docs/CONTRIBUTING.en.md)
+- [Sample trails](examples/README.en.md)
+
+## Release
+
+- Current version: v2.3.1
+- `PATCH`: fixes, compatibility, documentation, and small interaction refinements.
+- `MINOR`: new user-visible capabilities or data formats.
+- `MAJOR`: incompatible data or export-format changes.
+
+`npm run version:bump` updates the version and bilingual CHANGELOG together. `.github/workflows/pages.yml` is the only Pages publisher, and the repository Pages Source is set to **GitHub Actions**.
 
 ## License
 

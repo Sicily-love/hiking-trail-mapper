@@ -73,6 +73,8 @@ index.html -> src/main.ts -> bootstrap.ts
 
 - 所有模块必须通过严格类型检查，不得新增 `@ts-nocheck`。
 - 纯逻辑使用显式输入输出且不依赖 DOM。
+- TypeScript、CSS 和资源文件使用 `kebab-case`；Python、Shell 与 Node 测试使用 `snake_case`。
+- 测试和样例文件按行为或用途命名，不在文件名中写版本号；`README.md`、`LICENSE`、`package-lock.json` 等生态约定名称保持不变。
 - 变量和函数使用 `camelCase`，类型和类使用 `PascalCase`，常量使用 `SCREAMING_SNAKE_CASE`。
 - controller 表示所有权，渲染数据使用 `*Model`，工厂使用 `create*`。
 - 注释只解释不明显的约束、生命周期和兼容原因。
@@ -84,7 +86,7 @@ index.html -> src/main.ts -> bootstrap.ts
 ```bash
 npm run test:unit
 npm run typecheck
-./tests/run_full_check.sh
+./tests/run_full_test_suite.sh
 npm run test:visual:capture
 ```
 

@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.3.1',
+    date: '2026-08-11',
+    items: {
+      zh: ['GitHub Pages 收口为唯一 Actions 发布链，避免 legacy 分支发布与自定义工作流重复触发。', '将标注点编辑器、图片读取、右键与长按手势及交互会话迁入 typed waypoint runtime owner，主 runtime 缩减至约 2700 行。', '统一源码、测试和样例文件命名，单元测试改为自动发现；重写中英文 README，删除重复与过期说明。'],
+      en: ['Consolidate GitHub Pages into a single Actions publishing pipeline, preventing duplicate legacy branch and custom-workflow deployments.', 'Move waypoint editing, image reads, right-click and long-press gestures, and interaction sessions into a typed waypoint runtime owner, reducing the main runtime to about 2,700 lines.', 'Standardize source, test, and sample filenames, switch unit tests to auto-discovery, and rewrite both READMEs to remove duplicate and stale guidance.'],
+    },
+  },
+  {
     version: 'v2.3.0',
     date: '2026-08-10',
     items: {
@@ -766,17 +774,17 @@ export const CHANGELOG = [
     items: {
       zh: [
         '📝 JSDoc 类型注解全覆盖：新增 10 个 @typedef（TrackPoint / TrackTuple / Waypoint / DayMeta / TrailStats / EscapeRoute / Trail / ElevLayout / ElevAnnotation / ImportedFile），15+ 顶层函数带 @param / @returns（haversine / accumulatorAscent / smoothElev / parseKml / enrichWaypoints / parseAndProcessKml / drawElevBar / handleFiles / applyChange / trailContentHash 等）',
-        '🧪 单元测试首次落地（tests/unit/）：抽出 trail_core.js 纯函数镜像 + test_math.js（30 断言）+ test_enrich.js（12 断言）+ verify_alignment.js（13 项 HTML↔trail_core 对齐校准）',
-        '🧪 端到端测试首次落地（tests/e2e/run_all.py）：14 大场景 39 项断言，覆盖启动、KML/ZIP 导入、去重、切主轨迹、批量分组、反转、删除、waypoint 过滤、分天切换、IndexedDB、i18n、导出、file:// 错误检测',
-        '🛠 一键测试流程 tests/run_full_check.sh：6 阶段流水线（语法→单元→静态→功能→e2e→sync），大改动必跑，失败即停',
+        '🧪 单元测试首次落地（tests/unit/）：抽出 trail_core.js 纯函数镜像 + test_math.js（30 断言）+ test_enrich.js（12 断言）+ test_release_alignment.js（13 项 HTML↔trail_core 对齐校准）',
+        '🧪 端到端测试首次落地（tests/e2e/test_end_to_end.py）：14 大场景 39 项断言，覆盖启动、KML/ZIP 导入、去重、切主轨迹、批量分组、反转、删除、waypoint 过滤、分天切换、IndexedDB、i18n、导出、file:// 错误检测',
+        '🛠 一键测试流程 tests/run_full_test_suite.sh：6 阶段流水线（语法→单元→静态→功能→e2e→sync），大改动必跑，失败即停',
         '📚 文档三件套：docs/TESTING.md（测试指南）+ docs/CONTRIBUTING.md（贡献指引，含类型注解风格/命名/大改动流程）+ ARCHITECTURE.md 补齐 v1.17-1.19 拆分架构与 applyChange 约定，全部 zh + en 双语',
         '🎯 无功能变化，纯工程化基建；6/6 阶段测试全过（Phase1 语法 · Phase2 单元 55/55 · Phase3 静态 54/54 · Phase4 功能 55/55 · Phase5 e2e 39/39 · Phase6 sync）',
       ],
       en: [
         '📝 Full JSDoc type coverage: 10 new @typedefs (TrackPoint / TrackTuple / Waypoint / DayMeta / TrailStats / EscapeRoute / Trail / ElevLayout / ElevAnnotation / ImportedFile), 15+ top-level functions with @param / @returns (haversine / accumulatorAscent / smoothElev / parseKml / enrichWaypoints / parseAndProcessKml / drawElevBar / handleFiles / applyChange / trailContentHash etc.)',
-        '🧪 Unit tests first-time landing (tests/unit/): extracted trail_core.js pure-function mirror + test_math.js (30 assertions) + test_enrich.js (12) + verify_alignment.js (13 HTML↔trail_core alignment checks)',
-        '🧪 End-to-end tests first-time landing (tests/e2e/run_all.py): 14 scenarios × 39 assertions covering startup, KML/ZIP import, dedup, switch primary trail, batch grouping, reverse, delete, waypoint filter, day switch, IndexedDB, i18n, export, file:// error detection',
-        '🛠 One-command test flow tests/run_full_check.sh: 6-phase pipeline (syntax→unit→static→functional→e2e→sync), required for big changes, fail-fast',
+        '🧪 Unit tests first-time landing (tests/unit/): extracted trail_core.js pure-function mirror + test_math.js (30 assertions) + test_enrich.js (12) + test_release_alignment.js (13 HTML↔trail_core alignment checks)',
+        '🧪 End-to-end tests first-time landing (tests/e2e/test_end_to_end.py): 14 scenarios × 39 assertions covering startup, KML/ZIP import, dedup, switch primary trail, batch grouping, reverse, delete, waypoint filter, day switch, IndexedDB, i18n, export, file:// error detection',
+        '🛠 One-command test flow tests/run_full_test_suite.sh: 6-phase pipeline (syntax→unit→static→functional→e2e→sync), required for big changes, fail-fast',
         '📚 Documentation triple: docs/TESTING.md (testing guide) + docs/CONTRIBUTING.md (contribution guide with type annotation style / naming / big-change workflow) + ARCHITECTURE.md updated with v1.17-1.19 split architecture and applyChange convention, all zh + en bilingual',
         '🎯 No behavior change, pure engineering infrastructure; all 6 phases pass (Phase1 syntax · Phase2 unit 55/55 · Phase3 static 54/54 · Phase4 functional 55/55 · Phase5 e2e 39/39 · Phase6 sync)',
       ]

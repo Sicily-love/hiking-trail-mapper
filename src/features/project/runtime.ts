@@ -1,6 +1,6 @@
 import type { RuntimeContext } from '../../app/runtime/context.ts';
 import type { BrowserFileAdapter } from '../../adapters/file.ts';
-import type { ProjectArchiveTrail } from '../../core/projectArchive.ts';
+import type { ProjectArchiveTrail } from '../../core/project-archive.ts';
 import { createProjectArchiveController } from './archive-controller.ts';
 import { createProjectHistoryController } from '../history/controller.ts';
 

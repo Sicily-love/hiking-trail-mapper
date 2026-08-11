@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Skill 静态验收测试（无 CDP，不启交互式 Chrome）
-==================================================
+发布物静态验收测试（无 CDP，不启交互式 Chrome）
+==============================================
 只做：
 1. 版本一致性
 2. 关键函数/变量存在（正则）
@@ -142,7 +142,7 @@ try:
         # 不在 Codex seatbelt 沙箱内启动 /Applications/Google Chrome.app。
         # Chrome 会在 HIServices::_RegisterApplication / TransformProcessType
         # 阶段被 macOS 拦截并 SIGABRT，导致系统弹崩溃通知；真实浏览器验收
-        # 统一由 ./tests/run_full_check.sh 在批准的外部执行环境中完成。
+        # 统一由 ./tests/run_full_test_suite.sh 在批准的外部执行环境中完成。
         reason = "沙箱环境" if codex_sandbox else "全量测试的静态阶段"
         print(f"    {reason}不重复启动 Chrome；真实浏览器验收由功能与 E2E 阶段完成")
         check(f"DOM 长度 > 100k", len(HTML) > 100_000, f"source {len(HTML):,} chars")
@@ -217,16 +217,11 @@ if RELEASE.exists():
     check("release/LICENSE 存在", (RELEASE / "LICENSE").exists())
     check("release/CHANGELOG.md 存在", (RELEASE / "CHANGELOG.md").exists())
 
-    # README 语言切换头（允许多种格式）
-    for f in ['README.md', 'README.en.md']:
-        p = RELEASE / f
-        if p.exists():
-            txt = p.read_text(encoding='utf-8')
-            has_zh = '[中文]' in txt or re.search(r'<a\s+href="README\.md">中文</a>', txt) is not None
-            has_en = '[English]' in txt or re.search(r'<a\s+href="README\.en\.md">English</a>', txt) is not None
-            check(f"{f} 有语言切换头",
-                  has_zh and has_en,
-                  f"zh={has_zh} en={has_en}")
+    # Each README links directly to its counterpart; the current language need not link to itself.
+    readme_zh = (RELEASE / 'README.md').read_text(encoding='utf-8')
+    readme_en = (RELEASE / 'README.en.md').read_text(encoding='utf-8')
+    check('README.md 链接英文版', '[English](README.en.md)' in readme_zh)
+    check('README.en.md links Chinese edition', '[中文](README.md)' in readme_en)
 
     # README 版本 badge 一致（若存在）
     for f in ['README.md', 'README.en.md']:

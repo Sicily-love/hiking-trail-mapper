@@ -23,9 +23,9 @@ Or simpler: drag all three files into the browser window at once.
 
 | File | Size | Notes |
 |------|------|-------|
-| `格聂牧场+V.kml` | ~849KB | Main line (default primary trail) |
-| `2025-07-1608_48格聂牧场+V.kml` | ~874KB | 2025-07-16 upload variant |
-| `格聂牧场+v线.kml` | ~239KB | Simplified version, fewer waypoints |
+| `route-variant-full.kml` | ~849KB | Complete primary variant |
+| `route-variant-dated.kml` | ~874KB | 2025-07-16 upload variant |
+| `route-variant-simplified.kml` | ~239KB | Simplified variant with fewer waypoints |
 
 ## Route summary
 

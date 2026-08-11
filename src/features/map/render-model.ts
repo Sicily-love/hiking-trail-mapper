@@ -1,5 +1,5 @@
 import { buildElevationPolylineSegments } from '../../core/performance/elevation.ts';
-import { splitTrackByBreaks } from '../../core/trackSegments.ts';
+import { splitTrackByBreaks } from '../../core/track-segments.ts';
 import type { TrackTuple } from '../../core/types.ts';
 import type { RuntimeContext } from '../../app/runtime/context.ts';
 

@@ -79,7 +79,7 @@ export {
   collectElevationAnnotations,
   layoutElevationAnnotations,
   buildElevationAnnotationRenderModel,
-} from './elevationProfile.ts';
+} from './elevation-profile.ts';
 
 export {
   classifyWaypointTag,
@@ -104,7 +104,7 @@ export {
   splitTrackByBreaks,
   trackBreaksInRange,
   type SegmentedTrackMetrics,
-} from './trackSegments.ts';
+} from './track-segments.ts';
 
 export {
   buildKmlParseModel,
@@ -224,9 +224,9 @@ export {
   type ProjectArchiveSummary,
   type ProjectArchiveTrail,
   type ProjectArchiveWorkspace,
-} from './projectArchive.ts';
+} from './project-archive.ts';
 
-export { rebuildProjectDerivedData } from './projectDerivations.ts';
+export { rebuildProjectDerivedData } from './project-derivations.ts';
 
 export {
   DEFAULT_ELEVATION_BAND_COUNT,

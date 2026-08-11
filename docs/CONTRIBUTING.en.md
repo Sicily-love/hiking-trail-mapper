@@ -73,6 +73,8 @@ The test inspector may only be created through `?studio-test=1` and must remain 
 
 - Every module must pass strict type checking; do not add `@ts-nocheck`.
 - Keep pure logic DOM-free with explicit inputs and outputs.
+- Use `kebab-case` for TypeScript, CSS, and asset files; use `snake_case` for Python, shell, and Node test files.
+- Name tests and samples after behavior or purpose, never a release number. Keep ecosystem-standard names such as `README.md`, `LICENSE`, and `package-lock.json` unchanged.
 - Use `camelCase` for values/functions, `PascalCase` for types/classes, and `SCREAMING_SNAKE_CASE` for constants.
 - Controllers indicate ownership, render data uses `*Model`, and factories use `create*`.
 - Comments explain non-obvious constraints, lifecycle, or compatibility reasons only.
@@ -84,7 +86,7 @@ Run the smallest risk-matched checks first, then the full release chain:
 ```bash
 npm run test:unit
 npm run typecheck
-./tests/run_full_check.sh
+./tests/run_full_test_suite.sh
 npm run test:visual:capture
 ```
 

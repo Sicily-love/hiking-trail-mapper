@@ -34,7 +34,7 @@ src/
 │   ├── interaction-manager.ts    地图交互会话
 │   ├── render-scheduler.ts       合帧与最后一次 fit
 │   ├── runtime-context.ts        typed 服务上下文
-│   └── runtime/studio.ts         启动胶水与共享地图编排（约 3170 行）
+│   └── runtime/studio.ts         启动胶水与共享地图编排（约 2700 行）
 ├── core/                         无 DOM 的领域算法与 render model
 ├── features/                     垂直功能 controller 与数据
 ├── adapters/                     Leaflet、IndexedDB、文件与浏览器副作用
@@ -47,7 +47,7 @@ src/
 
 ### Core
 
-`core/` 只接收普通数据并返回确定性结果。距离、海拔、KML、测距、分段、统计、触摸策略、复位动画计划、抽稀、marker diff、revision 和版本化项目归档不依赖 DOM、Leaflet 或存储句柄。`projectArchive.ts` 持有 schema 迁移链、输入预算和数据校验。
+`core/` 只接收普通数据并返回确定性结果。距离、海拔、KML、测距、分段、统计、触摸策略、复位动画计划、抽稀、marker diff、revision 和版本化项目归档不依赖 DOM、Leaflet 或存储句柄。`project-archive.ts` 持有 schema 迁移链、输入预算和数据校验。
 
 ### App
 
@@ -66,11 +66,11 @@ trail、storage、file import/export、project archive/history runtime、waypoin
 - IndexedDB adapter 负责事务与 snapshot；
 - file/browser adapter 负责 ZIP、Blob、ObjectURL、保存选择器和导出画布。
 
-Lightbox 的缩放/拖动/触摸生命周期与侧栏收起后的主轨迹浮卡由 `ui/` controller 持有；轨迹点临时检查由 `features/map/inspection-controller.ts` 产生 render model，再交给 Leaflet adapter 创建和销毁 Marker。`studio.ts` 不再持有这些 listener、timer 或位置状态。
+标注点编辑器、图片读取、右键/长按手势与统一交互会话由 `features/waypoint/runtime-owner.ts` 持有。Lightbox 的缩放/拖动/触摸生命周期与侧栏收起后的主轨迹浮卡由 `ui/` controller 持有；轨迹点临时检查由 `features/map/inspection-controller.ts` 产生 render model，再交给 Leaflet adapter 创建和销毁 Marker。`studio.ts` 不再持有这些 listener、timer 或位置状态。
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` 已从约 6200 行压到约 3170 行。KML 项目构建、地图复位/fit、侧栏/行程 DOM、导入 DOM、轨迹拼接和海拔 Canvas 分别由独立 controller/owner 持有。全部 TypeScript 源码通过严格检查，不再存在 `@ts-nocheck`。主 runtime 仅装配 store、actions、selectors 和浏览器副作用，不直接读写 raw 项目或应用状态；`RuntimeContext` 也只向 feature 暴露 action/selector。生产环境不发布业务全局，仅 `?studio-test=1` 创建深只读测试 inspector，并通过专用 `testDriver` 构造夹具。
+`src/app/runtime/studio.ts` 已从约 6200 行压到约 2700 行。KML 项目构建、地图复位/fit、侧栏/行程 DOM、导入 DOM、轨迹拼接、标注点交互和海拔 Canvas 分别由独立 controller/owner 持有。全部 TypeScript 源码通过严格检查，不再存在 `@ts-nocheck`。主 runtime 仅装配 store、actions、selectors 和浏览器副作用，不直接读写 raw 项目或应用状态；`RuntimeContext` 也只向 feature 暴露 action/selector。生产环境不发布业务全局，仅 `?studio-test=1` 创建深只读测试 inspector，并通过专用 `testDriver` 构造夹具。
 
 真实浏览器测试在 URL 带 `?studio-test=1` 时获得冻结且嵌套对象不可写的 inspector；测试夹具修改通过 `testDriver` 进入 `ProjectActions`。正常发布不创建这些测试接口，也不暴露 `HikingTrailCore`、`HikingTrailApp`、命令或 dialog classic globals。
 

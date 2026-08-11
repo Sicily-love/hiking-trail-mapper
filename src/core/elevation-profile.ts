@@ -18,7 +18,7 @@ import type {
 } from './types.ts';
 import { accumulatorAscent, accumulatorDescent, elevRatioColor } from './elevation.ts';
 import { haversine } from './geo.ts';
-import { normalizeTrackBreaks } from './trackSegments.ts';
+import { normalizeTrackBreaks } from './track-segments.ts';
 
 function rgba(rgb: [number, number, number], alpha: number): string {
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;

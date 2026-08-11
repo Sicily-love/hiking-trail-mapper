@@ -5,8 +5,8 @@ import {
   computeDayRangeStats,
   getDayIndexRange,
 } from './itinerary.ts';
-import type { ProjectArchive, ProjectArchiveJson, ProjectArchiveTrail } from './projectArchive.ts';
-import { computeSegmentedTrackMetrics, normalizeTrackBreaks } from './trackSegments.ts';
+import type { ProjectArchive, ProjectArchiveJson, ProjectArchiveTrail } from './project-archive.ts';
+import { computeSegmentedTrackMetrics, normalizeTrackBreaks } from './track-segments.ts';
 import type { DayMeta, EnrichedWaypoint, TrackTuple } from './types.ts';
 
 type JsonRecord = Record<string, ProjectArchiveJson>;

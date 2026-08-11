@@ -32,6 +32,8 @@ T('package scripts expose one build path and retire legacy generators', () => {
   );
   assert.strictEqual(scripts['release:prepare'], './scripts/release/prepare_release.sh');
   assert.strictEqual(scripts['version:bump'], 'node scripts/release/bump_version.mjs');
+  assert.strictEqual(scripts['test:unit'], 'node tests/unit/run_unit_tests.mjs');
+  assert.strictEqual(scripts['test:full'], './tests/run_full_test_suite.sh');
   ['sync:core', 'check:core-runtime', 'generate:html', 'prune:fallbacks']
     .forEach(name => assert.strictEqual(scripts[name], undefined, name));
 });
@@ -48,6 +50,7 @@ T('retired template, IIFE sync, and fallback scripts are absent', () => {
 T('release sync and version bump use Vite plus source-owned metadata', () => {
   const sync = read('scripts/release/sync_release.sh');
   const syncDocs = read('scripts/release/sync_release_docs.mjs');
+  const metadata = read('scripts/release/check_release_metadata.py');
   const bump = read('scripts/release/bump_version.mjs');
   assert.ok(sync.includes('npm run build'));
   assert.ok(!sync.includes('generate_release_html'));
@@ -56,6 +59,7 @@ T('release sync and version bump use Vite plus source-owned metadata', () => {
   assert.ok(syncDocs.includes("process.argv.includes('--check')"));
   assert.ok(!syncDocs.includes('const changelogBlock = html.match'));
   assert.ok(syncDocs.includes("src/app/version.ts"));
+  assert.ok(metadata.includes('img\\.shields\\.io/badge/version-'));
   assert.ok(bump.includes("src/app/version.ts"));
   assert.ok(bump.includes("src/features/localization/changelog.ts"));
   assert.ok(!bump.includes("src/template/app.html"));
@@ -134,13 +138,13 @@ T('release.json can verify its own HTML payload', () => {
   assert.strictEqual(manifest.sha256, crypto.createHash('sha256').update(index).digest('hex'));
 });
 
-T('full check builds before exporting the release path to browser suites', () => {
-  const script = read('tests/run_full_check.sh');
+T('full test suite builds before exporting the release path to browser suites', () => {
+  const script = read('tests/run_full_test_suite.sh');
   const buildPosition = script.indexOf('npm run check:generated');
   const exportPosition = script.indexOf('export HTM_RELEASE_HTML=');
-  const browserPosition = script.indexOf('run_python_with_websocket "$LATEST_FUNC"');
+  const browserPosition = script.indexOf('run_python_with_websocket "$STUDIO_BROWSER_TEST"');
   const performancePosition = script.indexOf('test_large_project_performance.py');
-  const e2ePosition = script.indexOf('run_python_with_websocket tests/e2e/run_all.py');
+  const e2ePosition = script.indexOf('run_python_with_websocket tests/e2e/test_end_to_end.py');
   const visualPosition = script.indexOf('tests/visual/capture_workbench.py');
   [buildPosition, exportPosition, browserPosition, performancePosition, e2ePosition, visualPosition]
     .forEach(position => assert.ok(position >= 0));
@@ -161,7 +165,7 @@ T('release preparation syncs, verifies, builds, and validates dist', () => {
   const script = read('scripts/release/prepare_release.sh');
   const positions = [
     script.indexOf('./scripts/release/sync_release.sh'),
-    script.indexOf('./tests/run_full_check.sh'),
+    script.indexOf('./tests/run_full_test_suite.sh'),
     script.indexOf('npm run build'),
     script.indexOf('dist verified'),
   ];

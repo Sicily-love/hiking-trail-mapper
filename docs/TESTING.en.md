@@ -10,14 +10,14 @@ The test system protects modular source, the direct runtime, real-browser behavi
 npm run test:unit
 npm run typecheck
 npm run build
-./tests/run_full_check.sh
+./tests/run_full_test_suite.sh
 npm run test:visual:capture
 ```
 
 - `npm run test:unit`: fast Node contract tests.
 - `npm run typecheck`: TypeScript boundaries.
 - `npm run build`: generate the self-contained release from the small shell and `src/`.
-- `./tests/run_full_check.sh`: complete pre-release verification.
+- `./tests/run_full_test_suite.sh`: complete pre-release verification.
 - `npm run test:visual:capture`: real KML, desktop/mobile breakpoints, and interaction-state screenshots.
 
 Visual and real-Chrome checks require an environment that can launch a browser. A restricted sandbox may not run them. A release must not treat missing browser execution as a pass.
@@ -32,7 +32,7 @@ Visual and real-Chrome checks require an environment that can launch a browser. 
 
 ## Full Check
 
-`tests/run_full_check.sh` is the shared local and release-preparation entrypoint. It validates these layers:
+`tests/run_full_test_suite.sh` is the shared local and release-preparation entrypoint. It validates these layers:
 
 ### Phase 1: TypeScript and Temporary Vite Release
 
@@ -83,7 +83,7 @@ Do not restore the old “`index.html` must equal `hiking-trail-mapper.html`” 
 | `test_lightbox_controller.js` / `test_primary_mini_controller.js` / `test_map_inspection.js` | Image zoom/listener disposal, primary-card bounds and persistence, and transient inspection-marker lifecycle |
 | `test_vite_entry.js` | Small shell, `main.ts`, `bootstrap.ts`, direct runtime, and single-file build |
 | `test_release_pipeline.js` | Reproducible builds, release metadata, version tools, and the GitHub Pages workflow |
-| `verify_alignment.js` | Generated release behavior uses `src/core` without restoring duplicate core fallbacks |
+| `test_release_alignment.js` | Generated release behavior uses `src/core` without restoring duplicate core fallbacks |
 
 All Node unit tests import `src/core/index.ts` directly; no test mirror or compatibility import bridge remains.
 
@@ -101,7 +101,7 @@ This phase validates only and must not rewrite business source.
 
 ### Phase 4: Static Browser Contracts
 
-`tests/browser/test_skill.py` reads both the shell and generated release and verifies at least:
+`tests/browser/test_static_release.py` reads both the shell and generated release and verifies at least:
 
 - required DOM for `#app`, map, route sidebar, elevation dock, tool panels, and dialogs;
 - matching Chinese and English i18n keys;
@@ -111,7 +111,7 @@ This phase validates only and must not rewrite business source.
 
 ### Phase 5: Real-Chrome Functionality
 
-`tests/browser/test_v1_31.py` checks startup, imports, DOM updates, and core interactions in a real browser. It is followed by `test_large_project_performance.py`, which loads 12 trails, 216,000 points, and 96 waypoints to guard first-frame coalescing, Leaflet layer bounds, stable Marker reuse, elevation downsampling, reset latency, and heap use. Milestone 6 assertions should await `window.__OUTDOOR_ROUTE_STUDIO__.ready` so an intermediate boot state is not treated as failure.
+`tests/browser/test_studio_browser.py` checks startup, imports, DOM updates, and core interactions in a real browser. It is followed by `test_large_project_performance.py`, which loads 12 trails, 216,000 points, and 96 waypoints to guard first-frame coalescing, Leaflet layer bounds, stable Marker reuse, elevation downsampling, reset latency, and heap use. Assertions should await `window.__OUTDOOR_ROUTE_STUDIO__.ready` so an intermediate boot state is not treated as failure.
 
 Key coverage:
 
@@ -127,7 +127,7 @@ Key coverage:
 
 ### Phase 6: End-to-End Workflows
 
-`tests/e2e/run_all.py` covers empty startup, KML/ZIP import, deduplication, groups and primary trails, batch moves, reverse, delete, waypoint filters, Day/measure/segment, IndexedDB, complete-project archive round trips, i18n, export, and `file://`.
+`tests/e2e/test_end_to_end.py` covers empty startup, KML/ZIP import, deduplication, groups and primary trails, batch moves, reverse, delete, waypoint filters, Day/measure/segment, IndexedDB, complete-project archive round trips, i18n, export, and `file://`.
 
 E2E tests assert user outcomes instead of manager private fields. Phase 2 protects manager internals.
 
@@ -203,12 +203,12 @@ node tests/unit/test_vite_entry.js
 # Core and generated artifact
 node tests/unit/test_measure_itinerary.js
 node tests/unit/test_storage_core.js
-node tests/unit/verify_alignment.js
+node tests/unit/test_release_alignment.js
 
 # Release and browser
 python3 scripts/release/check_release_metadata.py
-python3 tests/browser/test_skill.py
-uv run --with websocket-client python3 tests/e2e/run_all.py
+python3 tests/browser/test_static_release.py
+uv run --with websocket-client python3 tests/e2e/test_end_to_end.py
 ```
 
 Use this judgment order:

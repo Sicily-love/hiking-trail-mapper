@@ -8,6 +8,7 @@ const studioCss = fs.readFileSync(path.join(root, 'src/styles/studio.css'), 'utf
 const ui = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const primaryMini = fs.readFileSync(path.join(root, 'src/ui/primary-mini.ts'), 'utf8');
 const { runtimeSource: runtime } = require('./runtime_source');
+const waypointRuntime = fs.readFileSync(path.join(root, 'src/features/waypoint/runtime-owner.ts'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'src/features/map/workspace-controller.ts'), 'utf8');
 const sidebar = fs.readFileSync(path.join(root, 'src/ui/sidebar/runtime-owner.ts'), 'utf8');
 const visual = fs.readFileSync(path.join(root, 'tests/visual/capture_workbench.py'), 'utf8');
@@ -56,8 +57,8 @@ T('waypoint select, escape filters, and segment dirty state have dedicated contr
   assert.ok(css.includes('.segment-dirty-indicator'));
   assert.ok(runtime.includes('addescape-day-select'));
   assert.ok(runtime.includes('DAY_ITINERARY_WAYPOINT_TAGS'));
-  assert.ok(runtime.includes("const tag = document.createElement('select')"));
-  assert.strictEqual(runtime.includes("tag.type = 'hidden'"), false);
+  assert.ok(waypointRuntime.includes("const tag = document.createElement('select')"));
+  assert.strictEqual(waypointRuntime.includes("tag.type = 'hidden'"), false);
   assert.ok(runtime.includes('requestSegmentExit'));
 });
 T('sidebar becomes a mobile bottom sheet', () => {

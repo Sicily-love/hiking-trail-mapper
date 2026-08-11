@@ -6,9 +6,9 @@ import {
   computeElevationRenderModel,
   estimateElevationLabelStackDepth,
   layoutElevationAnnotations,
-} from '../../core/elevationProfile.ts';
+} from '../../core/elevation-profile.ts';
 import { downsampleMinMaxIndices } from '../../core/performance/downsample.ts';
-import { normalizeTrackBreaks } from '../../core/trackSegments.ts';
+import { normalizeTrackBreaks } from '../../core/track-segments.ts';
 import type {
   ElevationAnnotationOptions,
   ElevationAnnotationRenderModel,

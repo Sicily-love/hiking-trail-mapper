@@ -69,30 +69,26 @@ ok "  发布元数据一致"
 
 # Phase 4: static browser acceptance checks.
 skip "Phase 4 · 静态验收"
-HTM_SKIP_STATIC_CHROME=1 python3 "$ROOT/tests/browser/test_skill.py" > "$TMP_CHECK_DIR/test_skill.log" 2>&1 || {
-  cat "$TMP_CHECK_DIR/test_skill.log"; fail "静态验收失败"
+HTM_SKIP_STATIC_CHROME=1 python3 "$ROOT/tests/browser/test_static_release.py" > "$TMP_CHECK_DIR/static-release.log" 2>&1 || {
+  cat "$TMP_CHECK_DIR/static-release.log"; fail "静态验收失败"
 }
-STATIC_LINE=$(grep -E "^结果: [0-9]+/[0-9]+ passed" "$TMP_CHECK_DIR/test_skill.log" | tail -1 || true)
+STATIC_LINE=$(grep -E "^结果: [0-9]+/[0-9]+ passed" "$TMP_CHECK_DIR/static-release.log" | tail -1 || true)
 [ -n "$STATIC_LINE" ] || {
-  cat "$TMP_CHECK_DIR/test_skill.log"; fail "静态验收缺少结果汇总"
+  cat "$TMP_CHECK_DIR/static-release.log"; fail "静态验收缺少结果汇总"
 }
 ok "  $STATIC_LINE"
 
 # Phase 5: browser functional suite against the exact temporary artifact.
 skip "Phase 5 · 功能测试"
-LATEST_FUNC=$(find "$ROOT/tests/browser" -maxdepth 1 -name 'test_v1_*.py' -print | sort -V | tail -1)
-if [ -n "$LATEST_FUNC" ]; then
-  run_python_with_websocket "$LATEST_FUNC" > "$TMP_CHECK_DIR/test_func.log" 2>&1 || {
-    cat "$TMP_CHECK_DIR/test_func.log"; fail "功能测试失败"
-  }
-  RESULT_LINE=$(grep -E "^结果: [0-9]+/[0-9]+ passed" "$TMP_CHECK_DIR/test_func.log" | tail -1 || true)
-  [ -n "$RESULT_LINE" ] || {
-    cat "$TMP_CHECK_DIR/test_func.log"; fail "功能测试缺少结果汇总"
-  }
-ok "  $RESULT_LINE  ($LATEST_FUNC)"
-else
-  fail "找不到 tests/browser/test_v1_*.py"
-fi
+STUDIO_BROWSER_TEST="$ROOT/tests/browser/test_studio_browser.py"
+run_python_with_websocket "$STUDIO_BROWSER_TEST" > "$TMP_CHECK_DIR/studio-browser.log" 2>&1 || {
+  cat "$TMP_CHECK_DIR/studio-browser.log"; fail "功能测试失败"
+}
+RESULT_LINE=$(grep -E "^结果: [0-9]+/[0-9]+ passed" "$TMP_CHECK_DIR/studio-browser.log" | tail -1 || true)
+[ -n "$RESULT_LINE" ] || {
+  cat "$TMP_CHECK_DIR/studio-browser.log"; fail "功能测试缺少结果汇总"
+}
+ok "  $RESULT_LINE  ($STUDIO_BROWSER_TEST)"
 
 PERF_OUTPUT=$(run_python_with_websocket "$ROOT/tests/browser/test_large_project_performance.py") || {
   echo "$PERF_OUTPUT"; fail "大项目性能测试失败"
@@ -104,7 +100,7 @@ PERF_METRICS=$(echo "$PERF_OUTPUT" | grep '^Metrics:' | tail -1 || true)
 ok "  12 条轨迹 / 21.6 万点真实 Chrome 性能通过"
 [ -z "$PERF_METRICS" ] || echo "    ${PERF_METRICS#Metrics: }"
 
-PWA_OUTPUT=$(HTM_PWA_DIST="$ROOT/.vite-build" run_python_with_websocket "$ROOT/tests/browser/test_pwa.py") || {
+PWA_OUTPUT=$(HTM_PWA_DIST="$ROOT/.vite-build" run_python_with_websocket "$ROOT/tests/browser/test_pwa_offline.py") || {
   echo "$PWA_OUTPUT"; fail "PWA 离线启动测试失败"
 }
 echo "$PWA_OUTPUT" | grep -q "结果: 2/2 passed" || {
@@ -114,7 +110,7 @@ ok "  PWA 在线安装与离线重开通过"
 
 # Phase 6: end-to-end suite against the same temporary artifact.
 skip "Phase 6 · 端到端测试"
-run_python_with_websocket tests/e2e/run_all.py > "$TMP_CHECK_DIR/e2e.log" 2>&1 || {
+run_python_with_websocket tests/e2e/test_end_to_end.py > "$TMP_CHECK_DIR/e2e.log" 2>&1 || {
   cat "$TMP_CHECK_DIR/e2e.log"; fail "端到端测试失败"
 }
 E2E_LINE=$(grep -E "^结果: [0-9]+/[0-9]+ passed" "$TMP_CHECK_DIR/e2e.log" | tail -1 || true)

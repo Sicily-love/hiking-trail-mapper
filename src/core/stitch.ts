@@ -1,5 +1,5 @@
 import { haversine, nearestPointIndex } from './geo.ts';
-import { computeSegmentedTrackMetrics } from './trackSegments.ts';
+import { computeSegmentedTrackMetrics } from './track-segments.ts';
 import type { TrackTuple } from './types.ts';
 
 export interface StitchWaypoint {

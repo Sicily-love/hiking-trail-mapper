@@ -4,7 +4,7 @@ import {
   parseProjectArchive,
   type ProjectArchive,
   type ProjectArchiveTrail,
-} from '../../core/projectArchive.ts';
+} from '../../core/project-archive.ts';
 import { applyProjectArchive } from '../project/archive-controller.ts';
 
 export type ProjectHistoryEvent =

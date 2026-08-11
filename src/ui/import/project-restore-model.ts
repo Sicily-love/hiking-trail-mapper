@@ -2,7 +2,7 @@ import {
   summarizeProjectArchive,
   type ProjectArchive,
   type ProjectArchiveTrail,
-} from '../../core/projectArchive.ts';
+} from '../../core/project-archive.ts';
 import type {ContentDialogOptions} from '../dialog/content-model.ts';
 import type {ProjectRuntimeLanguage} from '../../features/project/runtime.ts';
 

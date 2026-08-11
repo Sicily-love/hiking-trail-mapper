@@ -79,17 +79,20 @@ T('rejects stale anchors, blank names, and non-primary trails', () => {
   assert.strictEqual(effects.revision, 0);
 });
 
-T('direct runtime delegates waypoint state and mutation to the controller', () => {
-  const source = read('src/app/runtime/studio.ts');
-  const interaction = source.slice(source.indexOf('const waypointController'));
-  assert.match(interaction, /createWaypointController\(runtimeContext/);
-  assert.match(interaction, /const addWaypointState = waypointController\.state/);
-  assert.match(interaction, /waypointController\.addManualWaypoint/);
-  assert.match(interaction, /studioDialogs\.openCustom/);
-  assert.match(interaction, /waypointController\.enter/);
-  assert.match(interaction, /waypointController\.exit/);
+T('typed waypoint runtime owns dialogs and interaction while studio only composes it', () => {
+  const studio = read('src/app/runtime/studio.ts');
+  const interaction = read('src/features/waypoint/runtime-owner.ts');
+  assert.match(studio, /createWaypointRuntime\(\{/);
+  assert.match(studio, /const waypointController = waypointRuntime\.controller/);
+  assert.doesNotMatch(studio, /manual-waypoint-name/);
+  assert.doesNotMatch(studio, /map\.on\('contextmenu'/);
+  assert.match(interaction, /createWaypointController\(context/);
+  assert.match(interaction, /controller\.addManualWaypoint/);
+  assert.match(interaction, /dialogs\.openCustom/);
+  assert.match(interaction, /controller\.enter/);
+  assert.match(interaction, /controller\.exit/);
   assert.doesNotMatch(interaction, /main\.waypoints\.push\(/);
-  assert.doesNotMatch(interaction, /addWaypointState\.(?:active|trailId)\s*=/);
+  assert.doesNotMatch(interaction, /controller\.state\.(?:active|trailId)\s*=/);
 });
 
 console.log('\n══════════════════════════════════════════════════');

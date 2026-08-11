@@ -57,7 +57,8 @@ def main() -> int:
     build_path = ROOT / "scripts" / "build" / "build_release.mjs"
     sync_path = ROOT / "scripts" / "release" / "sync_release.sh"
     bump_path = ROOT / "scripts" / "release" / "bump_version.mjs"
-    full_check_path = ROOT / "tests" / "run_full_check.sh"
+    full_check_path = ROOT / "tests" / "run_full_test_suite.sh"
+    unit_runner_path = ROOT / "tests" / "unit" / "run_unit_tests.mjs"
     workflow_path = ROOT / ".github" / "workflows" / "pages.yml"
 
     source_html = read_text(source_html_path)
@@ -75,6 +76,7 @@ def main() -> int:
     sync_script = read_text(sync_path)
     bump_script = read_text(bump_path)
     full_check = read_text(full_check_path)
+    unit_runner = read_text(unit_runner_path)
     workflow = read_text(workflow_path) if workflow_path.exists() else ""
     gitignore_entries = set(read_text(ROOT / ".gitignore").splitlines())
 
@@ -94,10 +96,11 @@ def main() -> int:
         r"BUILD_DATE:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", release_html
     )
     readme_version = extract(
-        r"(?m)^版本：\s*(v[0-9]+\.[0-9]+\.[0-9]+)", read_text(ROOT / "README.md")
+        r"img\.shields\.io/badge/version-(v[0-9]+\.[0-9]+\.[0-9]+)-blue",
+        read_text(ROOT / "README.md"),
     )
     readme_en_version = extract(
-        r"(?m)^Version:\s*(v[0-9]+\.[0-9]+\.[0-9]+)",
+        r"img\.shields\.io/badge/version-(v[0-9]+\.[0-9]+\.[0-9]+)-blue",
         read_text(ROOT / "README.en.md"),
     )
     changelog_version = extract(
@@ -181,6 +184,12 @@ def main() -> int:
         == "node scripts/build/build_release.mjs --check --outDir .vite-build",
     )
     runner.check("dev opens the sole Vite HTML", "/dev.html" not in scripts.get("dev", ""))
+    runner.check(
+        "test:unit uses the auto-discovery runner",
+        scripts.get("test:unit") == "node tests/unit/run_unit_tests.mjs"
+        and "readdirSync" in unit_runner
+        and "^test_.*\\.js$" in unit_runner,
+    )
     for test_name in (
         "test_performance_core.js",
         "test_interaction_manager.js",
@@ -188,7 +197,7 @@ def main() -> int:
         "test_command_dialog.js",
         "test_ui_contract.js",
     ):
-        runner.check(f"test:unit includes {test_name}", test_name in scripts.get("test:unit", ""))
+        runner.check(f"unit suite exists: {test_name}", (ROOT / "tests" / "unit" / test_name).exists())
 
     runner.check("vite.config.mts exists", vite_path.exists())
     runner.check("vite.config.ts absent", not (ROOT / "vite.config.ts").exists())
@@ -231,7 +240,7 @@ def main() -> int:
         and "link.id = 'version-tag-link'" in version_badge
         and "link.textContent = version" in version_badge,
     )
-    runner.check("browser tests are grouped", (ROOT / "tests/browser/test_v1_31.py").exists())
+    runner.check("browser tests are grouped", (ROOT / "tests/browser/test_studio_browser.py").exists())
     runner.check("release HTML remains tracked", "hiking-trail-mapper.html" not in gitignore_entries)
     for entry in ("node_modules/", "dist/", ".vite-build/"):
         runner.check(f".gitignore contains {entry}", entry in gitignore_entries)

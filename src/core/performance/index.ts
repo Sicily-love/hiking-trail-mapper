@@ -23,7 +23,7 @@ export type { NumericAccessor } from './downsample.ts';
 export {
   planKeyedWaypointDiff,
   planWaypointDiff,
-} from './waypointDiff.ts';
+} from './waypoint-diff.ts';
 
 export type {
   KeyedWaypoint,
@@ -35,18 +35,18 @@ export type {
   WaypointEquality,
   WaypointKey,
   WaypointKeySelector,
-} from './waypointDiff.ts';
+} from './waypoint-diff.ts';
 
 export {
   createTrackRevision,
   createTrackSignature,
   nextTrackRevision,
-} from './trackRevision.ts';
+} from './track-revision.ts';
 
 export type {
   TrackRevision,
   TrackRevisionResult,
-} from './trackRevision.ts';
+} from './track-revision.ts';
 
 export {
   interactionHitTargetSize,

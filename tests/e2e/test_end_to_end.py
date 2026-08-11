@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-端到端测试 · 徒步路线地图 v1.19.0
+端到端测试 · Outdoor Route Studio
 
 覆盖 14 大场景（E1-E14），每次大改动前后都要跑一遍。
 
 运行：
-    uv run --with websocket-client python tests/e2e/run_all.py
+    uv run --with websocket-client python tests/e2e/test_end_to_end.py
 
 依赖：
     - google-chrome / chromium
@@ -21,7 +21,7 @@ from pathlib import Path
 # ═══════════════════════════════════════════════════════════════
 ROOT = Path(__file__).resolve().parents[2]  # → github-release/hiking-trail-mapper
 HTML = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
-SAMPLE_KML = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
+SAMPLE_KML = ROOT / "examples/sample-trails/route-variant-simplified.kml"
 
 assert HTML.exists(), f"未找到 HTML: {HTML}"
 assert SAMPLE_KML.exists(), f"未找到样本 KML: {SAMPLE_KML}"

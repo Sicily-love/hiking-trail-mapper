@@ -1,5 +1,5 @@
 import type {DialogController} from '../dialog/controller.ts';
-import type {ProjectArchiveTrail} from '../../core/projectArchive.ts';
+import type {ProjectArchiveTrail} from '../../core/project-archive.ts';
 import type {createProjectArchiveController} from '../../features/project/archive-controller.ts';
 import type {ProjectRuntimeLanguage} from '../../features/project/runtime.ts';
 import {buildProjectRestorePreview} from './project-restore-model.ts';

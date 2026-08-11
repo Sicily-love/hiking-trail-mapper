@@ -9,9 +9,9 @@ import {
   type ProjectArchive,
   type ProjectArchiveParseResult,
   type ProjectArchiveTrail,
-} from '../../core/projectArchive.ts';
+} from '../../core/project-archive.ts';
 import { sanitizeExportFilename } from '../../core/export.ts';
-import { rebuildProjectDerivedData } from '../../core/projectDerivations.ts';
+import { rebuildProjectDerivedData } from '../../core/project-derivations.ts';
 import type {ProjectMutationReason} from '../../app/project-store.ts';
 
 export type ProjectArchiveEvent =

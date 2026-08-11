@@ -16,7 +16,7 @@ import websocket
 
 ROOT = Path(__file__).resolve().parents[2]
 HTML = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
-SAMPLE = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
+SAMPLE = ROOT / "examples/sample-trails/route-variant-simplified.kml"
 OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.gettempdir()) / "outdoor-route-studio"
 
 

@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 ./scripts/release/sync_release.sh
-./tests/run_full_check.sh
+./tests/run_full_test_suite.sh
 npm run build
 
 node - "$ROOT/dist" <<'NODE'

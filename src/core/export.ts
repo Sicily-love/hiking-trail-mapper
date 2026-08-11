@@ -1,4 +1,4 @@
-import { computeSegmentedTrackMetrics, normalizeTrackBreaks, splitTrackByBreaks } from './trackSegments.ts';
+import { computeSegmentedTrackMetrics, normalizeTrackBreaks, splitTrackByBreaks } from './track-segments.ts';
 import type { TrackTuple } from './types.ts';
 
 export interface ExportWaypoint {

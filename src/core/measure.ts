@@ -1,6 +1,6 @@
 import { accumulatorAscent, accumulatorDescent } from './elevation.ts';
 import { haversine } from './geo.ts';
-import { normalizeTrackBreaks } from './trackSegments.ts';
+import { normalizeTrackBreaks } from './track-segments.ts';
 import type {
   MeasureEndpointLabel,
   MeasureEndpointStateResult,

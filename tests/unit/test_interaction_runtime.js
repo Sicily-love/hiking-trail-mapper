@@ -10,6 +10,7 @@ const runtime = [
   read('src/app/runtime/interaction-owner.ts'),
   read('src/ui/sidebar/runtime-owner.ts'),
   read('src/features/stitch/runtime-owner.ts'),
+  read('src/features/waypoint/runtime-owner.ts'),
 ].join('\n');
 const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const segmentController = fs.readFileSync(path.join(root, 'src/features/segment/controller.ts'), 'utf8');
@@ -38,20 +39,19 @@ test('all six modes activate owner-bound sessions', () => {
   for(const [kind, phase] of [
     ['measure', 'select-a'],
     ['segment', 'editing'],
-    ['waypoint', 'select'],
     ['escape', 'select-a'],
     ['stitch', 'editing'],
     ['day-preview', 'preview'],
   ]) {
     assert.ok(runtime.includes(`beginRuntimeInteraction('${kind}', '${phase}'`), `${kind}:${phase}`);
   }
+  assert.ok(runtime.includes("beginInteraction('waypoint', 'select'"), 'waypoint:select');
 });
 
 test('the original five cleanup paths cancel through the manager', () => {
   for(const [kind, functionName] of [
     ['measure', 'measureExit'],
     ['segment', 'segmentExit'],
-    ['waypoint', 'exitAddWaypointMode'],
     ['escape', 'addEscapeExit'],
     ['day-preview', 'clearDaySegmentPreview'],
   ]) {
@@ -60,6 +60,8 @@ test('the original five cleanup paths cancel through the manager', () => {
     const body = runtime.slice(start, start + 500);
     assert.ok(body.includes(`cancelRuntimeInteraction('${kind}'`), `${functionName} -> ${kind}`);
   }
+  const waypointExit = runtime.slice(runtime.indexOf('function exitAddWaypointMode('));
+  assert.ok(waypointExit.slice(0, 500).includes("cancelInteraction('waypoint'"));
 });
 
 test('stitch cleanup exits through its owner-bound session', () => {
@@ -113,8 +115,8 @@ test('Escape dispatches the cancel command while open dialogs retain priority', 
 test('waypoint quick actions also use transient sessions', () => {
   assert.ok(runtime.includes('function dispatchTransientWaypointTap('));
   assert.ok(runtime.includes("source, latlng, requireNear:false, transient:true"));
-  assert.ok(runtime.includes("dispatchTransientWaypointTap(e.latlng, 'contextmenu')"));
-  assert.ok(runtime.includes("dispatchTransientWaypointTap(ll, 'long-press')"));
+  assert.match(runtime, /dispatchTransientWaypointTap\([^,]+\.latlng, 'contextmenu'\)/);
+  assert.match(runtime, /dispatchTransientWaypointTap\(map\.containerPointToLatLng\([^)]*\), 'long-press'\)/);
 });
 
 test('Day preview replaces other modes instead of keeping manual conflict checks', () => {

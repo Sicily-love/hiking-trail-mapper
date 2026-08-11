@@ -1,28 +1,70 @@
 <div align="center">
 
-<p><a href="README.md">中文</a> | <a href="README.en.md">English</a></p>
+# Outdoor Route Studio
 
-<h1>Outdoor Route Studio</h1>
+**面向徒步路线的离线优先 KML 工作台**
 
-**单文件 KML 户外路线工作台 · 导入、对比、测距、分段与导出**
+[English](README.en.md) · [在线使用](https://sicily-love.github.io/hiking-trail-mapper/) · [功能说明](docs/FEATURES.md)
+
+![version](https://img.shields.io/badge/version-v2.3.1-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
+![license](https://img.shields.io/badge/license-MIT-green)
 
 </div>
 
-Outdoor Route Studio 是一个地图优先的 KML 路线查看与整理工具。应用实现只维护在 `src/`：根目录 `index.html` 是加载 `src/main.ts` 的 Vite 小壳，Vite 再把完整模块图生成并内联为可离线打开的单 HTML 发布物。
+Outdoor Route Studio 用于查看、比较和规划徒步轨迹。它可以叠加多条 KML 路线，规划每日行程，测量局部路段，管理标注与下撤方案，并导出路线或完整项目备份。
 
-## 快速开始
+项目只维护一套 TypeScript 源码。发布时由 Vite 同时生成 GitHub Pages 站点和可直接离线打开的单 HTML 文件。
 
-直接使用仓库中的生成发布物：
+## 使用方式
 
-```bash
-open hiking-trail-mapper.html
-```
+### 在线版
 
-`hiking-trail-mapper.html` 可通过 `file://` 直接打开；除在线地图瓦片外，应用代码、样式、Leaflet 和压缩库都已内联。根目录 `index.html` 是源码入口壳，应通过 Vite 使用，不是离线发布文件。
+打开 [GitHub Pages](https://sicily-love.github.io/hiking-trail-mapper/)。Android 和桌面 Chrome 可以将其安装为 PWA，安装后断网仍能启动应用。
 
-GitHub Pages 版本同时提供可安装 PWA：首次在线打开后，可从浏览器菜单安装到 Android 或桌面，并在断网时重新启动完整工作台。轨迹、行程与工作区缓存仍保存在浏览器 IndexedDB 中；卫星底图来自在线服务，未访问过的地图区域在离线状态下不会显示。直接下载单个 `hiking-trail-mapper.html` 仍可离线使用，但不包含 PWA 安装与自动更新能力。
+### 单文件版
 
-本地开发：
+下载并打开 [`hiking-trail-mapper.html`](hiking-trail-mapper.html)。应用代码、样式和运行库均已内联，不需要安装 Node.js，也不需要本地服务器。
+
+### 导入轨迹
+
+选择“添加轨迹”，或把文件拖入地图：
+
+- `.kml`：可一次导入多个文件。
+- `.zip` / `.kml.zip`：自动提取其中的 KML。
+- `.ors-project.json`：恢复完整项目备份。
+
+当前不直接解析 GPX 或 GeoJSON，需要先转换为 KML。
+
+## 主要功能
+
+| 功能 | 说明 |
+|---|---|
+| 轨迹组 | 按项目或路线方案组织多条轨迹，设置主轨迹并控制叠加显示 |
+| 测距 | 在主轨迹上选择和拖动 A/B 点，查看沿迹距离、爬升、下降和海拔剖面 |
+| 行程规划 | 拖动分段边界，生成每日距离、爬升、下降、最高/最低海拔和营地信息 |
+| 标注点 | 在主轨迹附近添加类型、名称、描述和可选图片 |
+| 下撤方案 | 从主轨迹或同组其他轨迹选择局部路段，并关联一个或多个 Day |
+| 轨迹拼接 | 裁剪、反向、排序并拼接多个轨迹片段；断点不计算虚构里程或高差 |
+| 撤销与重做 | 覆盖轨迹、分段、标注、下撤和拼接等持久修改 |
+| 导出 | 导出单轨 KML、分组 ZIP、行程 Markdown 或完整项目备份 |
+
+详细操作见 [功能说明](docs/FEATURES.md)。
+
+## 离线与数据
+
+| 项目 | 离线情况 |
+|---|---|
+| 应用界面与路线工具 | PWA 安装后或单 HTML 可离线使用 |
+| 已导入轨迹、行程和设置 | 保存在当前浏览器 IndexedDB 中 |
+| 卫星底图 | 需要网络；未加载过的区域离线时不会显示 |
+| 完整项目迁移 | 使用“导出 → 完整项目备份”生成 `.ors-project.json` |
+
+应用不会把轨迹上传到项目服务器。清理浏览器数据、换浏览器或换设备前，应先导出完整项目备份。KML/ZIP 适合与其他地图软件交换路线，但不包含全部工作区状态。
+
+## 本地开发
+
+需要 Node.js 24 或当前 GitHub Actions 使用的兼容版本。
 
 ```bash
 git clone https://github.com/Sicily-love/hiking-trail-mapper.git
@@ -31,140 +73,48 @@ npm ci
 npm run dev
 ```
 
-导入路线：
-
-- 选择“添加轨迹”，导入一个或多个 `.kml` 文件。
-- 也可导入 `.zip` / `.kml.zip`，应用会提取其中的 KML 并跳过 macOS 元数据文件。
-- 支持把文件直接拖入工作区。
-- 新添加或拼接生成的轨迹统一进入“默认”轨迹组，之后可在轨迹详情中移动分组。
-
-## 核心能力
-
-| 场景 | 能力 |
-|------|------|
-| 多路线对比 | 叠加多条路线，突出当前分组的主轨迹并弱化辅助轨迹 |
-| 每日行程规划 | 按天分段，生成每日距离、爬升、下降、海拔和营地信息 |
-| 路段检查 | 在主轨迹上选择 A/B 点，计算沿迹距离、爬升、下降并查看路段海拔 |
-| 标注管理 | 在主轨迹选点，选择图标与类型、填写描述并添加可选图片，也可筛选和改名 |
-| 下撤方案 | 切换同组依据轨迹并选择 A/B 路段，方案归档到主轨迹行程中 |
-| 轨迹拼接 | 从零多选来源轨迹，在地图中裁剪、反向和排序多个片段；断点不产生虚构里程或高差 |
-| 安全编辑 | “编辑”菜单提供全局撤销/重做，覆盖轨迹、分段、标注、下撤和拼接等持久修改 |
-| 数据迁移 | 将当前分组导出为 KML ZIP、将行程导出为 Markdown，或用版本化项目文件完整迁移轨迹与工作区 |
-
-完整交互说明见 [功能说明](docs/FEATURES.md)，实现边界见 [架构说明](docs/ARCHITECTURE.md)。
-
-## Workbench
-
-Workbench 使用同一组命令语义适配不同屏幕：
-
-- 桌面端和移动端均保留轨迹组、轨迹、行程三个明确入口，地图模式在活动栏最前方独立切换。
-- 路线库与主轨迹摘要位于轨迹页，保存的下撤方案直接归入行程页。
-- 底部区域专注海拔分析；测距操作临时嵌入海拔区，分段使用独立编辑面板。
-- 命令状态、键盘/指针交互、渲染刷新和模态对话框分别由专门的管理器协调，避免 DOM 事件各自维护一套状态。
-
-## 数据与隐私
-
-轨迹、标注和分组状态保存在当前浏览器的 IndexedDB 中，不会上传到应用服务器。清除浏览器数据、更换浏览器或设备前，请使用“导出 → 完整项目备份”生成 `.ors-project.json`；恢复时应用会验证格式与 `schemaVersion`，自动迁移旧 schema，并在替换失败时回到恢复前快照。KML ZIP 更适合与其他地图软件交换路线，不包含全部工作区状态。
-
-## 工程结构
-
-当前入口链路是：
-
-```text
-index.html
-  -> src/main.ts
-  -> bootstrapOutdoorRouteStudio()
-  -> mountAppShell()
-  -> vendor side-effect modules
-  -> startStudioRuntime({ document, commands, dialogs })
-  -> typed core / feature controllers / adapters
-```
-
-- `index.html` 只保留元信息、`#app` 和 `/src/main.ts`，不承载业务实现。
-- `src/app/bootstrap.ts` 挂载 Workbench DOM，通过 Vite 模块图加载 vendor，并显式启动 Studio runtime；业务代码不再通过字符串脚本执行。
-- `src/core` 负责无 DOM 的计算、解析、版本化项目归档、数据转换和渲染模型。
-- `src/app` 与 `src/features` 负责状态和交互编排；工作区状态和项目数据分别由 `AppStateStore`、`ProjectStore` 持有，写入走 typed action、读取走 selector；轨迹拼接与海拔 Canvas 已有独立 feature owner；`src/adapters` 隔离 Leaflet、IndexedDB、ZIP、Blob 与浏览器文件保存；`src/ui` 负责 Workbench、侧栏/导入 owner 与对话框。
-- `InteractionManager` 保证测距、分段、标注、下撤、轨迹拼接和 Day 预览等交互互斥。
-- `RenderScheduler` 通过 dirty mask 合并轨迹、标注、侧栏、行程、图例、海拔图和 fit 刷新；海拔图按像素 min/max 降采样，轨迹按最多 40 个色带绘制，Marker 使用稳定 key 差异更新，连续复位只有最后一次生效。
-- `CommandRegistry` 统一顶部菜单、桌面/移动活动栏、底部分析栏、撤销/重做和快捷键；`DialogController` 已替换全部原生 `alert/prompt/confirm`，统一焦点恢复和危险确认。
-
-`v2.0.0` 删除了 classic 启动桥；当前进一步把 `studio.ts` 从约 6200 行压到约 2950 行。KML 项目构建、复位/fit、侧栏/行程、导入、轨迹拼接、地图悬浮信息和海拔 Canvas 已有独立 owner，全部 TypeScript 源码通过严格检查且不再使用 `@ts-nocheck`。主 runtime 与 typed feature 只通过 project/state actions 和 selectors 交换数据。仅真实浏览器测试通过 `?studio-test=1` 启用深只读 inspector，测试写入走专用 `testDriver`；正常发布不暴露业务 globals。
-
-## 开发与测试
+常用命令：
 
 ```bash
-npm run test:unit
-npm run typecheck
-npm run build
-./tests/run_full_check.sh
+npm run typecheck          # TypeScript 严格检查
+npm run test:unit          # 全部 Node 单元测试
+npm run build              # 生成 dist/ 和单文件发布物
+npm run test:full          # 完整发布验证
 npm run test:visual:capture
 ```
 
-完整测试默认包含真实 Chrome 功能、12 条轨迹 / 21.6 万点性能基准、PWA 离线重开、端到端和视觉布局回归；`test:visual:capture` 可单独生成截图，便于人工检查具体界面状态。
+`npm run test:full` 会运行构建、单元测试、静态检查、真实 Chrome 功能测试、21.6 万点性能测试、PWA 离线重开、端到端测试和响应式截图回归。
 
-`npm run build` 以小壳 `index.html` 为 Vite 入口，将 JavaScript 和 CSS 内联到 `dist/index.html`，并生成兼容别名 `dist/hiking-trail-mapper.html`、`dist/release.json`、PWA 清单、Service Worker 与应用图标。两个 HTML 名称指向同一份自包含发布内容，不是两套源码。
-
-`npm run release:prepare` 用于正式发布：同步生成物、运行完整验证、构建单文件并检查发布元数据。详细命令与分层见 [测试指南](docs/TESTING.md) 和 [贡献指南](docs/CONTRIBUTING.md)。
-
-## 里程碑
-
-| 里程碑 | 状态 | 结果 |
-|--------|------|------|
-| Milestone 1：测试护栏 | 完成 | 单元、静态、真实 Chrome、E2E、视觉和发布检查形成完整验证链 |
-| Milestone 2：工程骨架 | 完成 | Vite、TypeScript、`src/` 和类型检查进入日常开发 |
-| Milestone 3：核心模块化 | 完成 | 核心计算、KML、存储、测距、分段和海拔模型以 TypeScript 为真源 |
-| Milestone 4：UI 系统化 | 完成 | Workbench 统一桌面、移动、侧栏、底栏、海拔坞和 bottom sheet |
-| Milestone 5：发布链路 | 完成 | Vite 单文件构建、发布元数据、完整检查和 GitHub Pages 部署固定 |
-| Milestone 6：Architecture & UX 2.0 | 完成 | 删除 classic bridge/composer，直接模块启动、统一 manager、Workbench 和单 HTML 发布链收口 |
-
-Milestone 6 已完成 Architecture 2.0 基线：生产启动链中不存在 runtime 字符串注入、fragment composer 或双执行路径。后续迭代以 typed feature、性能与新格式支持为主，不再调整整体启动架构。
-
-## GPX / GeoJSON
-
-当前只直接解析 KML。GPX 可先转换：
-
-```bash
-ogr2ogr -f KML output.kml input.gpx
-```
-
-未来如原生支持 GPX / GeoJSON，应在 `src/core` 中归一为现有导入模型，让存储、测距、分段和渲染不感知源格式。
-
-## 版本策略
-
-版本：v2.3.0
-
-- `PATCH`：修复、文档、测试、兼容性和小型交互优化。
-- `MINOR`：新增用户可见能力、数据字段或主要工作流。
-- `MAJOR`：不兼容的数据迁移或导出格式变化。
-
-使用 `npm run version:bump` 统一更新发布元数据，不手工散改版本戳。
-
-## 目录
+## 代码结构
 
 ```text
-hiking-trail-mapper/
-├── index.html                    Vite 小壳源码入口
-├── hiking-trail-mapper.html      自动生成的离线单文件发布物
-├── src/
-│   ├── main.ts                   浏览器模块入口
-│   ├── app/                      bootstrap、状态、命令、交互与渲染协调
-│   ├── core/                     无 DOM 的计算与数据模型
-│   ├── features/                 功能 controller
-│   ├── adapters/                 Leaflet / IndexedDB 边界
-│   ├── ui/                       Workbench、布局与对话框
-│   ├── styles/                   全局与 vendor 样式入口
-│   └── vendor/                   构建时内联的浏览器依赖
-├── scripts/                      build、release 与 maintenance 工具
-├── public/                       PWA 清单、Service Worker 与应用图标
-├── tests/                        unit、browser、e2e 与 visual
-├── docs/                         中英文功能、架构、测试和贡献说明
-├── dist/                         Vite 生成的 Pages 发布目录
-└── .github/workflows/pages.yml   验证并部署 GitHub Pages
+src/
+├── app/          启动、状态、命令、交互和渲染调度
+├── core/         不依赖 DOM 的计算、解析和数据模型
+├── features/     测距、分段、标注、行程、下撤等功能 owner
+├── adapters/     Leaflet、IndexedDB、文件和浏览器边界
+├── ui/           Workbench 布局、侧栏、面板和对话框
+├── styles/       组件、布局和主题
+└── vendor/       构建时内联的第三方浏览器库
 ```
 
-## 部署
+入口链路为 `index.html → src/main.ts → bootstrap → studio runtime → typed feature/controller`。`src/app/runtime/studio.ts` 只负责跨功能装配；业务写入通过 typed actions，读取通过 selectors。生产环境不存在 classic bridge、字符串脚本执行或第二套 HTML 业务实现。
 
-`.github/workflows/pages.yml` 在 pull request 上验证，在 `main` 推送时运行 `npm run release:prepare`、上传 `dist/` 并部署 GitHub Pages。Pages 入口是构建后的自包含 `dist/index.html`，并由同目录 Service Worker 提供应用壳离线启动；根目录小壳不直接作为部署产物。
+进一步阅读：
+
+- [架构说明](docs/ARCHITECTURE.md)
+- [测试说明](docs/TESTING.md)
+- [贡献指南](docs/CONTRIBUTING.md)
+- [示例轨迹](examples/README.md)
+
+## 发布
+
+- 当前版本：v2.3.1
+- `PATCH`：修复、兼容性、文档和小型交互优化。
+- `MINOR`：新增用户可见功能或数据格式。
+- `MAJOR`：不兼容的数据或导出格式变化。
+
+`npm run version:bump` 统一更新版本和中英文 CHANGELOG。`.github/workflows/pages.yml` 是唯一 Pages 发布链；仓库 Pages Source 使用 **GitHub Actions**。
 
 ## License
 

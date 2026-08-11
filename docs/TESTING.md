@@ -10,14 +10,14 @@
 npm run test:unit
 npm run typecheck
 npm run build
-./tests/run_full_check.sh
+./tests/run_full_test_suite.sh
 npm run test:visual:capture
 ```
 
 - `npm run test:unit`：快速 Node 契约测试。
 - `npm run typecheck`：TypeScript 边界。
 - `npm run build`：从小壳和 `src/` 生成自包含发布物。
-- `./tests/run_full_check.sh`：发布前完整检查。
+- `./tests/run_full_test_suite.sh`：发布前完整检查。
 - `npm run test:visual:capture`：真实 KML、桌面/移动断点和交互状态截图。
 
 视觉与真实 Chrome 检查需要本机可启动浏览器；受限沙箱可能无法运行这部分。正式发布不能因为浏览器环境缺失而把它们视为通过。
@@ -32,7 +32,7 @@ npm run test:visual:capture
 
 ## 完整检查
 
-`tests/run_full_check.sh` 是本地和发布准备的统一入口，按以下层次验证：
+`tests/run_full_test_suite.sh` 是本地和发布准备的统一入口，按以下层次验证：
 
 ### Phase 1：TypeScript 与 Vite 临时发布
 
@@ -83,7 +83,7 @@ npm run check:generated
 | `test_lightbox_controller.js` / `test_primary_mini_controller.js` / `test_map_inspection.js` | 图片缩放与监听器清理、主轨迹浮卡边界/持久化、轨迹点 Marker 生命周期 |
 | `test_vite_entry.js` | 小壳、`main.ts`、`bootstrap.ts`、direct runtime 与单文件构建 |
 | `test_release_pipeline.js` | 构建重现、release metadata、版本工具和 GitHub Pages workflow |
-| `verify_alignment.js` | 生成发布物使用 `src/core` 行为且没有恢复重复 core fallback |
+| `test_release_alignment.js` | 生成发布物使用 `src/core` 行为且没有恢复重复 core fallback |
 
 所有 Node 单元测试直接导入 `src/core/index.ts`，不再保留测试镜像或兼容导入桥。
 
@@ -101,7 +101,7 @@ npm run check:generated
 
 ### Phase 4：静态浏览器契约
 
-`tests/browser/test_skill.py` 读取小壳和生成发布物，至少验证：
+`tests/browser/test_static_release.py` 读取小壳和生成发布物，至少验证：
 
 - `#app`、地图、路线侧栏、海拔坞、工具面板和 dialog 所需 DOM；
 - 中英文 i18n key 对齐；
@@ -111,7 +111,7 @@ npm run check:generated
 
 ### Phase 5：真实 Chrome 功能
 
-`tests/browser/test_v1_31.py` 在真实浏览器中检查启动、导入、DOM 更新和核心交互。随后 `test_large_project_performance.py` 加载 12 条轨迹、21.6 万点和 96 个标注，验证首帧合并、Leaflet 图层上限、Marker 稳定复用、海拔降采样、复位耗时和堆内存保护。Milestone 6 相关断言应等待 `window.__OUTDOOR_ROUTE_STUDIO__.ready`，避免把启动中的中间状态当作失败。
+`tests/browser/test_studio_browser.py` 在真实浏览器中检查启动、导入、DOM 更新和核心交互。随后 `test_large_project_performance.py` 加载 12 条轨迹、21.6 万点和 96 个标注，验证首帧合并、Leaflet 图层上限、Marker 稳定复用、海拔降采样、复位耗时和堆内存保护。相关断言应等待 `window.__OUTDOOR_ROUTE_STUDIO__.ready`，避免把启动中的中间状态当作失败。
 
 重点覆盖：
 
@@ -127,7 +127,7 @@ npm run check:generated
 
 ### Phase 6：端到端流程
 
-`tests/e2e/run_all.py` 覆盖空工作区、KML/ZIP 导入、去重、分组与主轨迹、批量移动、反向、删除、waypoint 筛选、Day/测距/分段、IndexedDB、完整项目归档往返、i18n、导出和 `file://`。
+`tests/e2e/test_end_to_end.py` 覆盖空工作区、KML/ZIP 导入、去重、分组与主轨迹、批量移动、反向、删除、waypoint 筛选、Day/测距/分段、IndexedDB、完整项目归档往返、i18n、导出和 `file://`。
 
 E2E 以用户结果为准，不直接依赖 manager 私有字段。manager 内部细节由 Phase 2 测试保护。
 
@@ -203,12 +203,12 @@ node tests/unit/test_vite_entry.js
 # core 与生成物
 node tests/unit/test_measure_itinerary.js
 node tests/unit/test_storage_core.js
-node tests/unit/verify_alignment.js
+node tests/unit/test_release_alignment.js
 
 # 发布与浏览器
 python3 scripts/release/check_release_metadata.py
-python3 tests/browser/test_skill.py
-uv run --with websocket-client python3 tests/e2e/run_all.py
+python3 tests/browser/test_static_release.py
+uv run --with websocket-client python3 tests/e2e/test_end_to_end.py
 ```
 
 判断顺序：

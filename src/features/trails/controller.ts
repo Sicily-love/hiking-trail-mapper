@@ -1,5 +1,5 @@
 import type { RuntimeContext } from '../../app/runtime/context.ts';
-import { computeSegmentedTrackMetrics, normalizeTrackBreaks } from '../../core/trackSegments.ts';
+import { computeSegmentedTrackMetrics, normalizeTrackBreaks } from '../../core/track-segments.ts';
 
 export type MutableTrailPoint = [
   lat: number,

@@ -62,13 +62,16 @@ test('browser capabilities have one explicit module owner', () => {
   const sidebar = read('src/ui/sidebar/runtime-owner.ts');
   const importer = read('src/ui/import/runtime-owner.ts');
   const localization = read('src/features/localization/runtime-owner.ts');
+  const waypoint = read('src/features/waypoint/runtime-owner.ts');
   const workspace = read('src/features/map/workspace-controller.ts');
   const interaction = read('src/app/runtime/interaction-owner.ts');
   for(const functionName of [
     'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar',
     'measureEnter', 'addEscapeEnter',
-    'segmentEnter', 'addManualWaypointAt',
+    'segmentEnter',
   ]) assert.strictEqual((runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
+  assert.strictEqual((waypoint.match(/const addManualWaypointAt = async/g) || []).length, 1);
+  assert.strictEqual(runtimeSource.includes('function addManualWaypointAt('), false);
   assert.strictEqual((interaction.match(/export function createRuntimeInteractionOwner</g) || []).length, 1);
   assert.strictEqual((localization.match(/export function createLocalizationRuntime\(/g) || []).length, 1);
   assert.strictEqual(runtimeSource.includes('function setLang('), false);
@@ -84,6 +87,7 @@ test('browser capabilities have one explicit module owner', () => {
   assert.match(runtimeSource, /createWorkspaceController\(/);
   assert.match(runtimeSource, /createSidebarRuntime\(/);
   assert.match(runtimeSource, /createImportRuntime\(/);
+  assert.match(runtimeSource, /createWaypointRuntime\(/);
   const lightbox = read('src/ui/lightbox.ts');
   assert.match(runtimeSource, /createImageLightboxController\(/);
   assert.match(runtimeSource, /const openLightbox = .*lightboxController\.open/);

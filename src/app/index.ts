@@ -113,8 +113,8 @@ export {
   type ElevationCanvasDimensions,
   type ElevationCanvasRenderer,
 } from '../adapters/elevation-canvas.ts';
-export { executeIndexedDbOperation } from '../adapters/indexedDb.ts';
-export { openIndexedDbDatabase } from '../adapters/indexedDb.ts';
+export { executeIndexedDbOperation } from '../adapters/indexed-db.ts';
+export { openIndexedDbDatabase } from '../adapters/indexed-db.ts';
 export {
   createBrowserFileAdapter,
   createFileArchiveAdapter,
@@ -181,6 +181,11 @@ export {
   type WaypointTrackPoint,
   type WaypointTrail,
 } from '../features/waypoint/controller.ts';
+export {
+  createWaypointRuntime,
+  type WaypointRuntime,
+  type WaypointRuntimeDependencies,
+} from '../features/waypoint/runtime-owner.ts';
 export {
   CommandRegistry,
   STUDIO_COMMANDS,

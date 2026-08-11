@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TMPL = Path(os.environ.get("HTM_RELEASE_HTML", ROOT / "hiking-trail-mapper.html"))
-SAMPLE_KML = ROOT / "examples/sample-trails/格聂牧场+v线.kml"
+SAMPLE_KML = ROOT / "examples/sample-trails/route-variant-simplified.kml"
 EXPECTED_VERSION = re.search(
     r"STUDIO_VERSION = '(v\d+\.\d+\.\d+)'",
     (ROOT / "src/app/version.ts").read_text(encoding="utf-8"),
@@ -26,6 +26,7 @@ RUNTIME_SOURCE_FILES = [
     ROOT / "src/features/localization/runtime-owner.ts",
     ROOT / "src/features/map/workspace-controller.ts",
     ROOT / "src/features/elevation/runtime-owner.ts",
+    ROOT / "src/features/waypoint/runtime-owner.ts",
 ]
 RUNTIME_SOURCE = "\n".join(path.read_text(encoding="utf-8") for path in RUNTIME_SOURCE_FILES)
 
@@ -657,7 +658,7 @@ try:
             })()
           """))
     check("新增标注按钮进入一次性点选模式",
-          evalj("typeof HTM_APP.createWaypointController === 'function'") and source_has('function enterAddWaypointMode', 'crosshair', 'waypointController.addManualWaypoint'))
+          evalj("typeof HTM_APP.createWaypointController === 'function'") and source_has('function enterAddWaypointMode', 'crosshair', 'controller.addManualWaypoint'))
     check("海拔填充沿完整曲线路径绘制",
           evalj("""
             (() => {

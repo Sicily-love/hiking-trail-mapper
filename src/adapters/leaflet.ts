@@ -26,7 +26,7 @@ export function upsertLeafletPolyline(
   return line;
 }
 
-import { planKeyedWaypointDiff } from '../core/performance/waypointDiff.ts';
+import { planKeyedWaypointDiff } from '../core/performance/waypoint-diff.ts';
 import type { TrackPolylineRenderModel, TrackRenderModel } from '../features/map/render-model.ts';
 import type {
   TrackPointInspectionRenderModel,

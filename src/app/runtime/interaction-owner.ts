@@ -4,7 +4,7 @@ import type {
   InteractionOwner,
 } from '../interactions/types.ts';
 
-interface InteractionSessionLike {
+export interface InteractionSessionLike {
   readonly kind: string;
   readonly phase: string;
   readonly owner: InteractionOwner | null;
@@ -12,7 +12,9 @@ interface InteractionSessionLike {
   isCurrent(): boolean;
   setPhase(phase: string): boolean;
   dispatch(event: object): boolean;
+  cancel(reason?: InteractionCancelReason): boolean;
   frame(callback: (timestamp: number, session: InteractionSessionLike) => void): unknown;
+  delay(delayMs: number, callback: (session: InteractionSessionLike) => void): unknown;
 }
 
 interface InteractionManagerLike {
