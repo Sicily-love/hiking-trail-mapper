@@ -464,6 +464,38 @@ try:
     evaluate("""
       (() => {
         segmentExit();
+        addEscapeEnter();
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        const pointA = main.track[Math.floor(main.track.length * 0.22)];
+        const pointB = main.track[Math.floor(main.track.length * 0.64)];
+        dispatchRuntimeInteraction('escape', {type:'tap', latlng:{lat:pointA[0], lng:pointA[1]}});
+        dispatchRuntimeInteraction('escape', {type:'tap', latlng:{lat:pointB[0], lng:pointB[1]}});
+      })()
+    """)
+    time.sleep(0.6)
+    escape_state = evaluate("""
+      (() => {
+        const panel = document.getElementById('addescape-panel');
+        const rect = panel?.getBoundingClientRect();
+        const result = document.getElementById('addescape-result');
+        const buttons = [...(panel?.querySelectorAll('.escape-actions button') || [])];
+        return !!addEscapeState.active && !!addEscapeState._pending
+          && !!panel && getComputedStyle(panel).display !== 'none'
+          && !!result && getComputedStyle(result).display !== 'none'
+          && panel.scrollHeight <= panel.clientHeight + 1
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && buttons.length === 3;
+      })()
+    """)
+    hide_transient_ui()
+    wait_for_map_tiles()
+    escape_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-escape-plan.png").write_bytes(base64.b64decode(escape_shot["result"]["data"]))
+    evaluate("interactionManager.cancel('visual-regression')")
+
+    evaluate("""
+      (() => {
         enterAddWaypointMode({announce:false});
         const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
         const point = main.track[Math.floor(main.track.length * 0.35)];
@@ -722,6 +754,38 @@ try:
     evaluate("""
       (() => {
         toggleSidebar(false);
+        addEscapeEnter();
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        const pointA = main.track[Math.floor(main.track.length * 0.22)];
+        const pointB = main.track[Math.floor(main.track.length * 0.64)];
+        dispatchRuntimeInteraction('escape', {type:'tap', latlng:{lat:pointA[0], lng:pointA[1]}});
+        dispatchRuntimeInteraction('escape', {type:'tap', latlng:{lat:pointB[0], lng:pointB[1]}});
+        return true;
+      })()
+    """)
+    time.sleep(0.4)
+    mobile_escape_state = evaluate("""
+      (() => {
+        const panel = document.getElementById('addescape-panel');
+        const rect = panel?.getBoundingClientRect();
+        const buttons = [...(panel?.querySelectorAll('.escape-actions button') || [])];
+        return !!addEscapeState.active && !!addEscapeState._pending && !!rect
+          && rect.left >= 0 && rect.top >= 0
+          && rect.right <= innerWidth && rect.bottom <= innerHeight
+          && panel.scrollWidth <= panel.clientWidth
+          && buttons.length === 3
+          && buttons.every(button => {
+            const target = button.getBoundingClientRect();
+            return target.height >= 44 && button.scrollWidth <= button.clientWidth;
+          });
+      })()
+    """)
+    mobile_escape_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-escape-plan-mobile.png").write_bytes(base64.b64decode(mobile_escape_shot["result"]["data"]))
+    evaluate("interactionManager.cancel('visual-regression')")
+    time.sleep(0.1)
+    evaluate("""
+      (() => {
         window.__visualMobileDialogPromise = window.__OUTDOOR_ROUTE_STUDIO__?.dialogs.confirm({
           title:'Clear project?',
           message:'This removes every trail, waypoint, and itinerary from the current workspace.',
@@ -770,7 +834,7 @@ try:
         measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
     ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not waypoint_dialog_state or not waypoint_card_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
@@ -779,6 +843,8 @@ try:
             "day":bool(day_state),
             "measure":measure_state,
             "segment":bool(segment_state),
+            "escape":bool(escape_state),
+            "mobileEscape":bool(mobile_escape_state),
             "waypointDialog":bool(waypoint_dialog_state),
             "waypointCard":bool(waypoint_card_state),
             "dialog":bool(dialog_state),

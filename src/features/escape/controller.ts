@@ -27,7 +27,6 @@ export interface EscapeInteractionState {
   referenceTrailId: string | null;
   ptA: EscapeAnchorPoint | null;
   ptB: EscapeAnchorPoint | null;
-  layer: unknown;
   _pending: EscapeRoute | null;
 }
 
@@ -56,7 +55,7 @@ export interface EscapeController {
 }
 
 export function createEscapeInteractionState(): EscapeInteractionState {
-  return {active:false, trailId:null, referenceTrailId:null, ptA:null, ptB:null, layer:null, _pending:null};
+  return {active:false, trailId:null, referenceTrailId:null, ptA:null, ptB:null, _pending:null};
 }
 
 /** Owns escape-route interaction and project mutations without Leaflet or DOM access. */

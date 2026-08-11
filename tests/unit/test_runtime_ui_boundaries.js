@@ -75,6 +75,17 @@ const test = async (name, fn) => {
 (async () => {
   console.log('\nRuntime UI ownership boundaries');
 
+  await test('escape owner keeps planning DOM and Leaflet handles out of app state', () => {
+    const runtime = fs.readFileSync(path.join(root, 'src/app/runtime/studio.ts'), 'utf8');
+    const owner = fs.readFileSync(path.join(root, 'src/features/escape/runtime-owner.ts'), 'utf8');
+    const controller = fs.readFileSync(path.join(root, 'src/features/escape/controller.ts'), 'utf8');
+    assert.match(runtime, /createEscapeRuntime\(/);
+    assert.doesNotMatch(runtime, /getElementById\('addescape-/);
+    assert.match(owner, /const planningLayer = L\.layerGroup\(\)\.addTo\(map\)/);
+    assert.match(owner, /const required = <T extends HTMLElement>/);
+    assert.doesNotMatch(controller, /\blayer:/);
+  });
+
   await test('localization owner keeps language state and DOM synchronization together', () => {
     const {createLocalizationRuntime} = load('src/features/localization/runtime-owner.ts');
     const label = element({dataset:{i18n:'menu.file'}});

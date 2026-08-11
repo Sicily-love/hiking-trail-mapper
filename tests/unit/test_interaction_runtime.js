@@ -11,6 +11,7 @@ const runtime = [
   read('src/ui/sidebar/runtime-owner.ts'),
   read('src/features/stitch/runtime-owner.ts'),
   read('src/features/waypoint/runtime-owner.ts'),
+  read('src/features/escape/runtime-owner.ts'),
 ].join('\n');
 const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const segmentController = fs.readFileSync(path.join(root, 'src/features/segment/controller.ts'), 'utf8');
@@ -39,20 +40,19 @@ test('all six modes activate owner-bound sessions', () => {
   for(const [kind, phase] of [
     ['measure', 'select-a'],
     ['segment', 'editing'],
-    ['escape', 'select-a'],
     ['stitch', 'editing'],
     ['day-preview', 'preview'],
   ]) {
     assert.ok(runtime.includes(`beginRuntimeInteraction('${kind}', '${phase}'`), `${kind}:${phase}`);
   }
   assert.ok(runtime.includes("beginInteraction('waypoint', 'select'"), 'waypoint:select');
+  assert.ok(runtime.includes("beginInteraction('escape', 'select-a'"), 'escape:select-a');
 });
 
 test('the original five cleanup paths cancel through the manager', () => {
   for(const [kind, functionName] of [
     ['measure', 'measureExit'],
     ['segment', 'segmentExit'],
-    ['escape', 'addEscapeExit'],
     ['day-preview', 'clearDaySegmentPreview'],
   ]) {
     const start = runtime.indexOf(`function ${functionName}(`);
@@ -62,6 +62,8 @@ test('the original five cleanup paths cancel through the manager', () => {
   }
   const waypointExit = runtime.slice(runtime.indexOf('function exitAddWaypointMode('));
   assert.ok(waypointExit.slice(0, 500).includes("cancelInteraction('waypoint'"));
+  const escapeExit = runtime.slice(runtime.indexOf('function exit(options:'));
+  assert.ok(escapeExit.slice(0, 500).includes("cancelInteraction('escape'"));
 });
 
 test('stitch cleanup exits through its owner-bound session', () => {

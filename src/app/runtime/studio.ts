@@ -19,6 +19,7 @@ import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
 import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
 import { createWaypointRuntime } from '../../features/waypoint/runtime-owner.ts';
+import { createEscapeRuntime } from '../../features/escape/runtime-owner.ts';
 import { createRuntimeInteractionOwner } from './interaction-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
@@ -31,7 +32,6 @@ export interface StudioRuntimeDependencies {
   document: Document;
   commands: HTM_APP.CommandRegistry<void>;
   dialogs: HTM_APP.DialogController;
-  [name: string]: any;
 }
 
 /** Starts the browser runtime directly inside the Vite module graph. */
@@ -43,8 +43,8 @@ export function startStudioRuntime(
   if(!defaultView) throw new Error('Studio runtime requires a document with a window');
   const window:StudioBrowserWindow = defaultView;
   const studioTestMode = new URL(window.location.href).searchParams.has('studio-test');
-  const commandRegistry:any = dependencies.commands;
-  const studioDialogs:any = dependencies.dialogs;
+  const commandRegistry = dependencies.commands;
+  const studioDialogs = dependencies.dialogs;
   const STUDIO_COMMANDS = HTM_APP.STUDIO_COMMANDS;
   const L = window.L;
   const fflate = window.fflate;
@@ -58,8 +58,8 @@ export function startStudioRuntime(
   function dispatchStudioCommand(commandId: any) {
     try {
       const result = commandRegistry.dispatch(commandId);
-      if(result && typeof result.then === 'function') {
-        result.catch((error: any) => console.error(`Command failed: ${commandId}`, error));
+      if(result && typeof (result as PromiseLike<unknown>).then === 'function') {
+        Promise.resolve(result).catch(error => console.error(`Command failed: ${commandId}`, error));
       }
       return result;
     } catch(error) {
@@ -676,39 +676,18 @@ export function startStudioRuntime(
     return trackPointInspector.inspect(event, trail);
   }
   /* ============ Escape ============ */
-  const escapeController:any = HTM_APP.createEscapeController(runtimeContext, {
-    markRevision:markTrailRevision,
+  const escapeRuntime = createEscapeRuntime({
+    document, leaflet:L, map, displayLayer:escapeLayer, context:runtimeContext,
+    markRevision:markTrailRevision, language:getCurrentLang, drawTracks,
+    notify:showToast, beginInteraction:beginRuntimeInteraction,
+    cancelInteraction:cancelRuntimeInteraction, setInteractionPhase:setRuntimeInteractionPhase,
+    recordEdit:(labelZh, labelEn, mutation) => recordProjectEdit(labelZh, labelEn, mutation),
+    persist:saveToStorage, renderDays:() => buildDaysTab(),
   });
-  const addEscapeState:any = escapeController.state;
-
-  function showEscape(trailId: any, escapeId: any) {
-    escapeLayer.clearLayers();
-    const r = escapeId ? escapeController.selectDisplayedRoute(trailId, escapeId) : null;
-    if(!escapeId) escapeController.clearDisplayedRoute();
-    drawTracks();
-    if(!r) return;
-
-    const pl = L.polyline(r.line, {
-      color:'#ff3030', weight:5.5, opacity:0.95,
-      dashArray:'10,8', lineCap:'round',
-    }).addTo(escapeLayer);
-
-    const decorator = L.polylineDecorator(pl, {
-      patterns: [{
-        offset:'5%', repeat:'10%',
-        symbol: L.Symbol.arrowHead({ pixelSize:10, polygon:false, pathOptions:{stroke:true, color:'#fff', weight:2.5}})
-      }]
-    }).addTo(escapeLayer);
-
-    map.flyToBounds(pl.getBounds().pad(0.2), {duration:0.8});
-  }
-
-  function clearEscape() {
-    escapeLayer.clearLayers();
-    escapeController.clearDisplayedRoute();
-    drawTracks();
-    document.querySelectorAll('.escape-item').forEach((el: any) => el.classList.remove('active'));
-  }
+  const escapeController = escapeRuntime.controller;
+  const addEscapeState = escapeRuntime.state;
+  const showEscape = escapeRuntime.showRoute;
+  const clearEscape = escapeRuntime.clearRoute;
   /* ============ Build sidebar ============ */
   // Sidebar, itinerary, filters, and map-mode DOM are owned by createSidebarRuntime.
 
@@ -1276,242 +1255,10 @@ export function startStudioRuntime(
     bindMeasureEndpointDrag(marker, label);
     return marker;
   }
-  /* ============ 手动添加下撤路线 ============ */
-
-  function escapeReferenceTrails() {
-    if(selectors.activeGroup() == null) return [];
-    return selectors.trailsInActiveGroup(projectSelectors.trails()).filter((trail: any) => trail.track && trail.track.length);
-  }
-
-  function ensureEscapeTrailSelector() {
-    let select = document.getElementById('addescape-trail-select');
-    if(select) return select;
-    const panel = document.getElementById('addescape-panel');
-    const hint = document.getElementById('addescape-hint');
-    if(!panel || !hint) return null;
-    const row = document.createElement('div');
-    row.className = 'form-row escape-reference-row';
-    const label = document.createElement('label');
-    label.className = 'form-label';
-    label.htmlFor = 'addescape-trail-select';
-    label.textContent = getCurrentLang() === 'zh' ? '依据轨迹：' : 'Reference trail:';
-    select = document.createElement('select');
-    select.id = 'addescape-trail-select';
-    select.className = 'form-input';
-    row.append(label, select);
-    panel.insertBefore(row, hint);
-    return select;
-  }
-
-  function refreshEscapeTrailSelector() {
-    const select = ensureEscapeTrailSelector();
-    if(!select) return;
-    const label = select.previousElementSibling;
-    if(label) label.textContent = getCurrentLang() === 'zh' ? '依据轨迹：' : 'Reference trail:';
-    const selectedId = addEscapeState.referenceTrailId || selectors.primaryTrailId() || '';
-    select.replaceChildren();
-    escapeReferenceTrails().forEach((trail: any) => {
-      const option = document.createElement('option');
-      option.value = trail.id;
-      option.textContent = trail.name + (trail.id === selectors.primaryTrailId()
-        ? (getCurrentLang() === 'zh' ? '（主轨迹）' : ' (Primary)')
-        : '');
-      option.selected = trail.id === selectedId;
-      select.append(option);
-    });
-    select.disabled = select.options.length < 2;
-  }
-
-  function resetEscapeSelectionHint() {
-    const hint = document.getElementById('addescape-hint');
-    if(!hint) return;
-    hint.innerHTML = getCurrentLang() === 'zh'
-      ? '在所选依据轨迹上点击 <b style="color:#22c55e">起点 A</b>，再点击 <b style="color:#ef4444">终点 B</b>。<br><span style="font-size:10px">A/B 只会吸附到当前选择的轨迹。</span>'
-      : 'Click <b style="color:#22c55e">point A</b>, then <b style="color:#ef4444">point B</b> on the selected reference trail.<br><span style="font-size:10px">A/B snap only to that trail.</span>';
-  }
-
-  function refreshEscapeDaySelect(selectedDays: any = []) {
-    const group = document.getElementById('addescape-day-select');
-    if(!group) return [];
-    const days = escapeController.availableDays();
-    const requested = Array.isArray(selectedDays) ? selectedDays.map(Number) : [Number(selectedDays)];
-    const nextDays = days.filter((day: any) => requested.includes(day));
-    if(!nextDays.length && days.length) nextDays.push(days[0]);
-    group.replaceChildren();
-    days.forEach((day: any) => {
-      const label = document.createElement('label');
-      label.className = 'escape-day-option';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = String(day);
-      input.checked = nextDays.includes(day);
-      label.append(input, document.createTextNode(`D${day}`));
-      group.append(label);
-    });
-    if(nextDays.length) escapeController.setDays(nextDays);
-    const dayValue = document.getElementById('ae-day');
-    if(dayValue) dayValue.textContent = nextDays.length ? nextDays.map((day: any) => `D${day}`).join('、') : '-';
-    return nextDays;
-  }
-
-  function handleEscapeInteractionEvent(event: any, session: any) {
-    if(event.type !== 'tap') return;
-    const hit = escapeController.nearestPoint(event.latlng.lat, event.latlng.lng);
-    if(!hit) {
-      showToast(getCurrentLang() === 'zh' ? '请点击所选依据轨迹附近（2km 内）' : 'Click within 2 km of the selected reference trail', 'error');
-      return;
-    }
-    if(session.phase === 'select-a') {
-      escapeController.selectA(hit);
-      addEscapeState.layer.clearLayers();
-      L.circleMarker([hit.lat, hit.lng], {radius:8, color:'#fff', weight:2, fillColor:'#22c55e', fillOpacity:1})
-        .bindTooltip('A（起点）', {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'})
-        .addTo(addEscapeState.layer);
-      document.getElementById('addescape-result').style.display = 'none';
-      document.getElementById('addescape-hint').innerHTML =
-        '✓ 起点 A 已选。再点击 <b style="color:#ef4444">终点 B</b>。';
-      session.setPhase('select-b');
-      return;
-    }
-    if(session.phase === 'preview') session.setPhase('select-b');
-    if(session.phase !== 'select-b') return;
-    escapeController.selectB(hit);
-    addEscapeCompute();
-  }
-
-  function addEscapeEnter() {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) { showToast('请先设置主轨迹', 'error'); return; }
-    beginRuntimeInteraction('escape', 'select-a', main, {
-      onEvent: handleEscapeInteractionEvent,
-      onCancel: (opts: any) => addEscapeExit(opts),
-    });
-    if(!escapeController.enter(main.id)) return;
-    refreshEscapeTrailSelector();
-    const btn = document.getElementById('add-escape-btn');
-    if(btn) btn.classList.add('on');
-    if(!addEscapeState.layer) addEscapeState.layer = L.layerGroup().addTo(map);
-    addEscapeState.layer.clearLayers();
-    document.getElementById('addescape-panel').style.display = 'block';
-    document.getElementById('addescape-result').style.display = 'none';
-    document.getElementById('ae-day').textContent = '-';
-    document.getElementById('addescape-day-select').replaceChildren();
-    resetEscapeSelectionHint();
-    map.getContainer().style.cursor = 'crosshair';
-    drawTracks();
-  }
-
-  function addEscapeExit(opts: any = {}) {
-    if(!opts.fromManager && cancelRuntimeInteraction('escape', opts.reason || 'cancelled')) return;
-    escapeController.exit();
-    const btn = document.getElementById('add-escape-btn');
-    if(btn) btn.classList.remove('on');
-    if(addEscapeState.layer) addEscapeState.layer.clearLayers();
-    document.getElementById('addescape-panel').style.display = 'none';
-    map.getContainer().style.cursor = '';
-    drawTracks();
-  }
-
-  function addEscapeReset() {
-    escapeController.reset();
-    if(addEscapeState.layer) addEscapeState.layer.clearLayers();
-    document.getElementById('addescape-result').style.display = 'none';
-    document.getElementById('ae-day').textContent = '-';
-    resetEscapeSelectionHint();
-    setRuntimeInteractionPhase('escape', 'select-a');
-  }
-
-  function addEscapeCompute() {
-    const result = escapeController.compute();
-    if(!result.ok) {
-      if(result.reason === 'same-point') {
-        showToast('两点太近，请重新选择', 'error');
-      }
-      return false;
-    }
-    const preview = result.preview;
-    const route = preview.route;
-    if(!route._anchor) return false;
-    if(!route.line.length) return false;
-    const pointA = preview.pointA;
-    const pointB = preview.pointB;
-
-    // 预览高亮
-    addEscapeState.layer.clearLayers();
-    L.circleMarker([pointA.lat, pointA.lng], {radius:8, color:'#fff', weight:2, fillColor:'#22c55e', fillOpacity:1})
-      .bindTooltip('A（起点）', {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'})
-      .addTo(addEscapeState.layer);
-    L.circleMarker([pointB.lat, pointB.lng], {radius:8, color:'#fff', weight:2, fillColor:'#ef4444', fillOpacity:1})
-      .bindTooltip('B（终点）', {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'})
-      .addTo(addEscapeState.layer);
-    L.polyline(route.line, {color:'#f87171', weight:5, opacity:0.9, dashArray:'10,7'}).addTo(addEscapeState.layer);
-    map.flyToBounds(L.latLngBounds(route.line).pad(0.2), {duration:0.6});
-
-    // 填充面板
-    document.getElementById('ae-dist').textContent = route.distance_km + ' km';
-    document.getElementById('ae-trail').textContent = route._anchor.trailName;
-    refreshEscapeDaySelect(HTM_CORE.escapeRouteDays(route));
-    document.getElementById('ae-asc').textContent = preview.ascentM + ' m';
-    document.getElementById('ae-desc').textContent = preview.descentM + ' m';
-    document.getElementById('ae-eA').textContent = Math.round(pointA.elev) + ' m';
-    document.getElementById('ae-eB').textContent = Math.round(pointB.elev) + ' m';
-
-    document.getElementById('addescape-name').value = route.name;
-    document.getElementById('addescape-result').style.display = 'block';
-    document.getElementById('addescape-hint').textContent = '✓ 路线已预览。确认后点击「保存」。';
-    setRuntimeInteractionPhase('escape', 'preview');
-    return true;
-  }
-
-  function addEscapeCommit() {
-    if(!addEscapeState._pending) return;
-    if(!setRuntimeInteractionPhase('escape', 'committing')) return;
-    const nameInput = document.getElementById('addescape-name').value.trim();
-    const route = recordProjectEdit('添加下撤路线', 'Add escape route', () => escapeController.commit(nameInput));
-    if(!route) {
-      setRuntimeInteractionPhase('escape', 'preview');
-      showToast('下撤状态已失效，请重新选择', 'error');
-      return;
-    }
-    saveToStorage();
-    buildDaysTab();
-    showToast(`✓ 下撤路线「${route.name}」已保存`);
-    addEscapeExit({reason:'committed'});
-  }
-
-  // 按钮绑定
-  const escapeTrailSelect = ensureEscapeTrailSelector();
-  if(escapeTrailSelect) escapeTrailSelect.addEventListener('change', (event: any) => {
-    const trailId = event.target.value;
-    if(!escapeController.setReferenceTrail(trailId)) {
-      refreshEscapeTrailSelector();
-      return;
-    }
-    if(!selectors.activeTrailIds().has(trailId)) {
-      stateActions.setTrailActive(trailId, true);
-    }
-    drawTracks();
-    if(addEscapeState.layer) addEscapeState.layer.clearLayers();
-    document.getElementById('addescape-result').style.display = 'none';
-    resetEscapeSelectionHint();
-    setRuntimeInteractionPhase('escape', 'select-a');
-  });
-  document.getElementById('addescape-close').addEventListener('click', addEscapeExit);
-  document.getElementById('addescape-exit').addEventListener('click', addEscapeExit);
-  document.getElementById('addescape-reset').addEventListener('click', addEscapeReset);
-  document.getElementById('addescape-commit').addEventListener('click', addEscapeCommit);
-  document.getElementById('addescape-day-select').addEventListener('change', (event: any) => {
-    if(!event.target.matches('input[type="checkbox"]')) return;
-    const inputs = [...event.currentTarget.querySelectorAll('input[type="checkbox"]')];
-    let days = inputs.filter((input: any) => input.checked).map((input: any) => Number(input.value));
-    if(!days.length) {
-      event.target.checked = true;
-      days = [Number(event.target.value)];
-    }
-    if(escapeController.setDays(days)) {
-      document.getElementById('ae-day').textContent = days.map((day: any) => `D${day}`).join('、');
-    }
-  });
+  const addEscapeEnter = escapeRuntime.enter;
+  const addEscapeExit = escapeRuntime.exit;
+  const addEscapeReset = escapeRuntime.reset;
+  const addEscapeCommit = escapeRuntime.commit;
   function measureCompute() {
     if(!measureState.ptA || !measureState.ptB) return;
     const seq = measureController.nextComputeSequence();

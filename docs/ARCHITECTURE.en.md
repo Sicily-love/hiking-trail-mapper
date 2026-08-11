@@ -31,10 +31,11 @@ src/
 │   ├── project-actions.ts        Semantic project mutations
 │   ├── project-selectors.ts      Read-only project queries
 │   ├── command.ts                Unified commands
-│   ├── interaction-manager.ts    Map interaction sessions
-│   ├── render-scheduler.ts       Frame batching and last-fit wins
-│   ├── runtime-context.ts        Typed service context
-│   └── runtime/studio.ts         Startup glue and shared map orchestration (~2,700 lines)
+│   ├── interactions/manager.ts   Map interaction sessions
+│   ├── rendering/scheduler.ts    Frame batching and last-fit wins
+│   └── runtime/                  Typed service context and startup glue
+│       ├── context.ts
+│       └── studio.ts             Shared map orchestration (~2,450 lines)
 ├── core/                         DOM-free domain algorithms and render models
 ├── features/                     Vertical feature controllers and data
 ├── adapters/                     Leaflet, IndexedDB, file, and browser effects
@@ -70,7 +71,7 @@ Trail, storage, file import/export, project archive/history runtime, waypoint, m
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 2,700 lines. KML project building, reset/fit ownership, sidebar/itinerary DOM, import DOM, trail stitching, waypoint interaction, and elevation Canvas now have dedicated controllers or owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates a deeply read-only test inspector and a dedicated fixture driver.
+`src/app/runtime/studio.ts` has been reduced from roughly 6,200 to roughly 2,450 lines. KML project building, reset/fit ownership, sidebar/itinerary DOM, import DOM, trail stitching, waypoint interaction, escape planning, and elevation Canvas now have dedicated controllers or owners. All TypeScript source passes strict checking without `@ts-nocheck`. The main runtime only assembles stores, actions, selectors, and browser effects; it no longer reads or writes raw project/application state, and `RuntimeContext` exposes only action/selector surfaces to features. Production publishes no business globals, while `?studio-test=1` creates a deeply read-only test inspector and a dedicated fixture driver.
 
 Real-browser tests receive a frozen, deeply read-only inspector only when the URL includes `?studio-test=1`; fixture changes enter `ProjectActions` through `testDriver`. Normal releases create neither test surface and do not expose `HikingTrailCore`, `HikingTrailApp`, command, or dialog classic globals.
 

@@ -62,7 +62,7 @@ for(const name of ['README.md', 'README.en.md']) {
   const next = source
     .replace(/!\[version\]\(https:\/\/img\.shields\.io\/badge\/version-v[0-9.]+-blue\)/g,
       `![version](https://img.shields.io/badge/version-${version}-blue)`)
-    .replace(/^(\s*[-*]?\s*(?:版本|Version)\s*[:：]\s*)v[0-9]+\.[0-9]+\.[0-9]+/gm, `$1${version}`);
+    .replace(/^(\s*[-*]?\s*(?:当前版本|Current version|版本|Version)\s*[:：]\s*)v[0-9]+\.[0-9]+\.[0-9]+/gm, `$1${version}`);
   await syncFile(filePath, next);
 }
 if(stale.length) {

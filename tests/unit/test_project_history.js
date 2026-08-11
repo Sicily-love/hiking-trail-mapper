@@ -118,6 +118,7 @@ function harness(options = {}) {
       'src/ui/import/runtime-owner.ts',
       'src/features/stitch/runtime-owner.ts',
       'src/features/waypoint/runtime-owner.ts',
+      'src/features/escape/runtime-owner.ts',
     ].map(file => fs.readFileSync(file, 'utf8')).join('\n');
     const feature = fs.readFileSync('src/features/project/runtime.ts', 'utf8');
     assert.match(source, /createProjectRuntimeController\(runtimeContext/);

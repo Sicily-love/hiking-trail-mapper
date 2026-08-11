@@ -103,6 +103,14 @@ def main() -> int:
         r"img\.shields\.io/badge/version-(v[0-9]+\.[0-9]+\.[0-9]+)-blue",
         read_text(ROOT / "README.en.md"),
     )
+    readme_current_version = extract(
+        r"(?m)^- 当前版本：\s*(v[0-9]+\.[0-9]+\.[0-9]+)",
+        read_text(ROOT / "README.md"),
+    )
+    readme_en_current_version = extract(
+        r"(?m)^- Current version:\s*(v[0-9]+\.[0-9]+\.[0-9]+)",
+        read_text(ROOT / "README.en.md"),
+    )
     changelog_version = extract(
         r"(?m)^##\s+(v[0-9]+\.[0-9]+\.[0-9]+)\b", read_text(ROOT / "CHANGELOG.md")
     )
@@ -120,6 +128,8 @@ def main() -> int:
         "CHANGELOG.md": changelog_version,
         "README.md": readme_version,
         "README.en.md": readme_en_version,
+        "README.md current version": readme_current_version,
+        "README.en.md current version": readme_en_current_version,
         "package.json": package_version,
         "package-lock.json": lock_version,
         "package-lock root package": lock_root_version,

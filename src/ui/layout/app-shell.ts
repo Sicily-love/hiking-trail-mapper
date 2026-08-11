@@ -155,6 +155,10 @@ export const APP_SHELL = `
     <b class="tool-panel-title">下撤路线</b>
     <button id="addescape-close" class="tool-panel-close">关闭</button>
   </header>
+  <div class="form-row escape-reference-row">
+    <label id="addescape-trail-label" class="form-label" for="addescape-trail-select">依据轨迹</label>
+    <select id="addescape-trail-select" class="form-input"></select>
+  </div>
   <div id="addescape-hint" class="tool-panel-hint">在依据轨迹上点击起点 A，再点击终点 B。</div>
   <div id="addescape-result" class="escape-result">
     <div class="escape-result-grid">

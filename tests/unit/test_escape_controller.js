@@ -179,22 +179,28 @@ T('selects display routes and deletes only manual routes', () => {
 });
 
 T('direct runtime retains escape effects but delegates business state and writes', () => {
-  const source = [read('src/app/runtime/studio.ts'), read('src/ui/sidebar/runtime-owner.ts')].join('\n');
+  const runtime = read('src/app/runtime/studio.ts');
+  const owner = read('src/features/escape/runtime-owner.ts');
+  const controllerSource = read('src/features/escape/controller.ts');
+  const source = [owner, read('src/ui/sidebar/runtime-owner.ts')].join('\n');
   const directBusinessWrite = /addEscapeState\.(?:active|trailId|referenceTrailId|ptA|ptB|_pending)\s*(?:=|\+\+)/;
-  assert.match(source, /createEscapeController\(runtimeContext/);
-  assert.match(source, /const addEscapeState(?::any)? = escapeController\.state/);
+  assert.match(runtime, /createEscapeRuntime\(/);
+  assert.match(owner, /createEscapeController\(context/);
+  assert.match(runtime, /const addEscapeState = escapeRuntime\.state/);
   for(const method of [
     'enter', 'setReferenceTrail', 'exit', 'reset', 'nearestPoint', 'selectA', 'selectB', 'compute',
     'availableDays', 'setDay', 'setDays', 'commit',
     'deleteRoute', 'selectDisplayedRoute', 'clearDisplayedRoute',
-  ]) assert.match(source, new RegExp(`escapeController\\.${method}`), method);
+  ]) assert.match(source, new RegExp(`(?:controller|escapeController)\\.${method}`), method);
   assert.doesNotMatch(source, directBusinessWrite);
   assert.doesNotMatch(source, /function nearestPointOnAnyTrail\(/);
   assert.doesNotMatch(source, /function snapToTrail\(/);
-  assert.match(source, /addEscapeState\.layer\s*=/);
-  assert.match(source, /escapeReferenceTrailId:addEscapeState\.active/);
-  assert.match(source, /document\.getElementById\('ae-day'\)/);
-  assert.match(source, /addescape-day-select/);
+  assert.doesNotMatch(controllerSource, /\blayer:/);
+  assert.match(owner, /const planningLayer = L\.layerGroup\(\)\.addTo\(map\)/);
+  assert.match(runtime, /escapeReferenceTrailId:addEscapeState\.active/);
+  assert.doesNotMatch(runtime, /getElementById\('addescape-/);
+  assert.match(owner, /required<HTMLElement>\('ae-day'\)/);
+  assert.match(owner, /addescape-day-select/);
   assert.match(source, /resolveEscapeRouteDirection/);
   assert.match(source, /escape-filter-bar/);
 });

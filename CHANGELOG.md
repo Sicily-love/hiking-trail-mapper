@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.3.2 — 2026-08-11
+
+**中文**
+
+- 将下撤规划的交互、Leaflet 图层与面板 DOM 迁入 typed escape runtime owner，主 runtime 缩减至约 2450 行，并移除业务状态中的渲染句柄。
+- 优化下撤与分段面板的信息层级、A/B 状态反馈、窄屏高度和触摸目标，并新增真实下撤规划截图回归。
+
+**English**
+
+- Move escape planning interactions, Leaflet layers, and panel DOM into a typed escape runtime owner, reduce the main runtime to about 2,450 lines, and remove rendering handles from business state.
+- Refine escape and segment panel hierarchy, A/B feedback, narrow-screen sizing, and touch targets, with a real escape-planning visual regression.
+
 ## v2.3.1 — 2026-08-11
 
 **中文**

@@ -59,7 +59,9 @@ T('release sync and version bump use Vite plus source-owned metadata', () => {
   assert.ok(syncDocs.includes("process.argv.includes('--check')"));
   assert.ok(!syncDocs.includes('const changelogBlock = html.match'));
   assert.ok(syncDocs.includes("src/app/version.ts"));
+  assert.ok(syncDocs.includes('Current version'));
   assert.ok(metadata.includes('img\\.shields\\.io/badge/version-'));
+  assert.ok(metadata.includes('README.md current version'));
   assert.ok(bump.includes("src/app/version.ts"));
   assert.ok(bump.includes("src/features/localization/changelog.ts"));
   assert.ok(!bump.includes("src/template/app.html"));
