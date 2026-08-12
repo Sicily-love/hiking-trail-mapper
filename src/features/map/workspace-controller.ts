@@ -2,7 +2,7 @@ import {buildTrackLatLngs, planResetTransition} from '../../core/index.ts';
 import type {AppStateSelectors, GroupedTrail} from '../../app/selectors.ts';
 
 export interface WorkspaceTrail extends GroupedTrail {
-  track?: number[][];
+  track?: Array<readonly unknown[]>;
 }
 
 export interface WorkspaceMeasureState {
@@ -69,7 +69,9 @@ export function createWorkspaceController<TTrail extends WorkspaceTrail>(
     if(cached?.track === trail.track && cached.revision === revision) return cached.bounds;
     const bounds = dependencies.leaflet.latLngBounds([]);
     for(const point of trail.track) {
-      if(Number.isFinite(point[0]) && Number.isFinite(point[1])) bounds.extend([point[0], point[1]]);
+      if(Number.isFinite(point[0]) && Number.isFinite(point[1])) {
+        bounds.extend([Number(point[0]), Number(point[1])]);
+      }
     }
     if(!bounds.isValid()) return null;
     boundsCache.set(trail, {track:trail.track, revision, bounds});

@@ -125,10 +125,10 @@ export const APP_SHELL = `
 
 <section id="measure-panel" class="floating-panel">
   <div class="measure-panel-grip" data-panel-drag title="拖动；双击恢复默认位置" aria-hidden="true"></div>
-  <div class="panel-actions panel-actions-three">
-    <button id="measure-reset" class="panel-btn muted">重新选点</button>
-    <button id="measure-reverse" class="panel-btn muted">反向</button>
-    <button id="measure-exit" class="panel-btn ghost">退出</button>
+  <div class="panel-actions panel-actions-three" role="group" aria-label="测距操作">
+    <button id="measure-reset" class="panel-btn muted" type="button">重新选点</button>
+    <button id="measure-reverse" class="panel-btn muted" type="button">反向</button>
+    <button id="measure-exit" class="panel-btn ghost" type="button">退出</button>
   </div>
 </section>
 
@@ -136,16 +136,15 @@ export const APP_SHELL = `
   <header class="tool-panel-header">
     <b class="tool-panel-title">行程分段</b>
     <span id="segment-dirty-indicator" class="segment-dirty-indicator" hidden>存在未应用修改</span>
-    <button id="segment-close" class="tool-panel-close">关闭</button>
+    <button id="segment-close" class="tool-panel-close" type="button">关闭</button>
   </header>
-  <div id="segment-hint" class="tool-panel-hint">在主轨迹上点击起点，之后每次点击增加一天。</div>
+  <div id="segment-hint" class="tool-panel-hint" aria-live="polite">在主轨迹上点击以增加分段边界。</div>
   <div id="segment-list"></div>
   <footer class="tool-panel-footer">
-    <div class="panel-actions panel-actions-four">
-      <button id="segment-undo" class="panel-btn muted">撤销</button>
-      <button id="segment-restore" class="panel-btn muted">还原</button>
-      <button id="segment-apply" class="panel-btn primary">应用</button>
-      <button id="segment-exit" class="panel-btn ghost">退出</button>
+    <div class="panel-actions panel-actions-three" role="group" aria-label="分段操作">
+      <button id="segment-restore" class="panel-btn muted" type="button">还原</button>
+      <button id="segment-apply" class="panel-btn primary" type="button">应用</button>
+      <button id="segment-exit" class="panel-btn ghost" type="button">退出</button>
     </div>
   </footer>
 </section>

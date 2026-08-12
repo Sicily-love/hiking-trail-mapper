@@ -35,7 +35,7 @@ src/
 │   ├── rendering/scheduler.ts    合帧与最后一次 fit
 │   └── runtime/                  typed 服务上下文与启动胶水
 │       ├── context.ts
-│       └── studio.ts             共享地图编排（约 2450 行）
+│       └── studio.ts             共享地图编排（约 1560 行）
 ├── core/                         无 DOM 的领域算法与 render model
 ├── features/                     垂直功能 controller 与数据
 ├── adapters/                     Leaflet、IndexedDB、文件与浏览器副作用
@@ -71,7 +71,7 @@ trail、storage、file import/export、project archive/history runtime、waypoin
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` 已从约 6200 行压到约 2450 行。KML 项目构建、地图复位/fit、侧栏/行程 DOM、导入 DOM、轨迹拼接、标注点交互、下撤规划和海拔 Canvas 分别由独立 controller/owner 持有。全部 TypeScript 源码通过严格检查，不再存在 `@ts-nocheck`。主 runtime 仅装配 store、actions、selectors 和浏览器副作用，不直接读写 raw 项目或应用状态；`RuntimeContext` 也只向 feature 暴露 action/selector。生产环境不发布业务全局，仅 `?studio-test=1` 创建深只读测试 inspector，并通过专用 `testDriver` 构造夹具。
+`src/app/runtime/studio.ts` 已从约 6200 行压到约 1560 行。KML 项目构建、地图复位/fit、侧栏/行程 DOM、导入 DOM、轨迹拼接、测距、分段、标注点交互、下撤规划和海拔 Canvas 分别由独立 controller/owner 持有；共享轨迹吸附和地图输入也由专门模块管理。全部 TypeScript 源码通过严格检查，不再存在 `@ts-nocheck`。主 runtime 负责 store、actions、selectors、命令和浏览器能力的装配，不直接持有测距/分段 DOM 或 Leaflet 图层。生产环境不发布业务全局，仅 `?studio-test=1` 创建深只读测试 inspector，并通过专用 `testDriver` 构造夹具。
 
 真实浏览器测试在 URL 带 `?studio-test=1` 时获得冻结且嵌套对象不可写的 inspector；测试夹具修改通过 `testDriver` 进入 `ProjectActions`。正常发布不创建这些测试接口，也不暴露 `HikingTrailCore`、`HikingTrailApp`、命令或 dialog classic globals。
 

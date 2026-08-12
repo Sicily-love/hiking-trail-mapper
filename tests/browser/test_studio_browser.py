@@ -27,6 +27,10 @@ RUNTIME_SOURCE_FILES = [
     ROOT / "src/features/map/workspace-controller.ts",
     ROOT / "src/features/elevation/runtime-owner.ts",
     ROOT / "src/features/waypoint/runtime-owner.ts",
+    ROOT / "src/features/measure/runtime-owner.ts",
+    ROOT / "src/features/segment/runtime-owner.ts",
+    ROOT / "src/features/map/track-snap.ts",
+    ROOT / "src/features/map/interaction-input.ts",
 ]
 RUNTIME_SOURCE = "\n".join(path.read_text(encoding="utf-8") for path in RUNTIME_SOURCE_FILES)
 
@@ -457,14 +461,14 @@ try:
           and draggable_marker.get("dragDraggable") == True,
           str(draggable_marker))
 
-    check("measureCompute 使用可拖动端点 marker",
-          source_has('function measureCompute', 'addMeasureEndpointMarker'))
+    check("测距 owner 使用可拖动端点 marker",
+          source_has('function compute(): void', 'addEndpointMarker(pointA', 'draggable:true'))
     check("第三次点击替换端点逻辑已移除",
           evalj("typeof nearestEndpointLabel === 'undefined' && typeof updateMeasureEndpoint === 'undefined'"))
-    check("拖动吸附使用 requestAnimationFrame 节流",
-          evalj("createPrimaryTrackDragSnapper.toString().includes('requestAnimationFrame') && createPrimaryTrackDragSnapper.toString().includes('cancelAnimationFrame')"))
+    check("拖动吸附使用可取消的逐帧调度",
+          source_has('const createDragSnapper', 'dependencies.requestFrame(flush)', 'dependencies.cancelFrame(frameId)'))
     check("测距与分段拖动共用吸附调度器",
-          source_has('function bindMeasureEndpointDrag', 'function redrawSegmentLayer', 'createPrimaryTrackDragSnapper'))
+          source_has('trackSnap.createDragSnapper(endpointMarker', 'trackSnap.createDragSnapper(marker'))
     check("测距高亮线使用抽样点并防止旧计算回写",
           evalj("""
             (() => {
@@ -481,13 +485,13 @@ try:
                 && model.latLngs[0][0] === track[0][0]
                 && model.latLngs[899][0] === track[1199][0];
             })()
-          """) and source_has('function renderMeasureSegmentLine', 'buildMeasureSegmentRenderModel', 'nextComputeSequence', 'isComputeCurrent'))
+          """) and source_has('function renderSegmentLine', 'buildMeasureSegmentRenderModel', 'nextComputeSequence', 'isComputeCurrent'))
     check("测距统计使用缓存而非整段遍历",
-          source_has('function computeMeasureStats', 'getMeasureStatsCache'))
+          source_has('function computeStats', 'getStatsCache(trail)', 'ascCum', 'descCum'))
     check("测距拖动中实时更新线段和面板",
-          source_has('function handleMeasureInteractionEvent', 'queueMeasureLiveUpdate', "type:'drag-snap'", 'opts.onSnap'))
+          source_has('function handleInteractionEvent', 'function queueLiveUpdate', "type:'drag-snap'", 'options.onSnap'))
     check("测距拖动吸附优先局部近邻搜索",
-          source_has('function createPrimaryTrackDragSnapper', 'nearestTrackIdxNearPrimary'))
+          source_has('const nearestPrimaryNear', 'getCenterIdx', 'nearestPrimaryNear(latlng.lat'))
     check("测距复位会重新补画 A/B 黄线",
           source_has('const resetView =', 'getMeasureState', 'measure.ptA', 'measure.ptB', 'buildTrackLatLngs'))
     check("分段高亮线使用抽样点",
@@ -507,7 +511,7 @@ try:
                 && model.markers[1].markerOptions.draggable === true
                 && model.markers[2].markerOptions.draggable === false;
             })()
-          """) and source_has('function redrawSegmentLayer', 'buildSegmentLayerModel'))
+          """) and source_has('function redraw(): void', 'buildSegmentLayerModel'))
     check("缓存恢复等待布局后只执行一次复位",
           source_has('function schedulePostRestoreReset', 'completed', 'map.whenReady', 'await schedulePostRestoreReset'))
     check("缓存恢复跳过全轨迹预定位并暴露可等待启动状态",
@@ -528,7 +532,7 @@ try:
               });
               return model.iconHtml.includes('wp-day-badge') && model.iconHtml.includes('D2');
             })()
-          """) and source_has('function addWpMarker', 'function segmentApply', 'segmentController.apply'))
+          """) and source_has('function addWpMarker', 'const result = controller.apply()', 'rebuild();'))
     check("标注点图标按 tag 统一渲染",
           evalj("""
             waypointIconMarkup('fork').includes('data-lucide=\"git-fork\"')
@@ -558,9 +562,12 @@ try:
     check("顶部缓存按钮已移除",
           evalj("!document.getElementById('storage-btn') && !document.getElementById('storage-text')"))
     check("测距/分段进入时自动切换到标注点模式",
-          source_has('function measureEnter', 'function segmentEnter', "setMapMode('waypoint'", 'stateActions.setMode(mode)'))
+          source_has('function enterInteractionRenderMode', "setMapMode('waypoint'",
+                     'enterRenderMode(text(\'测距\'', 'enterRenderMode(text(\'分段\'',
+                     'stateActions.setMode(mode)'))
     check("日程每日摘要包含最低海拔并可点击预览当天轨迹",
-          source_has('function buildDaysTab', '最低海拔', 'showDaySegmentPreview', 'segmentController.apply', 'dayPreviewState.active'))
+          source_has('function buildDaysTab', '最低海拔', 'showDaySegmentPreview',
+                     'const result = controller.apply()', 'dayPreviewState.active'))
     check("地图按钮保持快速步进且双指缩放细化到四分之一级",
           evalj("map.options.zoomDelta === 1 && map.options.zoomSnap === 0.25 && map.options.touchZoom === true"))
     check("海拔图与测距浮动栏支持拖动记忆和双击复位",
@@ -598,8 +605,8 @@ try:
                     && annotations.every(item => !item.text.startsWith('高 ') && !item.text.startsWith('低 '));
                 })();
             })()
-          """) and source_has('function measureReverse', 'measureController.reverse',
-                              'createMeasurePanelController', 'measurePanelController.update(stats)',
+          """) and source_has('function reverse(): boolean', 'controller.reverse()',
+                              'createMeasurePanelController', 'panel.update(',
                               'buildElevationCanvasScene', 'measureMode:true'))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
           evalj("""
@@ -630,7 +637,8 @@ try:
                 && deleted.length === 2
                 && model.markers[1].markerOptions.draggable === true;
             })()
-          """) and source_has('segmentController.enter', 'resetView({restoreActive: true})', 'seg-day-delete', 'segmentController.deleteDay', 'm.markerOptions'))
+          """) and source_has('controller.enter(trail.id)', 'void resetView()', 'seg-day-delete',
+                              'controller.deleteDay(dayNo)', 'markerModel.markerOptions'))
     check("天数模式入口移到行程页并可恢复原显示模式",
           evalj("""
             (() => {

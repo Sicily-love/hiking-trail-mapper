@@ -14,6 +14,7 @@ export type TrackTuple = [
   km?: number,
   ascent_m?: number,
   dayId?: number | null,
+  ...extra: unknown[],
 ];
 
 export type WaypointInput = LatLng & {

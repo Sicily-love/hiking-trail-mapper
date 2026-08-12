@@ -3,7 +3,7 @@ export type RuntimeTrackPoint = [
   lng: number,
   elevation?: number,
   distanceKm?: number,
-  timestamp?: string | null,
+  ascentM?: number,
   day?: number | null,
   ...extra: unknown[],
 ];

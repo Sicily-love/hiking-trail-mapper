@@ -143,29 +143,29 @@ T('rejects commit after the primary trail changes', () => {
 });
 
 T('direct runtime delegates segment state and project writes to the controller', () => {
-  const segment = read('src/app/runtime/studio.ts');
-  const map = segment;
+  const runtime = read('src/app/runtime/studio.ts');
+  const segment = read('src/features/segment/runtime-owner.ts');
+  const controllerSource = read('src/features/segment/controller.ts');
+  const map = [runtime, segment].join('\n');
   const directBusinessWrite = /segmentState\.(?:active|trailId|points|campEdits|_justDragged|_fastTapUntil)\s*(?:=|\+\+)/;
-  assert.match(segment, /createSegmentController\(runtimeContext/);
-  assert.match(segment, /const segmentState(?::any)? = segmentController\.state/);
-  assert.match(segment, /segmentController\.enter/);
-  assert.match(segment, /segmentController\.insertPoint/);
-  assert.match(segment, /segmentController\.deleteDay/);
-  assert.match(segment, /segmentController\.moveBoundary/);
-  assert.match(segment, /segmentController\.restore/);
-  assert.match(segment, /segmentController\.isDirty/);
-  assert.match(segment, /requestSegmentExit/);
-  assert.match(segment, /studioDialogs\.confirm/);
-  assert.match(segment, /segmentController\.apply/);
-  assert.match(segment, /async function segmentApply\(\)/);
-  assert.match(segment, /const saved = await _doSave\(\)/);
-  assert.match(map, /segmentController\.suppressFastTap/);
+  assert.match(runtime, /createSegmentRuntime\(/);
+  assert.match(segment, /createSegmentController\(context/);
+  assert.match(segment, /const state = controller\.state/);
+  for(const method of ['enter', 'insertPoint', 'deleteDay', 'moveBoundary', 'restore', 'isDirty', 'apply']) {
+    assert.match(segment, new RegExp(`controller\\.${method}`));
+  }
+  assert.match(segment, /function requestExit\(/);
+  assert.match(segment, /dialogs\.confirm/);
+  assert.match(segment, /async function apply\(\)/);
+  assert.match(segment, /const saved = await persistNow\(\)/);
+  assert.match(runtime, /segmentController\.suppressFastTap/);
   assert.doesNotMatch(segment, directBusinessWrite);
   assert.doesNotMatch(map, directBusinessWrite);
-  assert.doesNotMatch(segment, /\.day_meta\s*=/);
-  assert.doesNotMatch(segment, /\.days\s*=/);
-  assert.doesNotMatch(segment, /track\[[^\]]+\]\[5\]\s*=/);
-  assert.match(segment, /segmentState\.layer\s*=/);
+  assert.doesNotMatch(runtime, /\.day_meta\s*=/);
+  assert.doesNotMatch(runtime, /\.days\s*=/);
+  assert.doesNotMatch(runtime, /track\[[^\]]+\]\[5\]\s*=/);
+  assert.doesNotMatch(controllerSource, /\blayer:/);
+  assert.match(segment, /const layer = L\.layerGroup\(\)\.addTo\(map\)/);
 });
 
 console.log('\n══════════════════════════════════════════════════');

@@ -23,7 +23,6 @@ export interface SegmentInteractionState {
   trailId: string | null;
   points: TrackIndexPoint[];
   campEdits: SegmentCampEdits;
-  layer: unknown;
   _justDragged: boolean;
   _fastTapUntil: number;
 }
@@ -84,7 +83,6 @@ export function createSegmentInteractionState(): SegmentInteractionState {
     trailId: null,
     points: [],
     campEdits: {},
-    layer: null,
     _justDragged: false,
     _fastTapUntil: 0,
   };

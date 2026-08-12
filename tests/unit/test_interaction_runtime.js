@@ -5,6 +5,9 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '../..');
 const { read, runtimeSource } = require('./runtime_source');
+const measureRuntime = read('src/features/measure/runtime-owner.ts');
+const segmentRuntime = read('src/features/segment/runtime-owner.ts');
+const mapInput = read('src/features/map/interaction-input.ts');
 const runtime = [
   runtimeSource,
   read('src/app/runtime/interaction-owner.ts'),
@@ -12,6 +15,9 @@ const runtime = [
   read('src/features/stitch/runtime-owner.ts'),
   read('src/features/waypoint/runtime-owner.ts'),
   read('src/features/escape/runtime-owner.ts'),
+  measureRuntime,
+  segmentRuntime,
+  mapInput,
 ].join('\n');
 const workbench = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const segmentController = fs.readFileSync(path.join(root, 'src/features/segment/controller.ts'), 'utf8');
@@ -43,23 +49,23 @@ test('all six modes activate owner-bound sessions', () => {
     ['stitch', 'editing'],
     ['day-preview', 'preview'],
   ]) {
-    assert.ok(runtime.includes(`beginRuntimeInteraction('${kind}', '${phase}'`), `${kind}:${phase}`);
+    const token = kind === 'measure' || kind === 'segment'
+      ? `beginInteraction('${kind}', '${phase}'`
+      : `beginRuntimeInteraction('${kind}', '${phase}'`;
+    assert.ok(runtime.includes(token), `${kind}:${phase}`);
   }
   assert.ok(runtime.includes("beginInteraction('waypoint', 'select'"), 'waypoint:select');
   assert.ok(runtime.includes("beginInteraction('escape', 'select-a'"), 'escape:select-a');
 });
 
 test('the original five cleanup paths cancel through the manager', () => {
-  for(const [kind, functionName] of [
-    ['measure', 'measureExit'],
-    ['segment', 'segmentExit'],
-    ['day-preview', 'clearDaySegmentPreview'],
-  ]) {
-    const start = runtime.indexOf(`function ${functionName}(`);
-    assert.ok(start >= 0, functionName);
-    const body = runtime.slice(start, start + 500);
-    assert.ok(body.includes(`cancelRuntimeInteraction('${kind}'`), `${functionName} -> ${kind}`);
+  for(const [kind, source] of [['measure', measureRuntime], ['segment', segmentRuntime]]) {
+    const start = source.indexOf('function exit(');
+    assert.ok(start >= 0, `${kind} exit`);
+    assert.ok(source.slice(start, start + 500).includes(`cancelInteraction('${kind}'`));
   }
+  const dayExit = runtime.slice(runtime.indexOf('function clearDaySegmentPreview('));
+  assert.ok(dayExit.slice(0, 500).includes("cancelRuntimeInteraction('day-preview'"));
   const waypointExit = runtime.slice(runtime.indexOf('function exitAddWaypointMode('));
   assert.ok(waypointExit.slice(0, 500).includes("cancelInteraction('waypoint'"));
   const escapeExit = runtime.slice(runtime.indexOf('function exit(options:'));
@@ -73,24 +79,24 @@ test('stitch cleanup exits through its owner-bound session', () => {
 });
 
 test('map taps use one active-kind dispatcher', () => {
-  assert.ok(runtime.includes("if(!['measure', 'segment', 'waypoint', 'escape'].includes(kind)) return;"));
-  assert.ok(runtime.includes("dispatchRuntimeInteraction(kind, {type:'tap', source:'leaflet', latlng:e.latlng})"));
+  assert.ok(mapInput.includes("if(!['measure', 'segment', 'waypoint', 'escape'].includes(kind)) return;"));
+  assert.ok(mapInput.includes("dispatch(kind as MapInputInteractionKind, {type:'tap', source:'leaflet'"));
   assert.strictEqual(runtime.includes('if(!addEscapeState.active) return;'), false);
   assert.strictEqual(runtime.includes('if(!addWaypointState.active) return;'), false);
 });
 
 test('fast taps and both drag systems dispatch typed events', () => {
-  assert.ok(runtime.includes("dispatchRuntimeInteraction(kind, {type:'tap', source:'fast', latlng})"));
+  assert.ok(mapInput.includes("dispatch(kind, {type:'tap', source:'fast', latlng})"));
   for(const eventType of ['drag-start', 'drag-snap', 'drag-end']) {
     assert.ok(runtime.includes(`type:'${eventType}'`), eventType);
   }
-  assert.ok(runtime.includes("dispatchRuntimeInteraction('measure'"));
-  assert.ok(runtime.includes("dispatchRuntimeInteraction('segment'"));
+  assert.ok(measureRuntime.includes("dispatchInteraction('measure'"));
+  assert.ok(segmentRuntime.includes("dispatchInteraction('segment'"));
 });
 
 test('scheduled drag work is session-owned', () => {
-  assert.match(runtime, /scheduleFrame:\s*\(callback(?:: any)?\) => scheduleRuntimeInteractionFrame\('measure', callback\)/);
-  assert.match(runtime, /scheduleFrame:\s*\(callback(?:: any)?\) => scheduleRuntimeInteractionFrame\('segment', callback\)/);
+  assert.match(measureRuntime, /scheduleFrame:callback => scheduleInteractionFrame\('measure', callback\)/);
+  assert.match(segmentRuntime, /scheduleFrame:callback => scheduleInteractionFrame\('segment', callback\)/);
   assert.ok(runtime.includes("scheduleRuntimeInteractionFrame('stitch', callback)"));
   assert.ok(runtime.includes('session.delay(250'));
   assert.ok(runtime.includes('session.delay(200'));
@@ -100,7 +106,7 @@ test('owner revisions are checked before dispatch and render work', () => {
   assert.ok(runtime.includes('const revalidateRuntimeInteractionOwner = interactionRuntime.revalidate'));
   assert.ok(runtime.includes('const ownerIsCurrent ='));
   assert.ok(runtime.includes("dependencies.manager.cancel('owner-invalid'"));
-  assert.ok(runtime.includes('segmentController.apply()'));
+  assert.ok(segmentRuntime.includes('controller.apply()'));
   assert.ok(segmentController.includes('dependencies.markRevision(updated)'));
   assert.ok(runtime.includes('markTrailRevision(trail)'));
 });

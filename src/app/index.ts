@@ -83,6 +83,13 @@ export {
   type TrackPointInspectionTrail,
 } from '../features/map/inspection-controller.ts';
 export {
+  createTrackSnapService,
+  type SnapTrail,
+  type TrackDragSnapperOptions,
+  type TrackSnapHit,
+  type TrackSnapService,
+} from '../features/map/track-snap.ts';
+export {
   createMapRenderController,
   buildTrackRenderModel,
   elevationTrackColor,

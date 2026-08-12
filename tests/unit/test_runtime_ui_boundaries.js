@@ -86,6 +86,32 @@ const test = async (name, fn) => {
     assert.doesNotMatch(controller, /\blayer:/);
   });
 
+  await test('measure and segment owners keep interaction DOM and Leaflet handles out of app state', () => {
+    const runtime = fs.readFileSync(path.join(root, 'src/app/runtime/studio.ts'), 'utf8');
+    const measure = fs.readFileSync(path.join(root, 'src/features/measure/runtime-owner.ts'), 'utf8');
+    const segment = fs.readFileSync(path.join(root, 'src/features/segment/runtime-owner.ts'), 'utf8');
+    const measureController = fs.readFileSync(path.join(root, 'src/features/measure/controller.ts'), 'utf8');
+    const segmentController = fs.readFileSync(path.join(root, 'src/features/segment/controller.ts'), 'utf8');
+    assert.match(runtime, /createMeasureRuntime\(/);
+    assert.match(runtime, /createSegmentRuntime\(/);
+    assert.doesNotMatch(runtime, /getElementById\(['"](?:measure|segment)-/);
+    assert.match(measure, /const layer = L\.layerGroup\(\)\.addTo\(map\)/);
+    assert.match(segment, /const layer = L\.layerGroup\(\)\.addTo\(map\)/);
+    assert.doesNotMatch(measureController, /\blayer:|\bsegmentLine:|\b_liveFrame:/);
+    assert.doesNotMatch(segmentController, /\blayer:/);
+  });
+
+  await test('map interaction input owns fast taps and the Leaflet click fallback', () => {
+    const runtime = fs.readFileSync(path.join(root, 'src/app/runtime/studio.ts'), 'utf8');
+    const input = fs.readFileSync(path.join(root, 'src/features/map/interaction-input.ts'), 'utf8');
+    assert.match(runtime, /createMapInteractionInput\(/);
+    assert.doesNotMatch(runtime, /addEventListener\(['"]pointerdown/);
+    assert.doesNotMatch(runtime, /map\.on\(['"]click,\s*onMapClick/);
+    assert.match(input, /listen\('pointerdown'/);
+    assert.match(input, /map\.on\('click', onMapClick\)/);
+    assert.match(input, /destroy\(\): void/);
+  });
+
   await test('localization owner keeps language state and DOM synchronization together', () => {
     const {createLocalizationRuntime} = load('src/features/localization/runtime-owner.ts');
     const label = element({dataset:{i18n:'menu.file'}});

@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.3.3',
+    date: '2026-08-11',
+    items: {
+      zh: ['重构测距与行程分段运行时：DOM、Leaflet 图层和拖动调度迁入独立 owner，主 runtime 缩减至约 1560 行', '新增共享轨迹吸附与地图输入模块，统一快速点击、邻近点缓存和拖动帧合并', '统一分段面板的桌面与移动端布局，移除重复的末日撤销按钮并保留按日删除与还原'],
+      en: ['Extracted measurement and itinerary segmentation into dedicated runtime owners, moving DOM, Leaflet layers, and drag scheduling out of the main runtime', 'Added shared trail snapping and map input modules for cached nearest-point lookup, fast taps, and coalesced drag frames', 'Unified the segment panel across desktop and mobile, removing the redundant last-day undo action while retaining per-day delete and restore'],
+    },
+  },
+  {
     version: 'v2.3.2',
     date: '2026-08-11',
     items: {

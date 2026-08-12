@@ -20,6 +20,10 @@ import { createElevationRuntime } from '../../features/elevation/runtime-owner.t
 import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
 import { createWaypointRuntime } from '../../features/waypoint/runtime-owner.ts';
 import { createEscapeRuntime } from '../../features/escape/runtime-owner.ts';
+import { createMeasureRuntime } from '../../features/measure/runtime-owner.ts';
+import { createSegmentRuntime } from '../../features/segment/runtime-owner.ts';
+import { createTrackSnapService } from '../../features/map/track-snap.ts';
+import { createMapInteractionInput } from '../../features/map/interaction-input.ts';
 import { createRuntimeInteractionOwner } from './interaction-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
@@ -38,7 +42,7 @@ export interface StudioRuntimeDependencies {
 export function startStudioRuntime(
   dependencies: StudioRuntimeDependencies,
 ): Promise<StudioBootResult> {
-  const document:any = dependencies.document;
+  const document = dependencies.document;
   const defaultView = document.defaultView as StudioBrowserWindow | null;
   if(!defaultView) throw new Error('Studio runtime requires a document with a window');
   const window:StudioBrowserWindow = defaultView;
@@ -55,7 +59,7 @@ export function startStudioRuntime(
     title:'徒步路线地图', trails:[], calc_method:{},
   };
 
-  function dispatchStudioCommand(commandId: any) {
+  function dispatchStudioCommand(commandId: string) {
     try {
       const result = commandRegistry.dispatch(commandId);
       if(result && typeof (result as PromiseLike<unknown>).then === 'function') {
@@ -189,12 +193,12 @@ export function startStudioRuntime(
     }
   }
   /* ============ State ============ */
-  const appStateStore:any = HTM_APP.createAppStateStore(initialProject);
-  const selectors:any = HTM_APP.createAppStateSelectors(() => appStateStore.snapshot());
-  const stateActions:any = HTM_APP.createAppStateActions(appStateStore);
-  const projectStore:any = HTM_APP.createProjectStore(initialProject);
-  const projectActions:any = HTM_APP.createProjectActions(projectStore);
-  const projectSelectors:any = HTM_APP.createProjectSelectors(() => projectStore.snapshot());
+  const appStateStore = HTM_APP.createAppStateStore(initialProject);
+  const selectors = HTM_APP.createAppStateSelectors<RuntimeTrail>(() => appStateStore.snapshot());
+  const stateActions = HTM_APP.createAppStateActions(appStateStore);
+  const projectStore = HTM_APP.createProjectStore(initialProject);
+  const projectActions = HTM_APP.createProjectActions(projectStore);
+  const projectSelectors = HTM_APP.createProjectSelectors<RuntimeTrail>(() => projectStore.snapshot());
   appStateStore.subscribe(() => commandRegistry.notifyChanged());
   const interactionManager = HTM_APP.createStudioInteractionManager();
   const interactionRuntime = createRuntimeInteractionOwner({
@@ -306,7 +310,9 @@ export function startStudioRuntime(
   function toggleTrailActive(trailId: any) {
     stateActions.setTrailActive(trailId, !selectors.activeTrailIds().has(trailId));
     // v1.21.0：主轨迹兜底只在当前组内挑
-    if(selectors.activeGroup() != null && !selectors.activeTrailIds().has(selectors.primaryTrailId())) {
+    const primaryTrailId = selectors.primaryTrailId();
+    if(selectors.activeGroup() != null && primaryTrailId != null
+        && !selectors.activeTrailIds().has(primaryTrailId)) {
       const inGroupActive = [...selectors.activeTrailIds()].filter((id: any) => {
         const tr = projectSelectors.trails().find((t: any) => t.id === id);
         return tr && trailGroup(tr) === selectors.activeGroup();
@@ -678,8 +684,10 @@ export function startStudioRuntime(
   /* ============ Escape ============ */
   const escapeRuntime = createEscapeRuntime({
     document, leaflet:L, map, displayLayer:escapeLayer, context:runtimeContext,
-    markRevision:markTrailRevision, language:getCurrentLang, drawTracks,
-    notify:showToast, beginInteraction:beginRuntimeInteraction,
+    markRevision:trail => markTrailRevision(trail as RuntimeTrail), language:getCurrentLang, drawTracks,
+    notify:showToast,
+    beginInteraction:(kind, phase, trail, options) =>
+      beginRuntimeInteraction(kind, phase, trail as RuntimeTrail, options),
     cancelInteraction:cancelRuntimeInteraction, setInteractionPhase:setRuntimeInteractionPhase,
     recordEdit:(labelZh, labelEn, mutation) => recordProjectEdit(labelZh, labelEn, mutation),
     persist:saveToStorage, renderDays:() => buildDaysTab(),
@@ -713,996 +721,102 @@ export function startStudioRuntime(
   const lightboxEl = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightbox-img');
   const lightboxCap = document.getElementById('lightbox-caption');
+  if(!lightboxEl || !lightboxImg || !lightboxCap) throw new Error('Lightbox shell is incomplete');
   const lightboxController = HTM_APP.createImageLightboxController({
-    document, viewport:window, container:lightboxEl, image:lightboxImg, caption:lightboxCap,
+    document, viewport:window, container:lightboxEl,
+    image:lightboxImg as HTMLImageElement, caption:lightboxCap,
   });
   const openLightbox = (src: any, caption: any) => lightboxController.open(src, caption);
   const closeLightbox = () => lightboxController.close();
-  /* ============ 测距功能（主轨迹上选两点 → 爬升/下降/里程） ============ */
-  const measureController:any = HTM_APP.createMeasureController();
-  const measureState:any = measureController.state;
-  const measureTrackCache = new WeakMap();
-  const measureStatsCache = new WeakMap();
-
-  function nearestTrackIdxOnPrimary(lat: any, lng: any) {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) return null;
-    const tk = main.track;
-    const sig = `${tk[0][0]},${tk[0][1]}|${tk[tk.length-1][0]},${tk[tk.length-1][1]}`;
-    // 缓存主轨迹 typed array + 经纬度网格；测距点击只查附近网格，避免每次全轨扫描。
-    let cache = measureTrackCache.get(main);
-    if(!cache || cache.length !== tk.length || cache.sig !== sig) {
-      const cellSize = 0.0015; // 约 160m，经纬度网格只用于候选点粗筛
-      const latCache = new Float64Array(tk.length);
-      const lngCache = new Float64Array(tk.length);
-      const grid = new Map();
-      for(let i=0; i<tk.length; i++) {
-        const la = tk[i][0], ln = tk[i][1];
-        latCache[i] = la;
-        lngCache[i] = ln;
-        const key = `${Math.floor(la / cellSize)}:${Math.floor(ln / cellSize)}`;
-        let bucket = grid.get(key);
-        if(!bucket) { bucket = []; grid.set(key, bucket); }
-        bucket.push(i);
-      }
-      cache = { length: tk.length, sig, cellSize, grid, latCache, lngCache };
-      measureTrackCache.set(main, cache);
-    }
-    const lats = cache.latCache;
-    const lngs = cache.lngCache;
-    const cellSize = cache.cellSize;
-    const cosL = Math.cos(lat * Math.PI / 180);
-    let bestI = 0, bestPlanar = Infinity;
-
-    const cLat = Math.floor(lat / cellSize);
-    const cLng = Math.floor(lng / cellSize);
-    const latRadius = 2;
-    const lngRadius = Math.max(2, Math.ceil((0.002 / Math.max(cosL, 0.15)) / cellSize));
-    let seenCandidate = false;
-    for(let gy = cLat - latRadius; gy <= cLat + latRadius; gy++) {
-      for(let gx = cLng - lngRadius; gx <= cLng + lngRadius; gx++) {
-        const bucket = cache.grid.get(`${gy}:${gx}`);
-        if(!bucket) continue;
-        for(let k=0; k<bucket.length; k++) {
-          const i = bucket[k];
-          const dy = lats[i] - lat;
-          const dx = (lngs[i] - lng) * cosL;
-          const d2 = dx*dx + dy*dy;
-          if(d2 < bestPlanar) { bestPlanar = d2; bestI = i; }
-        }
-        seenCandidate = true;
-      }
-    }
-
-    if(!seenCandidate) return null;
-    // 邻近网格可能仍有多点集中，候选内取最近；不再扫描整条主轨迹。
-    const p = tk[bestI];
-    const distM = haversine(lat, lng, p[0], p[1]);
-    if(distM > 200) return null;
-    return { idx: bestI, point: p, dist: distM, trail: main };
-  }
-
-  function nearestTrackIdxNearPrimary(lat: any, lng: any, centerIdx: any, windowSize: any = 700) {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length || centerIdx == null || !isFinite(centerIdx)) {
-      return nearestTrackIdxOnPrimary(lat, lng);
-    }
-    const tk = main.track;
-    const lo = Math.max(0, Math.floor(centerIdx) - windowSize);
-    const hi = Math.min(tk.length - 1, Math.floor(centerIdx) + windowSize);
-    const cosL = Math.cos(lat * Math.PI / 180);
-    let bestI = -1, bestPlanar = Infinity;
-    for(let i=lo; i<=hi; i++) {
-      const dy = tk[i][0] - lat;
-      const dx = (tk[i][1] - lng) * cosL;
-      const d2 = dx*dx + dy*dy;
-      if(d2 < bestPlanar) { bestPlanar = d2; bestI = i; }
-    }
-    if(bestI >= 0) {
-      const p = tk[bestI];
-      const distM = haversine(lat, lng, p[0], p[1]);
-      if(distM <= 200) return { idx: bestI, point: p, dist: distM, trail: main };
-    }
-    return nearestTrackIdxOnPrimary(lat, lng);
-  }
-
-  function nearestTrackIdxOnTrail(trail: any, lat: any, lng: any, centerIdx: any = null, windowSize: any = 1000) {
-    const track = trail?.track || [];
-    if(!track.length) return null;
-    let lo = 0;
-    let hi = track.length - 1;
-    if(Number.isFinite(centerIdx)) {
-      lo = Math.max(0, Math.round(centerIdx) - windowSize);
-      hi = Math.min(track.length - 1, Math.round(centerIdx) + windowSize);
-    }
-    const cosLat = Math.max(.15, Math.cos(lat * Math.PI / 180));
-    let bestIndex = lo;
-    let bestDistance = Infinity;
-    for(let index = lo; index <= hi; index += 1) {
-      const dy = track[index][0] - lat;
-      const dx = (track[index][1] - lng) * cosLat;
-      const distance = dx * dx + dy * dy;
-      if(distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
-    }
-    const point = track[bestIndex];
-    return {idx:bestIndex, point, dist:haversine(lat, lng, point[0], point[1]), trail};
-  }
-
-  function measurePointFromHit(hit: any) {
-    const p = hit.point;
-    return { idx: hit.idx, lat: p[0], lng: p[1], elev: p[2] || 0, km: p[3] || 0 };
-  }
-
-
-  function getMeasureStatsCache(main: any) {
-    if(!main || !main.track || !main.track.length) return null;
-    const tk = main.track;
-    const sig = `${tk[0][0]},${tk[0][1]}|${tk[tk.length-1][0]},${tk[tk.length-1][1]}|${tk.length}`;
-    let cache = measureStatsCache.get(main);
-    if(cache && cache.sig === sig) return cache;
-
-    const n = tk.length;
-    const ascCum = new Float64Array(n);
-    const descCum = new Float64Array(n);
-    const distCum = new Float64Array(n);
-    const elevs = new Array(n);
-    for(let i=0; i<n; i++) {
-      distCum[i] = Number.isFinite(tk[i][3]) ? tk[i][3] : (i ? distCum[i-1] : 0);
-      ascCum[i] = Number.isFinite(tk[i][4]) ? tk[i][4] : 0;
-      descCum[i] = main._descCum && Number.isFinite(main._descCum[i]) ? main._descCum[i] : 0;
-      elevs[i] = Number.isFinite(tk[i][2]) ? tk[i][2] : 0;
-    }
-    if(!main._descCum || main._descCum.length !== n) {
-      const d = accumulatorDescent(elevs, 10);
-      for(let i=0; i<n; i++) descCum[i] = d[i] || 0;
-    }
-    if(!Number.isFinite(tk[n-1][4])) {
-      const a = accumulatorAscent(elevs, 10);
-      for(let i=0; i<n; i++) ascCum[i] = a[i] || 0;
-    }
-
-    const blockSize = 256;
-    const blockCount = Math.ceil(n / blockSize);
-    const maxBlocks = new Float64Array(blockCount);
-    for(let b=0; b<blockCount; b++) {
-      let maxE = -Infinity;
-      const start = b * blockSize;
-      const end = Math.min(n, start + blockSize);
-      for(let i=start; i<end; i++) if(elevs[i] > maxE) maxE = elevs[i];
-      maxBlocks[b] = maxE;
-    }
-    cache = { sig, distCum, ascCum, descCum, elevs, blockSize, maxBlocks };
-    measureStatsCache.set(main, cache);
-    return cache;
-  }
-
-  function measureRangeMaxElev(cache: any, i1: any, i2: any) {
-    if(!cache) return 0;
-    const { elevs, blockSize, maxBlocks } = cache;
-    let maxE = -Infinity;
-    let i = i1;
-    while(i <= i2 && i % blockSize !== 0) {
-      if(elevs[i] > maxE) maxE = elevs[i];
-      i++;
-    }
-    while(i + blockSize - 1 <= i2) {
-      const b = Math.floor(i / blockSize);
-      if(maxBlocks[b] > maxE) maxE = maxBlocks[b];
-      i += blockSize;
-    }
-    while(i <= i2) {
-      if(elevs[i] > maxE) maxE = elevs[i];
-      i++;
-    }
-    return maxE;
-  }
-
-  function measureRangeMinElev(cache: any, i1: any, i2: any) {
-    if(!cache) return 0;
-    const { elevs } = cache;
-    let minE = Infinity;
-    for(let i=i1; i<=i2; i++) {
-      if(elevs[i] < minE) minE = elevs[i];
-    }
-    return minE;
-  }
-
-  function computeMeasureStatsFromCache(cache: any, startIdx: any, endIdx: any) {
-    if(!cache || !cache.elevs || !cache.elevs.length) return null;
-    const fakeTrack:any = { length: cache.elevs.length };
-    const range = normalizeTrackIndexRange(fakeTrack, startIdx, endIdx);
-    if(!range) return null;
-    const { iStart, iEnd, reversed } = range;
-    const distKm = Math.abs((cache.distCum[iEnd] || 0) - (cache.distCum[iStart] || 0));
-    const forwardAsc = Math.max(0, (cache.ascCum[iEnd] || 0) - (cache.ascCum[iStart] || 0));
-    const forwardDesc = Math.max(0, (cache.descCum[iEnd] || 0) - (cache.descCum[iStart] || 0));
-    return {
-      ...range,
-      distKm,
-      asc: Math.round(reversed ? forwardDesc : forwardAsc),
-      desc: Math.round(reversed ? forwardAsc : forwardDesc),
-      maxE: Math.round(measureRangeMaxElev(cache, iStart, iEnd)),
-      minE: Math.round(measureRangeMinElev(cache, iStart, iEnd)),
-    };
-  }
-
-  function computeMeasureStats(a: any, b: any) {
-    const main = projectSelectors.trails().find((t: any) => t.id === (measureState.trailId || selectors.primaryTrailId()));
-    if(!main || !main.track || !a || !b) return null;
-    const cache = getMeasureStatsCache(main);
-    if(!cache) return null;
-    return computeMeasureStatsFromCache(cache, a.idx, b.idx);
-  }
-
-
-  function createPrimaryTrackDragSnapper(marker: any, opts: any = {}) {
-    let latestLatLng:any = null;
-    let frameId = 0;
-    let frameTask:any = null;
-    const raf = typeof requestAnimationFrame === 'function'
-      ? requestAnimationFrame
-      : (cb: any) => setTimeout(cb, 16);
-    const cancelRaf = typeof cancelAnimationFrame === 'function'
-      ? cancelAnimationFrame
-      : clearTimeout;
-
-    function resolveLatLng(ll: any) {
-      const centerIdx = typeof opts.getCenterIdx === 'function' ? opts.getCenterIdx() : null;
-      if(opts.trail) {
-        const searchCenter = opts.globalSearch ? null : centerIdx;
-        return nearestTrackIdxOnTrail(opts.trail, ll.lat, ll.lng, searchCenter, opts.windowSize || 1000);
-      }
-      return centerIdx != null
-        ? nearestTrackIdxNearPrimary(ll.lat, ll.lng, centerIdx, opts.windowSize || 700)
-        : nearestTrackIdxOnPrimary(ll.lat, ll.lng);
-    }
-
-    function flush() {
-      frameId = 0;
-      frameTask = null;
-      if(!latestLatLng) return;
-      const ll = latestLatLng;
-      latestLatLng = null;
-      const hit = resolveLatLng(ll);
-      if(hit) {
-        if(opts.snapMarker !== false && marker && marker.setLatLng) {
-          marker.setLatLng([hit.point[0], hit.point[1]]);
-        }
-        if(typeof opts.onSnap === 'function') opts.onSnap(hit, ll);
-      }
-    }
-
-    return {
-      schedule(ev: any) {
-        latestLatLng = ev.target.getLatLng();
-        if(frameId || frameTask) return;
-        if(typeof opts.scheduleFrame === 'function') frameTask = opts.scheduleFrame(flush);
-        else frameId = raf(flush);
-      },
-      cancel() {
-        if(frameTask && typeof frameTask.cancel === 'function') frameTask.cancel();
-        if(frameId) cancelRaf(frameId);
-        frameTask = null;
-        frameId = 0;
-        latestLatLng = null;
-      },
-      resolve: resolveLatLng
-    };
-  }
-
-  function handleMeasureTap(event: any, session: any) {
-    if(measureState._justDragged) return;
-    const latlng = event.latlng;
-    const isFast = event.source === 'fast';
-    if(!isFast && measureState._fastTapUntil > Date.now()) return;
-    if(measureState.ptA && measureState.ptB) {
-      showToast('已选 A/B 后请拖动端点调整，或点「重新选点」', 'info');
-      return;
-    }
-
-    const isA = !measureState.ptA;
-    const tempColor = isA ? '#22c55e' : '#ef4444';
-    const tempLabel = isA ? 'A' : 'B';
-    let tempMarker = null;
-    if(isFast) {
-      if(isA) measureState.layer.clearLayers();
-      tempMarker = measureMarker(latlng.lat, latlng.lng, tempLabel, tempColor);
-      tempMarker.addTo(measureState.layer);
-    }
-
-    const commitHit = (hit: any) => {
-      if(!session.isCurrent()) return;
-      if(!hit) {
-        tempMarker?.remove();
-        showToast('请点击主轨迹附近（200m 内）', 'error');
-        return;
-      }
-      const pt = measurePointFromHit(hit);
-      if(tempMarker?.setLatLng) tempMarker.setLatLng([hit.point[0], hit.point[1]]);
-      if(!measureState.ptA) {
-        measureController.updateEndpoint('A', pt);
-        session.setPhase('select-b');
-        if(!tempMarker) measureMarker(pt.lat, pt.lng, 'A', '#22c55e').addTo(measureState.layer);
-        setMeasureElevHint('再点击终点。');
-        return;
-      }
-      if(pt.idx === measureState.ptA.idx) {
-        tempMarker?.remove();
-        showToast('起点和终点不能是同一点', 'error');
-        return;
-      }
-      measureController.updateEndpoint('B', pt);
-      session.setPhase('ready');
-      measureCompute();
-    };
-
-    if(isFast) session.frame(() => commitHit(nearestTrackIdxOnPrimary(latlng.lat, latlng.lng)));
-    else commitHit(nearestTrackIdxOnPrimary(latlng.lat, latlng.lng));
-  }
-
-  function handleMeasureInteractionEvent(event: any, session: any) {
-    if(event.type === 'tap') {
-      handleMeasureTap(event, session);
-      return;
-    }
-    if(event.type === 'drag-start') {
-      measureController.beginDrag();
-      session.setPhase('dragging');
-      return;
-    }
-    if(event.type === 'drag-snap') {
-      if(session.phase === 'dragging' && applyMeasureEndpointHit(event.endpoint, event.hit, true)) {
-        queueMeasureLiveUpdate();
-      }
-      return;
-    }
-    if(event.type !== 'drag-end') return;
-    session.setPhase('ready');
-    session.delay(250, () => { measureController.endDrag(); });
-    const hit = event.hit;
-    if(!hit) {
-      showToast('必须拖到主轨迹附近（200m 内）', 'error');
-      measureCompute();
-      return;
-    }
-    const other = event.endpoint === 'A' ? measureState.ptB : measureState.ptA;
-    if(other && hit.idx === other.idx) {
-      showToast('起点和终点不能是同一点', 'error');
-      measureCompute();
-      return;
-    }
-    applyMeasureEndpointHit(event.endpoint, hit, false);
-    measureCompute();
-  }
-
-  function measureEnter() {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) {
-      showToast('请先设置主轨迹', 'error');
-      return;
-    }
-    beginRuntimeInteraction('measure', 'select-a', main, {
-      onEvent: handleMeasureInteractionEvent,
-      onCancel: (opts: any) => measureExit(opts),
-    });
-    measureController.enter(main.id);
-    enterInteractionRenderMode('测距');
-    clearDaySegmentPreview({silent:true});
-    // v1.28.0：诊断日志（默认关闭，PERF_DEBUG=true 打开）
-    if(window.PERF_DEBUG === true) {
-      console.log('[measure-perf] 主轨迹点数:', main.track.length,
-        '· 主轨迹 waypoint 数:', (main.waypoints || []).length,
-        '· projectSelectors.trails() 数:', projectSelectors.trails().length);
-    }
-    if(!measureState.layer) measureState.layer = L.layerGroup().addTo(map);
-    clearMeasureLayer();
-    measurePanelController.enter();
-    resetMeasureElevReadout('在主轨迹上点击起点，再点击终点。');
-  }
-
-  function measureExit(opts: any = {}) {
-    if(!opts.fromManager && cancelRuntimeInteraction('measure', opts.reason || 'cancelled')) return;
-    measureController.exit();
-    clearMeasureLayer();
-    measurePanelController.exit();
-    hideMeasureElevReadout();
-    // 恢复完整主轨迹海拔图
-    if(typeof refreshElevBar === 'function') refreshElevBar();
-    // v1.30.0：取消自动复位到主轨迹（用户不希望测距退出后视图跳走）
-  }
-
-  function measureReset() {
-    measureController.reset();
-    setRuntimeInteractionPhase('measure', 'select-a');
-    clearMeasureLayer();
-    resetMeasureElevReadout('在主轨迹上点击起点，再点击终点。');
-    // v1.31.0：复位时把海拔图刷回全轨模式，否则下次 measureCompute 的 refreshElevBar 会与残留状态竞态，出现"选 B 慢"
-    if(typeof refreshElevBar === 'function') {
-      requestAnimationFrame(() => refreshElevBar());
-    }
-  }
-
-  function measureReverse() {
-    if(!measureState.ptA || !measureState.ptB) {
-      showToast('请先选择 A/B 两点', 'info');
-      return;
-    }
-    if(!measureController.reverse()) return;
-    measureCompute();
-  }
-
-  function measureMarker(lat: any, lng: any, label: any, color: any, opts: any = {}) {
-    // v1.27.0：用 divIcon 替代 circleMarker+tooltip，减少 DOM 层级和 layout 触发
-    const draggable = !!opts.draggable;
-    const icon = L.divIcon({
-      className: 'measure-marker-icon',
-      html: '<div style="width:20px;height:20px;background:'+color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;font-family:sans-serif;'+(draggable?'cursor:move;':'')+'">'+label+'</div>',
-      iconSize: [interactionMarkerHitSize, interactionMarkerHitSize],
-      iconAnchor: [interactionMarkerHitSize / 2, interactionMarkerHitSize / 2],
-    });
-    return L.marker([lat, lng], { icon, interactive: draggable, keyboard: false, draggable, autoPan: draggable });
-  }
-
-  function clearMeasureLayer() {
-    if(measureState._liveFrame) {
-      try {
-        if(typeof measureState._liveFrame.cancel === 'function') measureState._liveFrame.cancel();
-        else cancelAnimationFrame(measureState._liveFrame);
-      } catch(e) {}
-      measureState._liveFrame = 0;
-    }
-    if(measureState.layer) measureState.layer.clearLayers();
-    measureState.segmentLine = null;
-  }
-
-  function showMeasureElevReadout() {
-    measurePanelController.showReadout();
-  }
-
-  function hideMeasureElevReadout() {
-    measurePanelController.hideReadout();
-  }
-
-  function setMeasureElevHint(html: any) {
-    measurePanelController.setHint(html);
-  }
-
-  function resetMeasureElevReadout(hintText: any) {
-    measurePanelController.reset(hintText || '在主轨迹上点击起点，再点击终点。');
-  }
-
-
-  function renderMeasureSegmentLine(maxPoints: any = 900) {
-    if(!measureState.layer || !measureState.ptA || !measureState.ptB) return;
-    const main = projectSelectors.trails().find((t: any) => t.id === (measureState.trailId || selectors.primaryTrailId()));
-    if(!main || !main.track) return;
-    const model = buildMeasureSegmentRenderModel(
-      main.track,
-      measureState.ptA,
-      measureState.ptB,
-      maxPoints,
-      main.track_breaks,
-    );
-    if(!model) return;
-    measureState.segmentLine = HTM_APP.upsertLeafletPolyline(
-      L,
-      measureState.layer,
-      measureState.segmentLine,
-      model,
-    );
-  }
-
-  function updateMeasureReadout(loading: any = false) {
-    const a = measureState.ptA, b = measureState.ptB;
-    if(!a || !b) return;
-    if(loading) {
-      measurePanelController.update(null, true);
-      return;
-    }
-    const stats = computeMeasureStats(a, b);
-    measurePanelController.update(stats);
-  }
-
-  function queueMeasureLiveUpdate() {
-    if(measureState._liveFrame) return;
-    const session = interactionManager.current.kind === 'measure' ? interactionManager.current : null;
-    const task = session?.frame(() => {
-      measureState._liveFrame = 0;
-      renderMeasureSegmentLine(700);
-      updateMeasureReadout(false);
-    });
-    measureState._liveFrame = task || 0;
-  }
-
-
-  function applyMeasureEndpointHit(label: any, hit: any, live: any = false) {
-    if(!hit) return false;
-    const pt = measurePointFromHit(hit);
-    const changed = measureController.updateEndpoint(label, pt);
-    if(!changed) return false;
-    setMeasureElevHint('');
-    return true;
-  }
-
-  function bindMeasureEndpointDrag(marker: any, label: any) {
-    const snapper = createPrimaryTrackDragSnapper(marker, {
-      scheduleFrame: (callback: any) => scheduleRuntimeInteractionFrame('measure', callback),
-      getCenterIdx: () => {
-        const pt = label === 'A' ? measureState.ptA : measureState.ptB;
-        return pt ? pt.idx : null;
-      },
-      onSnap: (hit: any) => {
-        dispatchRuntimeInteraction('measure', {type:'drag-snap', endpoint:label, hit});
-      },
-    });
-    marker.on('dragstart', () => {
-      dispatchRuntimeInteraction('measure', {type:'drag-start', endpoint:label});
-    });
-    marker.on('drag', (ev: any) => snapper.schedule(ev));
-    marker.on('dragend', (ev: any) => {
-      const ll = ev.target.getLatLng();
-      const hit = snapper.resolve(ll);
-      snapper.cancel();
-      dispatchRuntimeInteraction('measure', {type:'drag-end', endpoint:label, hit});
-    });
-  }
-
-  function addMeasureEndpointMarker(pt: any, label: any, color: any) {
-    const marker = measureMarker(pt.lat, pt.lng, label, color, { draggable: true }).addTo(measureState.layer);
-    bindMeasureEndpointDrag(marker, label);
-    return marker;
-  }
+  /* ============ Shared trail snapping + typed measurement owner ============ */
+  const trackSnap = createTrackSnapService<RuntimeTrail>({
+    primaryTrail:() => selectors.primaryTrail(projectSelectors.trails()),
+    distance:haversine,
+    requestFrame:callback => window.requestAnimationFrame(callback),
+    cancelFrame:handle => window.cancelAnimationFrame(handle),
+  });
+  const nearestTrackIdxOnPrimary = trackSnap.nearestPrimary;
+  const nearestTrackIdxNearPrimary = trackSnap.nearestPrimaryNear;
+  const createPrimaryTrackDragSnapper = trackSnap.createDragSnapper;
+  const measureRuntime = createMeasureRuntime({
+    document, window, leaflet:L, map, context:runtimeContext, panel:measurePanelController,
+    trackSnap, interactionMarkerHitSize, language:getCurrentLang, notify:showToast,
+    beginInteraction:beginRuntimeInteraction, cancelInteraction:cancelRuntimeInteraction,
+    setInteractionPhase:setRuntimeInteractionPhase,
+    scheduleInteractionFrame:scheduleRuntimeInteractionFrame,
+    dispatchInteraction:dispatchRuntimeInteraction,
+    enterRenderMode:label => enterInteractionRenderMode(label),
+    clearDayPreview:() => clearDaySegmentPreview({silent:true}),
+    refreshElevation:() => refreshElevBar(),
+  });
+  const measureController = measureRuntime.controller;
+  const measureState = measureRuntime.state;
+  const measureEnter = measureRuntime.enter;
+  const measureExit = measureRuntime.exit;
+  const measureReset = measureRuntime.reset;
+  const measureReverse = measureRuntime.reverse;
+  const measureCompute = measureRuntime.compute;
+  const measureMarker = measureRuntime.marker;
+  const measurePointFromHit = measureRuntime.pointFromHit;
+  const computeMeasureStats = measureRuntime.computeStats;
+  const getMeasureStatsCache = measureRuntime.getStatsCache;
+  const addMeasureEndpointMarker = measureRuntime.addEndpointMarker;
+  const bindMeasureEndpointDrag = measureRuntime.bindEndpointDrag;
+  const applyMeasureEndpointHit = measureRuntime.applyEndpointHit;
+  const queueMeasureLiveUpdate = measureRuntime.queueLiveUpdate;
+  const renderMeasureSegmentLine = measureRuntime.renderSegmentLine;
+  const showMeasureElevReadout = measureRuntime.showReadout;
+  const hideMeasureElevReadout = measureRuntime.hideReadout;
+  const setMeasureElevHint = measureRuntime.setHint;
+  const resetMeasureElevReadout = measureRuntime.resetReadout;
+  const handleMeasureInteractionEvent = measureRuntime.handleInteractionEvent;
   const addEscapeEnter = escapeRuntime.enter;
   const addEscapeExit = escapeRuntime.exit;
   const addEscapeReset = escapeRuntime.reset;
   const addEscapeCommit = escapeRuntime.commit;
-  function measureCompute() {
-    if(!measureState.ptA || !measureState.ptB) return;
-    const seq = measureController.nextComputeSequence();
-    const a = measureState.ptA, b = measureState.ptB;
-
-    // 视觉反馈立即执行：先落 A/B marker，再把长线段绘制放到下一帧，避免拖动松手时卡住点位刷新。
-    clearMeasureLayer();
-    addMeasureEndpointMarker(a, 'A', '#22c55e');
-    addMeasureEndpointMarker(b, 'B', '#ef4444');
-
-    // 立即先显示计算中的数值状态，端点海拔由海拔图标注呈现。
-    updateMeasureReadout(true);
-    setMeasureElevHint('');
-
-    // ── 计算重活放到下一帧，不阻塞点击 ──
-    scheduleRuntimeInteractionFrame('measure', () => {
-      if(!measureController.isComputeCurrent(seq)) return;
-      renderMeasureSegmentLine(1200);
-      if(!measureController.isComputeCurrent(seq)) return;
-      updateMeasureReadout(false);
-
-      // v1.30.0：取消 AB 计算完成后的自动 fitBounds（用户不希望测距时视图跳转）
-
-      // 海拔图重绘放到再下一帧，让上面的数字先渲染
-      if(typeof refreshElevBar === 'function') {
-        scheduleRuntimeInteractionFrame('measure', () => {
-          if(measureController.isComputeCurrent(seq)) refreshElevBar();
-        });
-      }
-    });
-  }
-  /* ============ 分段功能（在主轨迹上依次选点，标记每天行程） ============ */
-  const segmentController:any = HTM_APP.createSegmentController(runtimeContext, {
-    markRevision:markTrailRevision,
+  /* ============ Typed itinerary segmentation owner ============ */
+  const segmentRuntime = createSegmentRuntime({
+    document, leaflet:L, map, dialogs:studioDialogs, context:runtimeContext, trackSnap,
+    dayPalette, interactionMarkerHitSize, language:getCurrentLang,
+    formatCoordinates:formatTrackPointCoordinates,
+    markRevision:trail => markTrailRevision(trail as unknown as RuntimeTrail),
+    notify:showToast, beginInteraction:beginRuntimeInteraction,
+    cancelInteraction:cancelRuntimeInteraction, setInteractionPhase:setRuntimeInteractionPhase,
+    scheduleInteractionFrame:scheduleRuntimeInteractionFrame,
+    dispatchInteraction:dispatchRuntimeInteraction,
+    currentInteractionKind:() => interactionManager.current.kind,
+    enterRenderMode:label => enterInteractionRenderMode(label),
+    resetView:() => resetView({restoreActive:true}),
+    persistNow:() => _doSave(),
+    rebuild:() => rebuildAll({fit:false}),
+    refreshElevation:() => refreshElevBar(),
+    captureHistory:() => projectHistoryController.capture(),
+    commitHistory:(labelZh, labelEn, before) =>
+      projectHistoryController.commit(historyLabel(labelZh, labelEn), before),
   });
+  const segmentController = segmentRuntime.controller;
   interactionRuntime.setSegmentDirtyReader(() => segmentController.isDirty());
-  const segmentState:any = segmentController.state;
+  const segmentState = segmentRuntime.state;
+  const segmentEnter = segmentRuntime.enter;
+  const segmentExit = segmentRuntime.exit;
+  const requestSegmentExit = segmentRuntime.requestExit;
+  const segmentRestore = segmentRuntime.restore;
+  const segmentInsertPoint = segmentRuntime.insertPoint;
+  const segmentDeleteDay = segmentRuntime.deleteDay;
+  const segmentApply = segmentRuntime.apply;
+  const updateSegmentUI = segmentRuntime.update;
+  const redrawSegmentLayer = segmentRuntime.redraw;
 
-  function handleSegmentTap(event: any, session: any) {
-    if(segmentState._justDragged) return;
-    if(event.source !== 'fast' && segmentState._fastTapUntil > Date.now()) return;
-    const latlng = event.latlng;
-    const commitHit = (hit: any) => {
-      if(!session.isCurrent()) return;
-      if(!hit) {
-        showToast('请点击主轨迹附近（200m 内）', 'error');
-        return;
-      }
-      const p = hit.point;
-      segmentInsertPoint({idx:hit.idx, lat:p[0], lng:p[1], elev:p[2] || 0, km:p[3] || 0});
-    };
-    if(event.source !== 'fast') {
-      commitHit(nearestTrackIdxOnPrimary(latlng.lat, latlng.lng));
-      return;
-    }
-    const tempMarker = L.circleMarker([latlng.lat, latlng.lng], {
-      radius:6, color:'#fff', weight:2, fillColor:'#fbbf24', fillOpacity:0.7,
-    }).addTo(segmentState.layer || (segmentState.layer = L.layerGroup().addTo(map)));
-    session.frame(() => {
-      const hit = nearestTrackIdxOnPrimary(latlng.lat, latlng.lng);
-      tempMarker.remove();
-      commitHit(hit);
-    });
-  }
-
-  function handleSegmentInteractionEvent(event: any, session: any) {
-    if(event.type === 'tap') {
-      handleSegmentTap(event, session);
-      return;
-    }
-    if(event.type === 'drag-start') {
-      segmentController.beginDrag();
-      session.setPhase('dragging');
-      return;
-    }
-    if(event.type !== 'drag-end') return;
-    session.setPhase('editing');
-    session.delay(200, () => { segmentController.endDrag(); });
-    const hit = event.hit;
-    if(!hit) {
-      showToast('必须拖到主轨迹附近（200m 内）', 'error');
-      redrawSegmentLayer();
-      return;
-    }
-    const p = hit.point;
-    const nextPoint = {idx:hit.idx, lat:p[0], lng:p[1], elev:p[2] || 0, km:p[3] || 0};
-    const move = segmentController.moveBoundary(event.boundaryIndex, nextPoint);
-    if(!move.ok && move.reason === 'duplicate') {
-      showToast('该位置已被占用，请选另一处', 'error');
-      redrawSegmentLayer();
-      return;
-    }
-    if(!move.ok) {
-      const message = move.reason === 'before-previous'
-        ? '分段点必须在上一边界之后'
-        : move.reason === 'after-next'
-          ? '分段点必须在下一边界之前'
-          : '该分段点不能移动到此处';
-      showToast(message, 'error');
-      redrawSegmentLayer();
-      return;
-    }
-    updateSegmentUI();
-  }
-
-  function segmentEnter() {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track || !main.track.length) {
-      showToast('请先设置主轨迹', 'error');
-      return;
-    }
-    beginRuntimeInteraction('segment', 'editing', main, {
-      onEvent: handleSegmentInteractionEvent,
-      onCancel: (opts: any) => segmentExit(opts),
-    });
-    enterInteractionRenderMode('分段');
-
-    if(!segmentController.enter(main.id)) return;
-    if(!segmentState.layer) segmentState.layer = L.layerGroup().addTo(map);
-    segmentState.layer.clearLayers();
-
-    document.getElementById('segment-panel').style.display = 'flex';
-    map.getContainer().style.cursor = 'crosshair';
-    // v1.30.0：分段模式也开启 SVG path 命中测试跳过
-    map.getContainer().classList.add('measure-active');
-    if(typeof resetView === 'function') resetView({restoreActive: true});
-    updateSegmentUI();
-  }
-
-  function segmentExit(opts: any = {}) {
-    if(!opts.fromManager && cancelRuntimeInteraction('segment', opts.reason || 'cancelled')) return;
-    segmentController.exit();
-    if(segmentState.layer) segmentState.layer.clearLayers();
-    document.getElementById('segment-panel').style.display = 'none';
-    map.getContainer().style.cursor = '';
-    // v1.30.0：恢复 SVG 命中检测
-    map.getContainer().classList.remove('measure-active');
-    updateSegmentDirtyIndicator();
-  }
-
-  let segmentExitPrompt:any = null;
-  function requestSegmentExit(reason: any = 'cancelled') {
-    if(!segmentState.active && interactionManager.current.kind !== 'segment') return Promise.resolve(true);
-    const finish = () => {
-      if(cancelRuntimeInteraction('segment', reason)) return true;
-      segmentExit({fromManager:true, reason});
-      return true;
-    };
-    if(!segmentController.isDirty()) return Promise.resolve(finish());
-    if(segmentExitPrompt) return segmentExitPrompt;
-    segmentExitPrompt = studioDialogs.confirm({
-      title:getCurrentLang() === 'zh' ? '存在未应用修改' : 'Unapplied segment changes',
-      message:getCurrentLang() === 'zh'
-        ? '当前分段边界或营地信息尚未应用。确定放弃这些修改并退出吗？'
-        : 'Segment boundaries or camp details have not been applied. Discard these changes and exit?',
-      danger:true,
-      confirmLabel:getCurrentLang() === 'zh' ? '放弃并退出' : 'Discard and exit',
-      cancelLabel:getCurrentLang() === 'zh' ? '继续编辑' : 'Keep editing',
-    }).then((confirmed: any) => confirmed ? finish() : false).finally(() => { segmentExitPrompt = null; });
-    return segmentExitPrompt;
-  }
-
-  function updateSegmentDirtyIndicator() {
-    const indicator = document.getElementById('segment-dirty-indicator');
-    if(!indicator) return;
-    indicator.hidden = !segmentController.isDirty();
-    indicator.textContent = getCurrentLang() === 'zh' ? '存在未应用修改' : 'Unapplied changes';
-  }
-
-  function segmentUndo() {
-    segmentDeleteDay(segmentState.points.length - 1);
-  }
-
-  function segmentRestore() {
-    if(segmentController.restore()) updateSegmentUI();
-  }
-
-
-  function segmentInsertPoint(pt: any) {
-    const result = segmentController.insertPoint(pt);
-    if(!result.ok) {
-      if(result.reason === 'empty') return false;
-      if(result.reason === 'duplicate') {
-        showToast('该点已选中，请选另一个位置', 'error');
-        return false;
-      }
-      showToast('请点击现有行程范围内的未占用位置', 'error');
-      return false;
-    }
-    updateSegmentUI();
-    return true;
-  }
-
-  function segmentDeleteDay(dayNo: any) {
-    const result = segmentController.deleteDay(dayNo);
-    if(!result.ok) {
-      if(result.reason === 'min-days') {
-        showToast('至少保留 1 天行程', 'info');
-      }
-      return false;
-    }
-    updateSegmentUI();
-    return true;
-  }
-
-
-  function segmentStats(startIdx: any, endIdx: any) {
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main || !main.track) return null;
-    const stats = computeSegmentStatsForTrack(main.track, startIdx, endIdx);
-    if(!stats) return null;
-    return { km: stats.kmText, asc: stats.asc, desc: stats.desc, maxE: stats.maxE, max: stats.max, minE: stats.minE, min: stats.min };
-  }
-
-  function updateSegmentUI() {
-    const pts = segmentState.points;
-    const hint = document.getElementById('segment-hint');
-    if(pts.length === 0) {
-      hint.innerHTML = '自动使用主轨迹起点与终点作为 1 天行程；点击轨迹中间位置可插入新的分段边界。';
-    } else if(pts.length === 1) {
-      hint.innerHTML = '✓ 起点已选（<span style="color:#22c55e">▲</span> D1 起点）。再点击选择 <b style="color:#fbbf24">D1 终点</b>（也是 D2 起点）。';
-    } else {
-      hint.innerHTML = '✓ 已分 <b style="color:#60a5fa">' + (pts.length - 1) + '</b> 天。点击轨迹插入边界，拖动黄色分段点调整，或在列表中删除指定日期。';
-    }
-    renderSegmentList();
-    redrawSegmentLayer();
-    updateSegmentDirtyIndicator();
-  }
-
-  function renderSegmentList() {
-    const list = document.getElementById('segment-list');
-    const pts = segmentState.points;
-    if(pts.length < 2) {
-      list.innerHTML = '<div style="color:#64748b;text-align:center;padding:16px 0;font-size:11px">尚未选中任何一天…</div>';
-      return;
-    }
-    const DAY_COLORS = dayPalette;
-    let html = '';
-    for(let d=1; d<pts.length; d++) {
-      const stats = segmentStats(pts[d-1].idx, pts[d].idx);
-      const color = DAY_COLORS[(d-1) % DAY_COLORS.length];
-      const campData = segmentState.campEdits[d] || {};
-      const campName = campData.name || '';
-      const campElev = Math.round(pts[d].elev);
-      const campCoordinates = formatTrackPointCoordinates([pts[d].lat, pts[d].lng]);
-      if(!stats) continue;
-      html += '<div class="segment-day-card" style="--day-color:'+color+'">' +
-        '<div class="segment-day-head">' +
-          '<b class="segment-day-title">D'+d+'</b>' +
-          '<span class="segment-day-stats">'+stats.km+'km · ↑'+stats.asc+' · ↓'+stats.desc+' · 高'+stats.maxE+' · 低'+stats.minE+'</span>' +
-          '<button class="seg-day-delete" data-day="'+d+'" title="删除 D'+d+'">删除</button>' +
-        '</div>' +
-        '<div class="segment-field">' +
-          '<label>营地名</label>' +
-          '<input class="seg-camp-name" data-day="'+d+'" placeholder="选填，如「仲达牧场」" value="'+campName.replace(/"/g,'&quot;')+'">' +
-        '</div>' +
-        '<div class="segment-field">' +
-          '<label>营地海拔</label>' +
-          '<output class="seg-camp-elev" data-day="'+d+'">'+campElev+' m</output>' +
-          '<span class="segment-point-coordinate">'+campCoordinates+'</span>' +
-        '</div>' +
-      '</div>';
-    }
-    list.innerHTML = html;
-    // 绑定输入事件
-    list.querySelectorAll('.seg-camp-name').forEach((inp: any) => {
-      inp.addEventListener('input', (e: any) => {
-        const d = +e.target.dataset.day;
-        segmentController.updateCamp(d, {name:e.target.value});
-        updateSegmentDirtyIndicator();
-      });
-    });
-    list.querySelectorAll('.seg-day-delete').forEach((btn: any) => {
-      btn.addEventListener('click', (e: any) => {
-        e.preventDefault();
-        e.stopPropagation();
-        segmentDeleteDay(+e.currentTarget.dataset.day);
-      });
-    });
-  }
-
-
-  function redrawSegmentLayer() {
-    if(!segmentState.layer) return;
-    segmentState.layer.clearLayers();
-    const main = selectors.primaryTrail(projectSelectors.trails());
-    if(!main) return;
-    const tk = main.track;
-    const pts = segmentState.points;
-    const DAY_COLORS = dayPalette;
-    const model = buildSegmentLayerModel(tk, pts, DAY_COLORS, 900, main.track_breaks);
-    // 为每天绘制不同颜色高亮线段
-    model.segments.forEach((seg: any) => {
-      L.polyline(seg.latLngs, seg.lineStyle).addTo(segmentState.layer);
-    });
-    // 绘制分段点标记（可拖拽的 divIcon Marker）
-    model.markers.forEach((m: any) => {
-      const icon = L.divIcon({
-        className: 'segment-marker',
-        html: '<div style="width:22px;height:22px;background:'+m.color+';border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a1a1a;font-size:10px;font-family:sans-serif;cursor:'+m.cursor+'">'+m.label+'</div>',
-        iconSize: [Math.max(m.iconSize[0], interactionMarkerHitSize), Math.max(m.iconSize[1], interactionMarkerHitSize)],
-        iconAnchor: [Math.max(m.iconSize[0], interactionMarkerHitSize) / 2, Math.max(m.iconSize[1], interactionMarkerHitSize) / 2],
-      });
-      const marker = L.marker([m.lat, m.lng], Object.assign({ icon }, m.markerOptions)).addTo(segmentState.layer);
-      marker._segIdx = m.pointIndex;
-      if(!m.isBoundary) return;
-      const snapper = createPrimaryTrackDragSnapper(marker, {
-        scheduleFrame: (callback: any) => scheduleRuntimeInteractionFrame('segment', callback),
-      });
-      marker.on('dragstart', () => {
-        dispatchRuntimeInteraction('segment', {type:'drag-start', boundaryIndex:marker._segIdx});
-      });
-      // 拖动过程中：吸附到主轨迹上（同时约束在相邻分段点之间）
-      marker.on('drag', (ev: any) => snapper.schedule(ev));
-      // 拖动结束：确定 idx，检查冲突，重排（保持递增顺序）后重绘
-      marker.on('dragend', (ev: any) => {
-        const ll = ev.target.getLatLng();
-        const hit = snapper.resolve(ll);
-        snapper.cancel();
-        dispatchRuntimeInteraction('segment', {type:'drag-end', boundaryIndex:marker._segIdx, hit});
-      });
-    });
-  }
-
-  async function segmentApply() {
-    if(segmentState.points.length < 2) {
-      showToast('至少需要 2 个分段点（1 天）', 'error');
-      return false;
-    }
-    if(!setRuntimeInteractionPhase('segment', 'committing')) return;
-    const before = projectHistoryController.capture();
-    const result = segmentController.apply();
-    if(!result) {
-      setRuntimeInteractionPhase('segment', 'editing');
-      showToast('分段状态已失效，请重新进入分段模式', 'error');
-      return false;
-    }
-    // 在离开编辑态前完成 IndexedDB 事务，避免应用后立即关闭 HTML 丢失最新日程。
-    const saved = await _doSave();
-    showToast(saved
-      ? '✓ 已应用并保存 ' + result.dayCount + ' 天分段'
-      : '已应用分段，但浏览器缓存保存失败', saved ? 'info' : 'error');
-    // 完整重绘（fit:false 保持当前视野，但同步地图标注、行程、主轨迹小卡等所有 UI）
-    rebuildAll({fit:false});
-    if(typeof refreshElevBar === 'function') refreshElevBar();
-    projectHistoryController.commit(historyLabel('应用行程分段', 'Apply itinerary segments'), before);
-    segmentExit({reason:'committed'});
-    return saved;
-  }
-
-  const segmentCloseBtn = document.getElementById('segment-close');
-  if(segmentCloseBtn) segmentCloseBtn.addEventListener('click', () => { void requestSegmentExit('close'); });
-  const segmentExitBtn = document.getElementById('segment-exit');
-  if(segmentExitBtn) segmentExitBtn.addEventListener('click', () => { void requestSegmentExit('exit'); });
-  const segmentUndoBtn = document.getElementById('segment-undo');
-  if(segmentUndoBtn) segmentUndoBtn.addEventListener('click', segmentUndo);
-  const segmentRestoreBtn = document.getElementById('segment-restore');
-  if(segmentRestoreBtn) segmentRestoreBtn.addEventListener('click', segmentRestore);
-  const segmentApplyBtn = document.getElementById('segment-apply');
-  if(segmentApplyBtn) segmentApplyBtn.addEventListener('click', segmentApply);
-  const measureCloseBtn = document.getElementById('measure-close');
-  if(measureCloseBtn) measureCloseBtn.addEventListener('click', measureExit);
-  const measureExitBtn = document.getElementById('measure-exit');
-  if(measureExitBtn) measureExitBtn.addEventListener('click', measureExit);
-  const measureResetBtn = document.getElementById('measure-reset');
-  if(measureResetBtn) measureResetBtn.addEventListener('click', measureReset);
-  const measureReverseBtn = document.getElementById('measure-reverse');
-  if(measureReverseBtn) measureReverseBtn.addEventListener('click', measureReverse);
-  // v1.26.0：测距/分段模式改用原生 pointerdown/pointerup 快速触发（绕过 Leaflet click 内部延迟）
-  // 判断"不是拖拽" = down 到 up 位置差 < 6px 且时间 < 400ms
-  (function() {
-    const container = map.getContainer();
-    let pd:any = null; // {x, y, t, pointerType, pointerId}
-    function isFastTap(x: any, y: any, t: any, pointerType: any, pointerId: any) {
-      if(!pd) return false;
-      if(pointerId != null && pd.pointerId != null && pointerId !== pd.pointerId) return false;
-      return HTM_CORE.isPointerTap({
-        startX:pd.x, startY:pd.y, endX:x, endY:y,
-        elapsedMs:t - pd.t,
-        pointerType:pointerType || pd.pointerType || 'mouse',
-      });
-    }
-    function onDown(x: any, y: any, target: any, pointerType: any = 'mouse', pointerId: any = null) {
-      // 只有测距/分段模式激活时才捕获
-      if(!['measure', 'segment'].includes(interactionManager.current.kind)) { pd = null; return; }
-      // 别拦截控件/UI 上的点击
-      if(target && (target.closest('.leaflet-marker-icon') || target.closest('.leaflet-control') ||
-                     target.closest('#segment-panel') || target.closest('#measure-panel') ||
-                     target.closest('#map-toolbar') || target.closest('#sidebar'))) {
-        pd = null; return;
-      }
-      pd = { x, y, pointerType, pointerId, t: (typeof performance !== 'undefined' ? performance.now() : Date.now()) };
-    }
-    function onUp(x: any, y: any, target: any, pointerType: any = 'mouse', pointerId: any = null) {
-      if(!pd) return;
-      const t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      if(!isFastTap(x, y, t, pointerType, pointerId)) { pd = null; return; }
-      // 别拦截控件/marker 上的点击
-      if(target && (target.closest('.leaflet-marker-icon') || target.closest('.leaflet-control'))) {
-        pd = null; return;
-      }
-      // 转换 x,y → latlng（相对 container 的位置）
-      const rect = container.getBoundingClientRect();
-      const latlng = map.containerPointToLatLng([x - rect.left, y - rect.top]);
-      // 派发到 measure/segment 处理逻辑，先阻止 Leaflet 的默认 click（避免重复）
-      handleFastTap(latlng);
-      pd = null;
-    }
-    function handleFastTap(latlng: any) {
-      const kind = interactionManager.current.kind;
-      if(kind !== 'measure' && kind !== 'segment') return;
-      if(!dispatchRuntimeInteraction(kind, {type:'tap', source:'fast', latlng})) return;
-      const until = Date.now() + 350;
+  const mapInteractionInput = createMapInteractionInput({
+    window,
+    map,
+    currentKind:() => interactionManager.current.kind,
+    dispatch:dispatchRuntimeInteraction,
+    suppressFastTap:(kind, until) => {
       if(kind === 'measure') measureController.suppressFastTap(until);
       else segmentController.suppressFastTap(until);
-    }
-    // 优先使用 pointer 事件（覆盖鼠标 + 触屏 + 触控笔）
-    if(window.PointerEvent) {
-      container.addEventListener('pointerdown', (e: any) => {
-        if(e.pointerType !== 'mouse' && e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
-        onDown(e.clientX, e.clientY, e.target, e.pointerType, e.pointerId);
-      }, {capture: true, passive: true});
-      container.addEventListener('pointerup', (e: any) => {
-        onUp(e.clientX, e.clientY, e.target, e.pointerType, e.pointerId);
-      }, {capture: true, passive: true});
-      container.addEventListener('pointercancel', () => { pd = null; }, {capture: true, passive: true});
-    } else {
-      container.addEventListener('mousedown', (e: any) => onDown(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
-      container.addEventListener('mouseup', (e: any) => onUp(e.clientX, e.clientY, e.target, 'mouse'), {capture: true});
-      container.addEventListener('touchstart', (e: any) => {
-        if(e.touches.length === 1) onDown(e.touches[0].clientX, e.touches[0].clientY, e.target, 'touch', e.touches[0].identifier);
-      }, {capture: true, passive: true});
-      container.addEventListener('touchend', (e: any) => {
-        if(e.changedTouches.length === 1) onUp(e.changedTouches[0].clientX, e.changedTouches[0].clientY, e.target, 'touch', e.changedTouches[0].identifier);
-      }, {capture: true, passive: true});
-    }
-  })();
-
-  // 监听地图点击：测距模式下选点（fallback：如果 fast-tap 没触发，click 兜底）
-  map.on('click', (e: any) => {
-    const kind = interactionManager.current.kind;
-    if(kind === 'idle') return;
-    if(!['measure', 'segment', 'waypoint', 'escape'].includes(kind)) return;
-    dispatchRuntimeInteraction(kind, {type:'tap', source:'leaflet', latlng:e.latlng});
+    },
+    isPointerTap:HTM_CORE.isPointerTap,
   });
 
   /* ============ Typed elevation Canvas owner ============ */
@@ -1777,11 +891,11 @@ export function startStudioRuntime(
           tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
         }
       });
-      projectActions.replaceTrails(restoredTrails, 'storage.restore');
+      projectActions.replaceTrails(restoredTrails as RuntimeTrail[], 'storage.restore');
       stateActions.restoreWorkspace({
         activeTrails:restored.activeTrails,
         activeGroup:restored.activeGroup,
-        primaryByGroup:restored.primaryByGroup,
+        primaryByGroup:restored.primaryByGroup as Record<string, string>,
       });
       return true;
     } catch(e) {
@@ -1882,7 +996,7 @@ export function startStudioRuntime(
     haversine,
     accumulatorAscent,
     accumulatorDescent,
-    markRevision:markTrailRevision,
+    markRevision:trail => markTrailRevision(trail as unknown as RuntimeTrail),
     persist:saveToStorage,
     render:rebuildAll,
     clearStorage:async () => { await clearStorage(); },
@@ -2200,7 +1314,7 @@ export function startStudioRuntime(
     selectors, projectSelectors, language:getCurrentLang, translate:t, tagColors,
     iconForTag:waypointIcon, iconMarkup:waypointIconMarkup,
     nearestPrimary:nearestTrackIdxOnPrimary, distance:haversine,
-    markRevision:markTrailRevision, renderWaypoints:drawWaypoints,
+    markRevision:trail => markTrailRevision(trail as unknown as RuntimeTrail), renderWaypoints:drawWaypoints,
     renderFilters:buildFilterGrid, renderDays:buildDaysTab, persist:saveToStorage,
     notify:showToast, recordEdit:recordProjectEdit,
     beginInteraction:beginRuntimeInteraction, cancelInteraction:cancelRuntimeInteraction,

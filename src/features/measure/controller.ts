@@ -6,12 +6,9 @@ export interface MeasureInteractionState {
   trailId: string | null;
   ptA: TrackIndexPoint | null;
   ptB: TrackIndexPoint | null;
-  layer: unknown;
-  segmentLine: unknown;
   _justDragged: boolean;
   _fastTapUntil: number;
   _computeSeq: number;
-  _liveFrame: unknown;
 }
 
 export interface MeasureController {
@@ -34,12 +31,9 @@ export function createMeasureInteractionState(): MeasureInteractionState {
     trailId: null,
     ptA: null,
     ptB: null,
-    layer: null,
-    segmentLine: null,
     _justDragged: false,
     _fastTapUntil: 0,
     _computeSeq: 0,
-    _liveFrame: 0,
   };
 }
 
@@ -66,7 +60,6 @@ export function reverseMeasureInteraction(state: MeasureInteractionState): boole
 export function resetMeasureInteraction(state: MeasureInteractionState): void {
   state.ptA = null;
   state.ptB = null;
-  state.segmentLine = null;
   state._computeSeq += 1;
 }
 

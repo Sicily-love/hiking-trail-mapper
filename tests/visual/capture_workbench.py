@@ -754,6 +754,45 @@ try:
     evaluate("""
       (() => {
         toggleSidebar(false);
+        segmentEnter();
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        segmentState.points = HTM_CORE.segmentIndexesToPoints(
+          main.track,
+          [0, Math.floor(main.track.length * 0.46), main.track.length - 1],
+        );
+        updateSegmentUI();
+        return true;
+      })()
+    """)
+    time.sleep(0.4)
+    mobile_segment_state = evaluate("""
+      (() => {
+        const panel = document.getElementById('segment-panel');
+        const dock = document.querySelector('.studio-bottom-dock');
+        const rect = panel?.getBoundingClientRect();
+        const dockRect = dock?.getBoundingClientRect();
+        const buttons = [...(panel?.querySelectorAll('.panel-actions button') || [])];
+        return {
+          active:!!segmentState.active,
+          inViewport:!!rect && rect.left >= 0 && rect.top >= 0
+            && rect.right <= innerWidth && rect.bottom <= innerHeight,
+          clearsDock:!!rect && !!dockRect && rect.bottom <= dockRect.top - 8,
+          noOverflow:!!panel && panel.scrollWidth <= panel.clientWidth,
+          scrollWidth:panel?.scrollWidth ?? null,
+          clientWidth:panel?.clientWidth ?? null,
+          buttonCount:buttons.length,
+          buttonHeights:buttons.map(button => button.getBoundingClientRect().height),
+          rect:rect ? {left:rect.left, top:rect.top, right:rect.right, bottom:rect.bottom} : null,
+          dockTop:dockRect?.top ?? null,
+        };
+      })()
+    """)
+    mobile_segment_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-segment-mobile.png").write_bytes(base64.b64decode(mobile_segment_shot["result"]["data"]))
+    evaluate("""
+      (() => {
+        segmentExit();
+        toggleSidebar(false);
         addEscapeEnter();
         const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
         const pointA = main.track[Math.floor(main.track.length * 0.22)];
@@ -833,8 +872,16 @@ try:
         measure_state.get("opacity") != "0",
         measure_state.get("topElement", "").startswith(("button#measure-", "div#.panel-actions")),
     ])
+    mobile_segment_valid = all([
+        mobile_segment_state.get("active"),
+        mobile_segment_state.get("inViewport"),
+        mobile_segment_state.get("clearsDock"),
+        mobile_segment_state.get("noOverflow"),
+        mobile_segment_state.get("buttonCount") == 3,
+        all(height >= 44 for height in mobile_segment_state.get("buttonHeights", [])),
+    ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not mobile_segment_valid or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
@@ -843,6 +890,7 @@ try:
             "day":bool(day_state),
             "measure":measure_state,
             "segment":bool(segment_state),
+            "mobileSegment":mobile_segment_state,
             "escape":bool(escape_state),
             "mobileEscape":bool(mobile_escape_state),
             "waypointDialog":bool(waypoint_dialog_state),

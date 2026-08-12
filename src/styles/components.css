@@ -1668,6 +1668,49 @@ textarea:focus-visible,
 .segment-day-stats,
 .segment-field,
 .segment-field label { color:var(--text-muted); }
+.segment-empty-state {
+  margin:18px 0;
+  color:var(--text-muted);
+  font-size:11px;
+  text-align:center;
+}
+.segment-hint-summary {
+  display:block;
+  color:var(--text);
+  font-weight:700;
+}
+.tool-panel-hint small {
+  display:block;
+  margin-top:2px;
+  color:var(--text-muted);
+  font-size:10px;
+}
+.measure-endpoint,
+.segment-boundary-dot {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:2px solid #fff;
+  border-radius:50%;
+  background:var(--measure-point-color,var(--segment-point-color,var(--accent)));
+  box-shadow:0 2px 7px rgba(0,0,0,.48);
+  font-family:var(--sans);
+  font-weight:750;
+  cursor:move;
+  user-select:none;
+}
+.measure-endpoint {
+  width:20px;
+  height:20px;
+  color:#fff;
+  font-size:11px;
+}
+.segment-boundary-dot {
+  width:22px;
+  height:22px;
+  color:#17211b;
+  font-size:10px;
+}
 .seg-day-delete { color:var(--text-muted); border-color:var(--line); }
 .seg-day-delete:hover { color:var(--danger); border-color:var(--danger); }
 .segment-field input,

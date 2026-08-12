@@ -76,20 +76,24 @@ T('invalidates stale asynchronous computations monotonically', () => {
 });
 
 T('direct runtime delegates all measure session mutations to the controller', () => {
-  const measure = read('src/app/runtime/studio.ts');
-  const map = measure;
+  const runtime = read('src/app/runtime/studio.ts');
+  const measure = read('src/features/measure/runtime-owner.ts');
+  const controllerSource = read('src/features/measure/controller.ts');
+  const map = [runtime, measure].join('\n');
   const directBusinessWrite = /measureState\.(?:active|trailId|ptA|ptB|_justDragged|_fastTapUntil|_computeSeq)\s*(?:=|\+\+)/;
+  assert.match(runtime, /createMeasureRuntime\(/);
   assert.match(measure, /createMeasureController\(\)/);
-  assert.match(measure, /const measureState(?::any)? = measureController\.state/);
-  assert.match(measure, /measureController\.enter/);
-  assert.match(measure, /measureController\.updateEndpoint/);
-  assert.match(measure, /measureController\.nextComputeSequence/);
-  assert.match(map, /measureController\.suppressFastTap/);
+  assert.match(measure, /const state = controller\.state/);
+  assert.match(measure, /controller\.enter/);
+  assert.match(measure, /controller\.updateEndpoint/);
+  assert.match(measure, /controller\.nextComputeSequence/);
+  assert.match(runtime, /measureController\.suppressFastTap/);
   assert.doesNotMatch(measure, directBusinessWrite);
   assert.doesNotMatch(map, directBusinessWrite);
-  assert.match(measure, /measureState\.layer\s*=/);
-  assert.match(measure, /measureState\.segmentLine\s*=/);
-  assert.match(measure, /measureState\._liveFrame\s*=/);
+  assert.doesNotMatch(controllerSource, /\blayer:|\bsegmentLine:|\b_liveFrame:/);
+  assert.match(measure, /const layer = L\.layerGroup\(\)\.addTo\(map\)/);
+  assert.match(measure, /let segmentLine: unknown = null/);
+  assert.match(measure, /let liveFrame: unknown = null/);
 });
 
 console.log('\n══════════════════════════════════════════════════');

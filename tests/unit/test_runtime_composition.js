@@ -66,13 +66,17 @@ test('browser capabilities have one explicit module owner', () => {
   const localization = read('src/features/localization/runtime-owner.ts');
   const waypoint = read('src/features/waypoint/runtime-owner.ts');
   const escape = read('src/features/escape/runtime-owner.ts');
+  const measure = read('src/features/measure/runtime-owner.ts');
+  const segment = read('src/features/segment/runtime-owner.ts');
   const workspace = read('src/features/map/workspace-controller.ts');
   const interaction = read('src/app/runtime/interaction-owner.ts');
-  for(const functionName of [
-    'loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar',
-    'measureEnter',
-    'segmentEnter',
-  ]) assert.strictEqual((runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
+  for(const functionName of ['loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar']) {
+    assert.strictEqual((runtimeSource.match(new RegExp(`function ${functionName}\\(`, 'g')) || []).length, 1, functionName);
+  }
+  assert.strictEqual(runtimeSource.includes('function measureEnter('), false);
+  assert.strictEqual(runtimeSource.includes('function segmentEnter('), false);
+  assert.strictEqual((measure.match(/function enter\(\)/g) || []).length, 1);
+  assert.strictEqual((segment.match(/function enter\(\)/g) || []).length, 1);
   assert.strictEqual((waypoint.match(/const addManualWaypointAt = async/g) || []).length, 1);
   assert.strictEqual(runtimeSource.includes('function addManualWaypointAt('), false);
   assert.strictEqual((interaction.match(/export function createRuntimeInteractionOwner</g) || []).length, 1);
