@@ -6,7 +6,7 @@
 
 [中文](README.md) · [Open online](https://sicily-love.github.io/hiking-trail-mapper/) · [Features](docs/FEATURES.en.md)
 
-![version](https://img.shields.io/badge/version-v2.3.5-blue)
+![version](https://img.shields.io/badge/version-v3.0.0-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -15,6 +15,12 @@
 Outdoor Route Studio is a map-first tool for reviewing, comparing, and planning hiking tracks. It overlays KML routes, plans daily itineraries, measures partial segments, manages waypoints and escape routes, and exports routes or complete project backups.
 
 The project maintains one TypeScript source tree. Vite produces both the GitHub Pages site and a self-contained HTML file that opens directly offline.
+
+## Workbench 3.0
+
+v3 introduces a map-first workspace: the app bar holds common commands, the activity rail switches among elevation, waypoint, trail-group, trail, and itinerary views, the route library keeps a stable width, and elevation analysis has a dedicated bottom dock. On phones, the map remains primary, activities move to bottom navigation, and the route library becomes a dismissible bottom sheet.
+
+This release changes the interface structure and responsive experience only. v2.3 project archives, KML data, IndexedDB caches, route calculations, and Leaflet rendering remain compatible.
 
 ## Use the app
 
@@ -109,7 +115,9 @@ Further reading:
 
 ## Release
 
-- Current version: v2.3.5
+- Current version: v3.0.0
+- v2.3.5: frozen compatibility baseline; the v2.3 series now receives essential fixes only.
+- v3.x: active Workbench UI and feature-development line.
 - `PATCH`: fixes, compatibility, documentation, and small interaction refinements.
 - `MINOR`: new user-visible capabilities or data formats.
 - `MAJOR`: incompatible data or export-format changes.

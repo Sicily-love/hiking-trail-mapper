@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture repeatable Field Console screenshots with real system Chrome."""
+"""Capture repeatable Workbench 3 screenshots with real system Chrome."""
 import base64
 import json
 import os
@@ -245,6 +245,22 @@ try:
               return style.display !== 'none' && style.visibility !== 'hidden'
                 && rect.width > 0 && rect.height > 0;
             });
+            const modeButtons = [...document.querySelectorAll('.studio-mode-button')];
+            const modeRects = modeButtons.map(button => button.getBoundingClientRect());
+            const modeButtonsNoOverlap = modeRects.every((candidate, index) => (
+              modeRects.every((other, otherIndex) => index === otherIndex || !overlaps(candidate, other))
+            ));
+            const modeLabelsVisible = modeButtons.every(button => {
+              const label = button.querySelector('.studio-mode-label');
+              const labelRect = label?.getBoundingClientRect();
+              const style = label && getComputedStyle(label);
+              return !!labelRect && !!style && label.textContent.trim().length > 0
+                && style.display !== 'none' && style.visibility !== 'hidden'
+                && labelRect.width > 0 && labelRect.height > 0;
+            });
+            const addTrail = document.getElementById('add-trail-btn');
+            const addTrailStyle = addTrail && getComputedStyle(addTrail);
+            const addTrailNextStyle = addTrail?.nextElementSibling && getComputedStyle(addTrail.nextElementSibling);
             return {
               viewport:{width:innerWidth,height:innerHeight},
               toolbar, zoom, sidebar:rect('sidebar'), elevation, primaryMini,
@@ -267,6 +283,12 @@ try:
                 && activityRail.bottom <= innerHeight + .5
               ),
               mapDockSeparated:!!map && !!bottomDock && map.bottom <= bottomDock.top + .5,
+              modeButtonsNoOverlap,
+              modeLabelsVisible,
+              addTrailSeparatorsClean:!!addTrailStyle
+                && parseFloat(addTrailStyle.borderLeftWidth) === 0
+                && parseFloat(addTrailStyle.borderRightWidth) === 0
+                && (!addTrailNextStyle || parseFloat(addTrailNextStyle.borderLeftWidth) === 0),
               touchTargetsValid:!mobileWorkbench || visibleTouchTargets.every(node => {
                 const target = node.getBoundingClientRect();
                 return target.width >= 44 && target.height >= 44;
@@ -333,6 +355,25 @@ try:
     (OUTPUT / "workbench-long-trail-name.png").write_bytes(base64.b64decode(long_name_shot["result"]["data"]))
     evaluate("trailController.renameTrail(DATA.trails[0].id, window.__visualOriginalTrailName)")
     time.sleep(0.2)
+
+    evaluate("document.getElementById('add-trail-btn')?.click()")
+    time.sleep(0.2)
+    import_dialog_state = evaluate("""
+      (() => {
+        const modal = document.getElementById('add-trail-modal');
+        const card = modal?.querySelector('.modal-card');
+        const description = modal?.querySelector('.modal-description')?.textContent.trim() || '';
+        const primary = modal?.querySelector('[data-i18n="add.dropPrimary"]')?.textContent.trim() || '';
+        const secondary = modal?.querySelector('[data-i18n="add.dropSecondary"]')?.textContent.trim() || '';
+        return !!modal?.classList.contains('open') && !!card
+          && card.scrollWidth <= card.clientWidth
+          && description.length <= 18 && primary.length <= 18 && secondary.length <= 18;
+      })()
+    """)
+    import_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-import.png").write_bytes(base64.b64decode(import_dialog_shot["result"]["data"]))
+    evaluate("document.getElementById('add-cancel')?.click()")
+    time.sleep(0.1)
 
     cdp("Emulation.setDeviceMetricsOverride", {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False})
     elevation_collapse_state = evaluate("""
@@ -426,6 +467,7 @@ try:
           panelRect.left + panelRect.width / 2,
           panelRect.top + panelRect.height / 2,
         );
+        const topControl = center?.closest('button,.panel-actions');
         return {
           active:measureState.active && !!measureState.ptA && !!measureState.ptB,
           visible:!!panel && visible(panel),
@@ -433,7 +475,7 @@ try:
           buttonsVisible:buttons.every(visible),
           rect:panelRect ? {left:panelRect.left, top:panelRect.top, right:panelRect.right, bottom:panelRect.bottom, width:panelRect.width, height:panelRect.height} : null,
           opacity:panel ? getComputedStyle(panel).opacity : null,
-          topElement:center ? `${center.tagName.toLowerCase()}#${center.id}.${center.className}` : null,
+          topElement:topControl ? `${topControl.tagName.toLowerCase()}#${topControl.id}.${topControl.className}` : null,
         };
       })()
     """)
@@ -896,7 +938,7 @@ try:
     evaluate("document.querySelector('dialog.workbench-dialog[open] .workbench-dialog__button--secondary')?.click()")
     time.sleep(0.1)
     (OUTPUT / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"] or not item["primaryMiniCompact"] or not item["primaryMiniInsideMap"] or not item["mobileBottomNavValid"] or not item["mapDockSeparated"] or not item["touchTargetsValid"] or not item["dragFeedbackValid"]]
+    invalid = [item["name"] for item in report if item["bodyOverflowX"] or item["buttonOverflow"] or item["toolbarElevationOverlap"] or item["toolbarZoomOverlap"] or item["toolbarOutOfViewport"] or item["elevationOutOfViewport"] or not item["appRuntime"] or not item["mobileResetClosesSidebar"] or not item["primaryMiniCompact"] or not item["primaryMiniInsideMap"] or not item["mobileBottomNavValid"] or not item["mapDockSeparated"] or not item["modeButtonsNoOverlap"] or not item["modeLabelsVisible"] or not item["addTrailSeparatorsClean"] or not item["touchTargetsValid"] or not item["dragFeedbackValid"]]
     elevation_collapse_valid = all([
         elevation_collapse_state.get("collapsed"),
         elevation_collapse_state.get("expanded") == "false",
@@ -921,11 +963,12 @@ try:
         all(height >= 44 for height in mobile_segment_state.get("buttonHeights", [])),
     ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not mobile_segment_valid or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not mobile_overlay_state.get("valid") or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
+    if not long_name_state.get("valid") or not import_dialog_state or not group_state or not day_state or not measure_state_valid or not segment_state or not mobile_segment_valid or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not mobile_overlay_state.get("valid") or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
             "longName":long_name_state,
+            "importDialog":bool(import_dialog_state),
             "group":bool(group_state),
             "day":bool(day_state),
             "measure":measure_state,

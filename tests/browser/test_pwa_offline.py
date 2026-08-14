@@ -115,7 +115,7 @@ try:
       (async () => {
         if(document.documentElement.dataset.offlineShell !== 'registered') return false;
         await navigator.serviceWorker.ready;
-        return document.documentElement.dataset.workbench === '2';
+        return document.documentElement.dataset.workbench === '3';
       })()
     """)
     one = report("service worker registers from the generated Pages build", installed, online_error[:120])
@@ -124,7 +124,7 @@ try:
     thread.join(timeout=2)
     time.sleep(0.4)
     reopened, offline_error = inspect_page(chrome, profile, url,
-        "document.documentElement.dataset.workbench === '2' && !!window.__OUTDOOR_ROUTE_STUDIO__")
+        "document.documentElement.dataset.workbench === '3' && !!window.__OUTDOOR_ROUTE_STUDIO__")
     two = report("cached application shell reopens after the server is offline", reopened, offline_error[:120])
     print(f"结果: {int(one) + int(two)}/2 passed")
     raise SystemExit(0 if one and two else 1)

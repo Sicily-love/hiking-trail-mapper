@@ -6,7 +6,7 @@
 
 [English](README.en.md) · [在线使用](https://sicily-love.github.io/hiking-trail-mapper/) · [功能说明](docs/FEATURES.md)
 
-![version](https://img.shields.io/badge/version-v2.3.5-blue)
+![version](https://img.shields.io/badge/version-v3.0.0-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -15,6 +15,12 @@
 Outdoor Route Studio 用于查看、比较和规划徒步轨迹。它可以叠加多条 KML 路线，规划每日行程，测量局部路段，管理标注与下撤方案，并导出路线或完整项目备份。
 
 项目只维护一套 TypeScript 源码。发布时由 Vite 同时生成 GitHub Pages 站点和可直接离线打开的单 HTML 文件。
+
+## Workbench 3.0
+
+v3 采用地图优先的工作台布局：顶部应用栏集中常用命令，左侧活动栏切换海拔、标注、轨迹组、轨迹与行程，路线资料库保持固定宽度，海拔分析独立位于底部。手机端保留地图主视图，将活动栏移到底部，并把路线资料库转换为可关闭的底部面板。
+
+这次升级只重做界面结构与响应式体验。v2.3 的项目备份、KML 数据、IndexedDB 缓存、路线计算和 Leaflet 渲染保持兼容。
 
 ## 使用方式
 
@@ -109,7 +115,9 @@ src/
 
 ## 发布
 
-- 当前版本：v2.3.5
+- 当前版本：v3.0.0
+- v2.3.5：冻结的兼容基线；v2.3 系列此后只接受必要修复。
+- v3.x：Workbench UI 与后续功能开发主线。
 - `PATCH`：修复、兼容性、文档和小型交互优化。
 - `MINOR`：新增用户可见功能或数据格式。
 - `MAJOR`：不兼容的数据或导出格式变化。

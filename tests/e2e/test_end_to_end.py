@@ -147,7 +147,7 @@ try:
     check("TypeScript core runtime 已内联并激活",
           evalj("!!HTM_CORE && computeElevationRenderModel === HTM_CORE.computeElevationRenderModel"))
     check("TypeScript app runtime 已内联并激活",
-          evalj("!!HTM_APP && document.documentElement.dataset.ui === 'studio' && document.documentElement.dataset.workbench === '2' && !!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
+          evalj("!!HTM_APP && document.documentElement.dataset.ui === 'studio-v3' && document.documentElement.dataset.workbench === '3' && !!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
     check("state 对象已初始化", evalj("typeof state === 'object' && state !== null"))
     check("DATA 对象已初始化", evalj("typeof DATA === 'object' && Array.isArray(DATA.trails)"))
     check("Leaflet map 已实例化", evalj("typeof map === 'object' && !!map"))

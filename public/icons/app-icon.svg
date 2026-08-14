@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Outdoor Route Studio">
-  <rect width="512" height="512" rx="96" fill="#1E6F50"/>
-  <path d="M76 382 205 158l51 88 44-76 136 212Z" fill="#FAFAF8" stroke="#FAFAF8" stroke-width="22" stroke-linejoin="round"/>
-  <path d="m164 230 41-72 51 88 44-76 53 83-50-18-35 42-42-24-34 31Z" fill="#F59E0B"/>
-  <path d="M102 382h334" fill="none" stroke="#FAFAF8" stroke-width="22" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="96" fill="#18372C"/>
+  <path d="M76 382 205 158l51 88 44-76 136 212Z" fill="#FCFDFB" stroke="#FCFDFB" stroke-width="22" stroke-linejoin="round"/>
+  <path d="m164 230 41-72 51 88 44-76 53 83-50-18-35 42-42-24-34 31Z" fill="#E4A83C"/>
+  <path d="M102 382h334" fill="none" stroke="#FCFDFB" stroke-width="22" stroke-linecap="round"/>
 </svg>

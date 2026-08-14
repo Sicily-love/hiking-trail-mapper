@@ -40,7 +40,7 @@ T('toolbar brand text is clipped within its own column', () => {
 T('command decoration is owned by the single Workbench UI module', () => {
   assert.ok(ui.includes('export const COMMAND_DEFINITIONS'));
   assert.ok(ui.includes('function decorateControl('));
-  assert.ok(ui.includes("document.documentElement.dataset.ui = 'studio'"));
+  assert.ok(ui.includes("document.documentElement.dataset.ui = 'studio-v3'"));
   assert.strictEqual(ui.includes('secondary-open'), false);
 });
 T('elevation analysis dock can collapse and persists its state', () => {
@@ -90,7 +90,7 @@ T('empty primary mini card still cannot cover commands', () => {
   assert.ok(primaryMini.includes('element.replaceChildren();'));
 });
 T('collapsed primary trail summary uses a compact class-based Workbench surface', () => {
-  assert.ok(studioCss.includes("html[data-workbench='2'] #primary-mini"));
+  assert.ok(studioCss.includes("html[data-workbench='3'] #primary-mini"));
   assert.ok(studioCss.includes('width:218px;'));
   assert.ok(studioCss.includes('.primary-mini__eyebrow'));
   assert.ok(studioCss.includes('.primary-mini__name'));

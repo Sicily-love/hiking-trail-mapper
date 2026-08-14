@@ -79,12 +79,16 @@ export const ACTIVITY_DEFINITIONS = [
 }>;
 
 export const MAP_MODE_DEFINITIONS = [
-  { mode: 'elev', label: 'Elevation mode', labelZh: '海拔模式', icon: 'mountain' },
-  { mode: 'waypoint', label: 'Waypoint mode', labelZh: '标注点模式', icon: 'map-pin' },
-] as const satisfies ReadonlyArray<ControlDefinition & { mode: 'elev' | 'waypoint' }>;
+  { mode: 'elev', label: 'Elevation mode', labelZh: '海拔模式', shortLabel: 'Elevation', shortLabelZh: '海拔', icon: 'mountain' },
+  { mode: 'waypoint', label: 'Waypoint mode', labelZh: '标注点模式', shortLabel: 'Waypoints', shortLabelZh: '标注点', icon: 'map-pin' },
+] as const satisfies ReadonlyArray<ControlDefinition & {
+  mode: 'elev' | 'waypoint';
+  shortLabel: string;
+  shortLabelZh: string;
+}>;
 
 export const WORKBENCH_STORAGE_KEYS = {
-  activity: 'hiking_workbench2_activity',
+  activity: 'hiking_workbench3_activity',
   elevationCollapsed: 'hiking_elevation_dock_collapsed',
 } as const;
 
@@ -103,6 +107,12 @@ const AUXILIARY_CONTROLS = {
   'stitch-close': { icon: 'x', label: 'Close route composer', labelZh: '关闭轨迹拼接' },
   'sidebar-close': { icon: 'panel-left-close', label: 'Close sidebar', labelZh: '收起侧栏' },
 } as const satisfies Record<string, ControlDefinition>;
+
+const AUXILIARY_COMMANDS: Partial<Record<keyof typeof AUXILIARY_CONTROLS, StudioCommandId>> = {
+  'measure-reset': STUDIO_COMMANDS.MEASURE_RESET,
+  'measure-reverse': STUDIO_COMMANDS.MEASURE_REVERSE,
+  'measure-exit': STUDIO_COMMANDS.MEASURE_EXIT,
+};
 
 export type WorkbenchMenuKey = (typeof MENU_DEFINITIONS)[number]['key'];
 export type WorkbenchActivityKey = (typeof ACTIVITY_DEFINITIONS)[number]['key'];
@@ -130,6 +140,13 @@ export function shouldCloseSidebarForFit(
 
 function localizedLabel(definition: ControlDefinition, language: WorkbenchLanguage): string {
   return language === 'zh' ? definition.labelZh : definition.label;
+}
+
+function localizedModeLabel(
+  definition: (typeof MAP_MODE_DEFINITIONS)[number],
+  language: WorkbenchLanguage,
+): string {
+  return language === 'zh' ? definition.shortLabelZh : definition.shortLabel;
 }
 
 interface MenuView {
@@ -258,6 +275,7 @@ function buildActivityRail(document: Document, language: WorkbenchLanguage): {
       if(!button) continue;
       const active = button.classList.contains('on');
       const label = localizedLabel(definition, language);
+      const visibleLabel = localizedModeLabel(definition, language);
       const labelNode = createElement(document, 'span', 'studio-mode-label');
       const i18nKey = button.dataset.i18n;
       button.className = 'studio-mode-button';
@@ -266,7 +284,7 @@ function buildActivityRail(document: Document, language: WorkbenchLanguage): {
       button.title = label;
       button.setAttribute('aria-label', label);
       button.setAttribute('aria-pressed', String(active));
-      labelNode.textContent = label;
+      labelNode.textContent = visibleLabel;
       if(i18nKey) {
         delete button.dataset.i18n;
         labelNode.dataset.i18n = i18nKey;
@@ -374,15 +392,21 @@ function prepareBrand(
   if(!context) {
     context = createElement(document, 'small', 'studio-brand-context');
     context.id = 'toolbar-context';
-    context.textContent = 'TRAIL WORKSPACE';
+    context.textContent = 'OUTDOOR ROUTE STUDIO';
   }
+
+  const edition = createElement(document, 'span', 'studio-edition-badge');
+  edition.textContent = 'V3';
+  edition.setAttribute('aria-label', 'Workbench version 3');
 
   if(existingToolbarBrand && existingToolbarBrand !== brand) existingToolbarBrand.remove();
 
   const mark = createElement(document, 'span', 'brand-icon studio-brand-mark');
   const copy = createElement(document, 'span', 'studio-brand-copy');
   mark.appendChild(createWorkbenchIcon(document, 'mountain', { size: 19 }));
-  copy.append(title, context);
+  const titleRow = createElement(document, 'span', 'studio-brand-title-row');
+  titleRow.append(title, edition);
+  copy.append(titleRow, context);
   brand.classList.add('toolbar-brand', 'studio-brand');
   brand.replaceChildren(mark, copy);
 
@@ -410,7 +434,7 @@ export function upgradeWorkbenchLayout(
 ): WorkbenchLayoutController | null {
   const registered = controllers.get(document);
   const main = document.getElementById('main');
-  if(registered && main?.dataset.workbenchLayout === '2') return registered;
+  if(registered && main?.dataset.workbenchLayout === '3') return registered;
 
   const header = document.getElementById('header');
   const map = document.getElementById('map');
@@ -434,12 +458,18 @@ export function upgradeWorkbenchLayout(
   const elevationToggle = prepareElevationToggle(document, elevationPanel, storage);
   cleanups.push(elevationToggle.destroy);
   const analysisDock = buildAnalysisDock(document, language);
+  const findAuxiliaryControl = (id: string): HTMLElement | null => (
+    document.getElementById(id) ?? analysisDock.querySelector<HTMLElement>(`#${id}`)
+  );
   const activityRail = buildActivityRail(document, language);
   const menuList = createElement(document, 'div', 'studio-menu-list');
+  const primaryCommands = createElement(document, 'div', 'studio-command-cluster studio-command-cluster--primary');
+  const utilityCommands = createElement(document, 'div', 'studio-command-cluster studio-command-cluster--utility');
   const menuGroups = new Map<WorkbenchMenuKey, HTMLElement>();
   const directButtons = new Map<(typeof DIRECT_COMMAND_IDS)[number], HTMLButtonElement>();
   const menuViews = new Map<WorkbenchMenuKey, MenuView>();
   const commandButtons = new Map<keyof typeof COMMAND_DEFINITIONS, HTMLButtonElement>();
+  const auxiliaryCommandButtons = new Map<StudioCommandId, HTMLButtonElement>();
   let activeMenu: WorkbenchMenuKey | null = null;
 
   const brandView = prepareBrand(document, header, toolbar);
@@ -447,6 +477,10 @@ export function upgradeWorkbenchLayout(
 
   menuList.setAttribute('role', 'toolbar');
   menuList.setAttribute('aria-label', language === 'zh' ? '工作台操作' : 'Workbench actions');
+  primaryCommands.setAttribute('role', 'group');
+  primaryCommands.setAttribute('aria-label', language === 'zh' ? '路线工作' : 'Route tools');
+  utilityCommands.setAttribute('role', 'group');
+  utilityCommands.setAttribute('aria-label', language === 'zh' ? '全局工具' : 'Global tools');
 
   const dispatchCommand = (commandId: StudioCommandId): void => {
     try {
@@ -531,12 +565,16 @@ export function upgradeWorkbenchLayout(
   for(const item of TOOLBAR_LAYOUT) {
     if(item.kind === 'menu') {
       const group = menuGroups.get(item.key);
-      if(group) menuList.appendChild(group);
+      if(group) primaryCommands.appendChild(group);
     } else {
       const command = directButtons.get(item.id);
-      if(command) menuList.appendChild(command);
+      if(command) {
+        const utility = item.id === 'reset-btn' || item.id === 'help-btn' || item.id === 'lang-btn';
+        (utility ? utilityCommands : primaryCommands).appendChild(command);
+      }
     }
   }
+  menuList.append(primaryCommands, utilityCommands);
 
   const retainedToolbarNodes = Array.from(toolbar.querySelectorAll<HTMLElement>('[id]'))
     .filter(node => node.id !== 'toolbar-context');
@@ -553,8 +591,20 @@ export function upgradeWorkbenchLayout(
   header.replaceChildren(toolbar, ...brandView.utilities);
 
   for(const [id, definition] of Object.entries(AUXILIARY_CONTROLS)) {
-    const control = document.getElementById(id);
-    if(control) decorateControl(document, control, definition, 'control', language);
+    const control = findAuxiliaryControl(id);
+    if(!control) continue;
+    decorateControl(document, control, definition, 'control', language);
+    const commandId = AUXILIARY_COMMANDS[id as keyof typeof AUXILIARY_CONTROLS];
+    if(!commandId) continue;
+    const button = control as HTMLButtonElement;
+    button.dataset.commandId = commandId;
+    const onClick = (event: MouseEvent): void => {
+      event.preventDefault();
+      dispatchCommand(commandId);
+    };
+    button.addEventListener('click', onClick);
+    cleanups.push(() => button.removeEventListener('click', onClick));
+    auxiliaryCommandButtons.set(commandId, button);
   }
   decorateHeading(
     document,
@@ -612,9 +662,10 @@ export function upgradeWorkbenchLayout(
     for(const definition of MAP_MODE_DEFINITIONS) {
       const button = activityRail.modeButtons.get(definition.mode);
       const label = localizedLabel(definition, language);
+      const visibleLabel = localizedModeLabel(definition, language);
       if(!button) continue;
       const labelNode = button.querySelector<HTMLElement>('.studio-mode-label');
-      if(labelNode) labelNode.textContent = label;
+      if(labelNode) labelNode.textContent = visibleLabel;
       button.title = label;
       button.setAttribute('aria-label', label);
     }
@@ -633,7 +684,7 @@ export function upgradeWorkbenchLayout(
     }
     elevationToggle.render(language);
     for(const [id, definition] of Object.entries(AUXILIARY_CONTROLS)) {
-      const control = document.getElementById(id);
+      const control = findAuxiliaryControl(id);
       const label = localizedLabel(definition, language);
       const labelNode = control?.querySelector<HTMLElement>('.studio-control-label');
       if(labelNode) labelNode.textContent = label;
@@ -654,21 +705,30 @@ export function upgradeWorkbenchLayout(
 
   const workspace = createElement(document, 'div', 'studio-workspace');
   const mapStage = createElement(document, 'main', 'studio-map-stage');
+  const sidebarScrim = createElement(document, 'button', 'studio-sidebar-scrim');
   const addEscapePanel = document.getElementById('addescape-panel');
   const segmentPanel = document.getElementById('segment-panel');
   const stitchPanel = document.getElementById('stitch-panel');
   mapStage.setAttribute('aria-label', 'Trail map workspace');
+  sidebarScrim.type = 'button';
+  sidebarScrim.setAttribute('aria-label', language === 'zh' ? '关闭路线资料库' : 'Close route library');
+  sidebarScrim.tabIndex = -1;
+  const onSidebarScrimClick = (): void => {
+    dispatchCommand(STUDIO_COMMANDS.SIDEBAR_CLOSE);
+  };
+  sidebarScrim.addEventListener('click', onSidebarScrimClick);
+  cleanups.push(() => sidebarScrim.removeEventListener('click', onSidebarScrimClick));
   mapStage.append(map, analysisDock);
   if(segmentPanel) mapStage.appendChild(segmentPanel);
   if(addEscapePanel) mapStage.appendChild(addEscapePanel);
   if(stitchPanel) mapStage.appendChild(stitchPanel);
-  workspace.append(activityRail.root, sidebarElement, mapStage);
+  workspace.append(activityRail.root, sidebarScrim, sidebarElement, mapStage);
 
   main.classList.add('studio-workbench');
-  main.dataset.workbenchLayout = '2';
+  main.dataset.workbenchLayout = '3';
   main.replaceChildren(header, workspace);
-  document.documentElement.dataset.workbench = '2';
-  document.documentElement.dataset.ui = 'studio';
+  document.documentElement.dataset.workbench = '3';
+  document.documentElement.dataset.ui = 'studio-v3';
 
   const menuKeys = MENU_DEFINITIONS.map(definition => definition.key);
   const activityKeys = ACTIVITY_DEFINITIONS.map(definition => definition.key);
@@ -831,6 +891,12 @@ export function upgradeWorkbenchLayout(
       button.setAttribute('aria-disabled', String(!commandState.enabled));
       button.setAttribute('aria-pressed', String(commandState.checked));
       button.classList.toggle('on', commandState.checked);
+    }
+    for(const [auxiliaryCommandId, button] of auxiliaryCommandButtons) {
+      if(commandId && auxiliaryCommandId !== commandId) continue;
+      const commandState = commandRegistry.getState(auxiliaryCommandId);
+      button.disabled = !commandState.enabled;
+      button.setAttribute('aria-disabled', String(!commandState.enabled));
     }
   }
 

@@ -154,8 +154,8 @@ try:
 
     print(f"\n▸ 需求 4/1（{EXPECTED_VERSION}）：分组交互 + 复选框合并")
     check(f"APP_VERSION = {EXPECTED_VERSION}", evalj("APP_VERSION") == EXPECTED_VERSION)
-    check("Workbench 2.0 已成为活动布局",
-          evalj("document.documentElement.dataset.workbench === '2' && document.documentElement.dataset.ui === 'studio'"))
+    check("Workbench 3.0 已成为活动布局",
+          evalj("document.documentElement.dataset.workbench === '3' && document.documentElement.dataset.ui === 'studio-v3'"))
     check("Workbench 控制器已挂载",
           evalj("!!window.__OUTDOOR_ROUTE_STUDIO__?.workbench"))
     check("唯一命令与对话框运行时已挂载",
@@ -304,8 +304,8 @@ try:
           and changelog_scroll_contract.get('actionVisible') is True,
           str(changelog_scroll_contract))
     evalj("document.querySelector('dialog[open] .workbench-dialog__button')?.click()")
-    check("Studio 主题变量已生效",
-          evalj("getComputedStyle(document.documentElement).getPropertyValue('--studio-forest').trim().toUpperCase() === '#1E6F50'"))
+    check("Studio v3 主题变量已生效",
+          evalj("getComputedStyle(document.documentElement).getPropertyValue('--v3-pine').trim().toUpperCase() === '#27624B'"))
     check("旧命令节点已无损迁移到多项菜单或顶栏直接操作区",
           evalj("['reverse-btn','stitch-btn','clear-btn','segment-btn','add-escape-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup')) && ['add-trail-btn','measure-btn','add-waypoint-btn','export-btn','reset-btn','help-btn','lang-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-list')?.classList.contains('studio-menu-list'))"))
     check("轨迹组选择拥有独立入口和独立页面",
@@ -556,9 +556,11 @@ try:
               const toolbar = document.getElementById('map-toolbar');
               const commandIds = ['help-btn','reset-btn','measure-btn','segment-btn','add-waypoint-btn','lang-btn',
                 'add-escape-btn','reverse-btn','stitch-btn','add-trail-btn','export-btn','clear-btn'];
-              return document.documentElement.dataset.ui === 'studio'
+              return document.documentElement.dataset.ui === 'studio-v3'
                 && !!HTM_APP
                 && !!toolbar.querySelector('.studio-brand')
+                && !!toolbar.querySelector('.studio-command-cluster--primary')
+                && !!toolbar.querySelector('.studio-command-cluster--utility')
                 && !toolbar.querySelector('#toolbar-more:not([hidden])')
                 && commandIds.every(id => {
                   const button = document.getElementById(id);
@@ -618,6 +620,25 @@ try:
           """) and source_has('function reverse(): boolean', 'controller.reverse()',
                               'createMeasurePanelController', 'panel.update(',
                               'buildElevationCanvasScene', 'measureMode:true'))
+    measure_command_wiring = evalj("""
+      (() => {
+        const reset = document.getElementById('measure-reset');
+        const reverse = document.getElementById('measure-reverse');
+        const exit = document.getElementById('measure-exit');
+        if(!reset || !reverse || !exit) return {ok:false, reason:'missing controls'};
+        return {
+          ok:exit.dataset.commandId === 'measure.exit'
+          && reset.dataset.commandId === 'measure.reset'
+          && reverse.dataset.commandId === 'measure.reverse'
+          && exit.disabled && reset.disabled && reverse.disabled,
+          commandIds:[reset.dataset.commandId, reverse.dataset.commandId, exit.dataset.commandId],
+          disabled:[reset.disabled, reverse.disabled, exit.disabled],
+        };
+      })()
+    """)
+    check("测距面板三个操作均接入统一命令并按状态禁用",
+          isinstance(measure_command_wiring, dict) and measure_command_wiring.get('ok') is True,
+          str(measure_command_wiring))
     check("行程 Day 预览优先使用 day_meta 范围并复用测距段显示和段内复位",
           evalj("""
             (() => {
@@ -1253,6 +1274,13 @@ try:
           measurePanel._resetFloatingPosition?.();
         }
 
+        document.getElementById('measure-exit').click();
+        await Promise.resolve();
+        const measurePanelExitWorked = interactionManager.current.kind === 'idle'
+          && document.getElementById('measure-panel').style.display === 'none';
+
+        measureButton.click();
+        await Promise.resolve();
         document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
         await Promise.resolve();
         const shortcutCancelled = interactionManager.current.kind === 'idle';
@@ -1276,6 +1304,7 @@ try:
           topMenuEnteredMeasure,
           measureActionsEmbedded,
           measureActionsDraggable,
+          measurePanelExitWorked,
           shortcutCancelled,
           activityOpenedGroups,
           activityOpenedItinerary,
@@ -1301,6 +1330,10 @@ try:
               command_flow.get('measureActionsEmbedded') == True
               and command_flow.get('measureActionsDraggable') == True
               and 'panel.log' not in command_flow['events'],
+              str(command_flow))
+        check("测距面板退出按钮通过 measure.exit 立即结束测距",
+              command_flow.get('measurePanelExitWorked') == True
+              and 'measure.exit' in command_flow['events'],
               str(command_flow))
         check("下撤方案直接合并进行程页",
               command_flow.get('escapeRoutesMerged') == True,

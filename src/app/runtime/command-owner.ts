@@ -18,6 +18,9 @@ export interface RuntimeCommandDependencies {
   reversePrimary: Execute;
   stitchTrails: Execute;
   toggleMeasure: Execute;
+  resetMeasure: Execute;
+  reverseMeasure: Execute;
+  exitMeasure: Execute;
   toggleSegment: Execute;
   toggleWaypoint: Execute;
   toggleEscape: Execute;
@@ -31,6 +34,7 @@ export interface RuntimeCommandDependencies {
   showGroups: Execute;
   showTrails: Execute;
   showItinerary: Execute;
+  closeSidebar: Execute;
 }
 
 export interface RuntimeCommandOwner {
@@ -62,6 +66,15 @@ export function createRuntimeCommandOwner(
       enabled:dependencies.hasPrimaryTrail,
       checked:() => dependencies.interactionKind() === 'measure',
     }),
+    register(STUDIO_COMMANDS.MEASURE_RESET, dependencies.resetMeasure, {
+      enabled:() => dependencies.interactionKind() === 'measure',
+    }),
+    register(STUDIO_COMMANDS.MEASURE_REVERSE, dependencies.reverseMeasure, {
+      enabled:() => dependencies.interactionKind() === 'measure',
+    }),
+    register(STUDIO_COMMANDS.MEASURE_EXIT, dependencies.exitMeasure, {
+      enabled:() => dependencies.interactionKind() === 'measure',
+    }),
     register(STUDIO_COMMANDS.SEGMENT_TOGGLE, dependencies.toggleSegment, {
       enabled:dependencies.hasPrimaryTrail,
       checked:() => dependencies.interactionKind() === 'segment',
@@ -88,6 +101,7 @@ export function createRuntimeCommandOwner(
     register(STUDIO_COMMANDS.WORKSPACE_GROUPS, dependencies.showGroups),
     register(STUDIO_COMMANDS.WORKSPACE_TRAILS, dependencies.showTrails),
     register(STUDIO_COMMANDS.WORKSPACE_ITINERARY, dependencies.showItinerary),
+    register(STUDIO_COMMANDS.SIDEBAR_CLOSE, dependencies.closeSidebar),
   ];
   registry.notifyChanged();
 

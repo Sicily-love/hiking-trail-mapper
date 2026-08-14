@@ -36,6 +36,8 @@ T('main.ts owns the one bootstrap path and ordered stylesheet imports', () => {
   assert.ok(main.includes("import './styles/components.css'"));
   assert.ok(main.includes("import './styles/studio.css'"));
   assert.ok(main.indexOf("import './styles/components.css'") < main.indexOf("import './styles/studio.css'"));
+  assert.ok(main.includes("import './styles/workbench-v3.css'"));
+  assert.ok(main.indexOf("import './styles/studio.css'") < main.indexOf("import './styles/workbench-v3.css'"));
   assert.ok(main.includes("import { bootstrapOutdoorRouteStudio } from './app/bootstrap.ts'"));
   assert.strictEqual((main.match(/bootstrapOutdoorRouteStudio\(/g) || []).length, 1);
 });

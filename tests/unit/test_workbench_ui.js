@@ -1,4 +1,4 @@
-/** Workbench UI 2.0 static and dependency-free DOM contracts. */
+/** Workbench UI 3.0 static and dependency-free DOM contracts. */
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '../..');
 const iconPath = path.join(root, 'src/ui/icons.ts');
 const workbenchPath = path.join(root, 'src/ui/layout/workbench.ts');
 const cssPath = path.join(root, 'src/styles/studio.css');
+const v3CssPath = path.join(root, 'src/styles/workbench-v3.css');
 const componentCssPath = path.join(root, 'src/styles/components.css');
 const floatingPanelPath = path.join(root, 'src/ui/floating-panel.ts');
 const toastPath = path.join(root, 'src/ui/toast.ts');
@@ -20,6 +21,8 @@ const stitchRuntimePath = path.join(root, 'src/features/stitch/runtime-owner.ts'
 const iconSource = fs.readFileSync(iconPath, 'utf8');
 const workbenchSource = fs.readFileSync(workbenchPath, 'utf8');
 const css = fs.readFileSync(cssPath, 'utf8');
+const v3Css = fs.readFileSync(v3CssPath, 'utf8');
+const workbenchCss = `${css}\n${v3Css}`;
 const componentCss = fs.readFileSync(componentCssPath, 'utf8');
 const floatingPanelSource = fs.readFileSync(floatingPanelPath, 'utf8');
 const toastSource = fs.readFileSync(toastPath, 'utf8');
@@ -54,7 +57,7 @@ function test(name, fn) {
   }
 }
 
-console.log('\nWorkbench UI 2.0 contracts');
+console.log('\nWorkbench UI 3.0 contracts');
 
 test('Lucide uses named tree-shakeable imports and one icon helper', () => {
   assert.ok(iconSource.includes("} from 'lucide';"));
@@ -175,6 +178,10 @@ test('map modes and trail groups own dedicated far-left rail destinations', () =
   assert.strictEqual(runtimeSource.includes('list.appendChild(tabs)'), false);
   assert.ok(workbenchSource.includes('root.appendChild(modeSwitcher)'));
   assert.ok(workbenchSource.includes("modeSwitcher.className = 'studio-mode-switcher'"));
+  assert.ok(workbenchSource.includes("shortLabelZh: '海拔'"));
+  assert.ok(workbenchSource.includes("shortLabelZh: '标注点'"));
+  assert.match(v3Css, /\.studio-mode-switcher\s*\{[^}]*grid-template-columns:1fr;[^}]*width:62px;/s);
+  assert.match(v3Css, /\.studio-mode-label\s*\{[^}]*position:static;[^}]*clip-path:none;/s);
   assert.ok(css.includes('.studio-mode-button.on'));
   assert.ok(css.includes('.studio-trail-selector #trail-list'));
 });
@@ -194,6 +201,13 @@ test('measurement actions remain available inside expanded and collapsed elevati
   assert.ok(shellSource.includes('id="measure-reset"'));
   assert.ok(shellSource.includes('id="measure-reverse"'));
   assert.ok(shellSource.includes('id="measure-exit"'));
+  assert.ok(workbenchSource.includes("'measure-reset': STUDIO_COMMANDS.MEASURE_RESET"));
+  assert.ok(workbenchSource.includes("'measure-reverse': STUDIO_COMMANDS.MEASURE_REVERSE"));
+  assert.ok(workbenchSource.includes("'measure-exit': STUDIO_COMMANDS.MEASURE_EXIT"));
+  assert.ok(workbenchSource.includes('auxiliaryCommandButtons.set(commandId, button)'));
+  assert.ok(runtimeSource.includes('resetMeasure:measureReset'));
+  assert.ok(runtimeSource.includes('reverseMeasure:measureReverse'));
+  assert.ok(runtimeSource.includes('exitMeasure:measureExit'));
   assert.ok(css.includes('#measure-panel.studio-elevation-measure-actions[style*="display: block"]'));
   assert.ok(css.includes('#elev-bar.collapsed ~ #measure-panel.studio-elevation-measure-actions'));
   assert.ok(runtimeSource.includes("mode: 'measure-dock'"));
@@ -203,6 +217,14 @@ test('measurement actions remain available inside expanded and collapsed elevati
   assert.ok(floatingPanelSource.includes("handle.addEventListener('dblclick'"));
   assert.ok(css.includes('#measure-panel .measure-panel-grip'));
   assert.ok(css.includes('cursor:grabbing'));
+});
+
+test('route import dialog keeps the v3 copy concise', () => {
+  assert.ok(shellSource.includes('导入路线文件或恢复项目备份。'));
+  assert.ok(shellSource.includes('选择或拖入 KML / ZIP'));
+  assert.ok(shellSource.includes('可一次选择多个文件'));
+  assert.ok(shellSource.includes('恢复轨迹、行程与标注'));
+  assert.match(v3Css, /\.studio-toolbar-command \+ \.studio-menu-group\s*\{[^}]*border-left:0;/s);
 });
 
 test('trail stitching selects from zero then edits ordered parts on the map', () => {
@@ -245,7 +267,7 @@ test('layout moves existing ID nodes without cloning or HTML string copies', () 
   assert.ok(workbenchSource.includes('mapStage.append(map, analysisDock)'));
   assert.ok(workbenchSource.includes('mapStage.appendChild(segmentPanel)'));
   assert.ok(workbenchSource.includes('mapStage.appendChild(stitchPanel)'));
-  assert.ok(workbenchSource.includes('workspace.append(activityRail.root, sidebarElement, mapStage)'));
+  assert.ok(workbenchSource.includes('workspace.append(activityRail.root, sidebarScrim, sidebarElement, mapStage)'));
   assert.ok(workbenchSource.includes('main.replaceChildren(header, workspace)'));
   assert.strictEqual(workbenchSource.includes('cloneNode'), false);
   assert.strictEqual(workbenchSource.includes('innerHTML'), false);
@@ -256,8 +278,8 @@ test('sidebar collapse control belongs to the persistent sidebar heading', () =>
   assert.ok(workbenchSource.includes("sidebarTitle?.closest<HTMLElement>('.sidebar-heading')"));
   assert.ok(workbenchSource.includes("document.getElementById('sidebar-close')"));
   assert.ok(workbenchSource.includes('sidebarHeading.appendChild(sidebarClose)'));
-  assert.ok(css.includes("html[data-workbench='2'] #sidebar-close"));
-  assert.ok(css.includes('position:absolute;'));
+  assert.ok(workbenchCss.includes("html[data-workbench='3'] #sidebar-close"));
+  assert.ok(workbenchCss.includes('position:absolute;'));
 });
 
 test('every trail card exposes one typed rename action', () => {
@@ -304,15 +326,15 @@ test('Workbench owns bilingual labels and responds to one language event', () =>
 
 test('upgrade is idempotent and persists only meaningful activity state', () => {
   assert.ok(workbenchSource.includes('const controllers = new WeakMap<Document, WorkbenchLayoutController>()'));
-  assert.ok(workbenchSource.includes("main?.dataset.workbenchLayout === '2'"));
-  assert.ok(workbenchSource.includes("activity: 'hiking_workbench2_activity'"));
+  assert.ok(workbenchSource.includes("main?.dataset.workbenchLayout === '3'"));
+  assert.ok(workbenchSource.includes("activity: 'hiking_workbench3_activity'"));
   assert.ok(workbenchSource.includes('writeStorage(storage, WORKBENCH_STORAGE_KEYS.activity'));
   assert.ok(workbenchSource.includes("syncActivitySelection('trails', false)"));
   assert.strictEqual(workbenchSource.includes('const initialActivity = readStorage'), false);
   assert.strictEqual(workbenchSource.includes('hiking_workbench2_bottom_tab'), false);
 });
 
-test('bootstrap activates Workbench 2.0 after the direct runtime starts', () => {
+test('bootstrap activates Workbench 3.0 after the direct runtime starts', () => {
   const runtimeIndex = bootstrapSource.indexOf('startStudioRuntime({ document, commands, dialogs })');
   const workbenchIndex = bootstrapSource.indexOf(
     'resolveWorkbenchStorage(document),\n    commands,',
@@ -324,11 +346,13 @@ test('bootstrap activates Workbench 2.0 after the direct runtime starts', () => 
   assert.ok(bootstrapSource.includes('architecture: 2'));
 });
 
-test('Studio stylesheet loads after the shared component stylesheet', () => {
+test('Workbench v3 stylesheet loads after the stable Studio stylesheet', () => {
   const legacyIndex = mainSource.indexOf("import './styles/components.css'");
   const studioIndex = mainSource.indexOf("import './styles/studio.css'");
+  const v3Index = mainSource.indexOf("import './styles/workbench-v3.css'");
   assert.ok(legacyIndex >= 0);
   assert.ok(studioIndex > legacyIndex);
+  assert.ok(v3Index > studioIndex);
 });
 
 test('Workbench is the only chrome owner', () => {
@@ -337,13 +361,13 @@ test('Workbench is the only chrome owner', () => {
   assert.ok(workbenchSource.includes('function prepareElevationToggle('));
 });
 
-test('Studio palette includes required semantic colors', () => {
-  ['#1E6F50', '#F59E0B', '#DC2626', '#FAFAF8']
-    .forEach(color => assert.ok(css.includes(color), color));
-  assert.ok(css.includes('--studio-forest:'));
-  assert.ok(css.includes('--studio-orange:'));
-  assert.ok(css.includes('--studio-danger:'));
-  assert.ok(css.includes('--studio-canvas:'));
+test('Workbench 3 palette includes the four restrained semantic color families', () => {
+  ['--v3-app:', '--v3-pine:', '--v3-amber:', '--v3-coral:', '--v3-paper:']
+    .forEach(token => assert.ok(v3Css.includes(token), token));
+  assert.ok(v3Css.includes('--studio-forest:var(--v3-pine)'));
+  assert.ok(v3Css.includes('--studio-orange:var(--v3-amber)'));
+  assert.ok(v3Css.includes('--studio-danger:var(--v3-coral)'));
+  assert.ok(v3Css.includes('--studio-canvas:var(--v3-fog)'));
 });
 
 test('controlled polish keeps project metrics readable and states explicit', () => {
@@ -369,16 +393,16 @@ test('toast feedback is semantic, high contrast, and avoids the bottom dock', ()
   assert.strictEqual(runtimeSource.includes('background:rgba(20,24,32,0.96)'), false);
 });
 
-test('Studio CSS owns desktop, tablet, phone, and coarse-pointer landscape contracts', () => {
-  [1440, 1024, 390, 320]
-    .forEach(width => assert.ok(css.includes(`@media (max-width: ${width}px)`), `${width}px`));
-  assert.ok(css.includes('grid-template-columns:repeat(5,minmax(0,1fr));'));
-  assert.ok(css.includes('(max-height:520px) and (pointer:coarse)'));
-  assert.ok(css.includes('--studio-safe-bottom:env(safe-area-inset-bottom,0px)'));
-  assert.ok(css.includes('height:min(68dvh,620px);'));
-  assert.ok(css.includes("#measure-panel.studio-elevation-measure-actions"));
-  assert.strictEqual(css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
-  assert.ok(css.includes("html[data-workbench='2'] [hidden]"));
+test('Workbench 3 CSS owns desktop, tablet, phone, and coarse-pointer contracts', () => {
+  [1180, 1024, 760, 360]
+    .forEach(width => assert.ok(v3Css.includes(`max-width:${width}px`), `${width}px`));
+  assert.ok(v3Css.includes('grid-template-columns:repeat(5,minmax(0,1fr));'));
+  assert.ok(v3Css.includes('(pointer:coarse) and (max-height:520px)'));
+  assert.ok(v3Css.includes('--studio-safe-bottom'));
+  assert.ok(v3Css.includes('height:min(72dvh,640px);'));
+  assert.ok(workbenchCss.includes("#measure-panel.studio-elevation-measure-actions"));
+  assert.strictEqual(v3Css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
+  assert.ok(workbenchCss.includes("html[data-workbench='3'] [hidden]"));
 });
 
 test('map fitting closes tablet overlays and mobile bottom sheets', () => {
@@ -397,8 +421,8 @@ test('new UI sources contain no Emoji glyphs or negative letter spacing', () => 
   const emoji = /\p{Extended_Pictographic}/u;
   assert.strictEqual(emoji.test(iconSource), false);
   assert.strictEqual(emoji.test(workbenchSource), false);
-  assert.strictEqual(emoji.test(css), false);
-  assert.strictEqual(/letter-spacing\s*:\s*-/.test(css), false);
+  assert.strictEqual(emoji.test(workbenchCss), false);
+  assert.strictEqual(/letter-spacing\s*:\s*-/.test(workbenchCss), false);
 });
 
 console.log(`\nResult: ${passed}/${passed + failed} passed`);

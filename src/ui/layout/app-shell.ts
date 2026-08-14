@@ -37,17 +37,17 @@ export const APP_SHELL = `
     <div id="add-trail-modal" class="modal-mask">
       <div class="modal-card">
         <h3 data-i18n="add.title">添加新轨迹</h3>
-        <p class="modal-description" data-i18n="add.description">上传一个或多个户外平台导出的 KML 文件。</p>
+        <p class="modal-description" data-i18n="add.description">导入路线文件或恢复项目备份。</p>
         <div id="kml-drop" class="kml-drop-zone">
           <div class="kml-drop-icon" aria-hidden="true">+</div>
-          <div data-i18n="add.dropPrimary">点击或拖拽 .kml 文件到此处</div>
-          <small data-i18n="add.dropSecondary">支持多选和多次添加</small>
+          <div data-i18n="add.dropPrimary">选择或拖入 KML / ZIP</div>
+          <small data-i18n="add.dropSecondary">可一次选择多个文件</small>
           <input id="kml-file" type="file" accept=".kml,.zip,application/vnd.google-earth.kml+xml,application/zip" multiple hidden>
         </div>
         <div class="project-restore-row">
           <div>
             <b data-i18n="add.projectRestore">恢复完整项目</b>
-            <small data-i18n="add.projectRestoreDesc">读取 .ors-project.json，恢复轨迹、行程、标注和工作区选择</small>
+            <small data-i18n="add.projectRestoreDesc">恢复轨迹、行程与标注</small>
           </div>
           <button id="project-restore-btn" class="btn-mini" type="button" data-i18n="add.projectChoose">选择备份</button>
           <input id="project-file" type="file" accept=".ors-project.json,.json,application/json,application/vnd.outdoor-route-studio.project+json" hidden>

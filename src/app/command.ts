@@ -32,6 +32,9 @@ export const STUDIO_COMMANDS = Object.freeze({
   TRAIL_REVERSE: 'trail.reverse',
   TRAIL_STITCH: 'trail.stitch',
   MEASURE_TOGGLE: 'measure.toggle',
+  MEASURE_RESET: 'measure.reset',
+  MEASURE_REVERSE: 'measure.reverse',
+  MEASURE_EXIT: 'measure.exit',
   SEGMENT_TOGGLE: 'segment.toggle',
   WAYPOINT_TOGGLE: 'waypoint.toggle',
   ESCAPE_TOGGLE: 'escape.toggle',
@@ -45,6 +48,7 @@ export const STUDIO_COMMANDS = Object.freeze({
   WORKSPACE_GROUPS: 'workspace.groups',
   WORKSPACE_TRAILS: 'workspace.trails',
   WORKSPACE_ITINERARY: 'workspace.itinerary',
+  SIDEBAR_CLOSE: 'sidebar.close',
 } as const);
 
 export type StudioCommandId = typeof STUDIO_COMMANDS[keyof typeof STUDIO_COMMANDS];

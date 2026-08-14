@@ -211,7 +211,8 @@ test('Workbench command surfaces only dispatch semantic commands', () => {
 test('runtime registers primary commands without native dialogs or onclick handlers', () => {
   [
     'FILE_IMPORT', 'FILE_EXPORT', 'PROJECT_CLEAR', 'TRAIL_REVERSE',
-    'MEASURE_TOGGLE', 'SEGMENT_TOGGLE', 'WAYPOINT_TOGGLE', 'ESCAPE_TOGGLE',
+    'MEASURE_TOGGLE', 'MEASURE_RESET', 'MEASURE_REVERSE', 'MEASURE_EXIT',
+    'SEGMENT_TOGGLE', 'WAYPOINT_TOGGLE', 'ESCAPE_TOGGLE',
     'MAP_RESET', 'HELP_OPEN', 'LANGUAGE_TOGGLE', 'INTERACTION_CANCEL',
   ].forEach(name => assert.ok(commandOwnerSource.includes(`register(STUDIO_COMMANDS.${name}`), name));
   const runtimeCommandSources = `${runtimeSource}\n${commandOwnerSource}`;

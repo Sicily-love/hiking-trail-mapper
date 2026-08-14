@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'outdoor-route-studio-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icons/app-icon.svg'];
 
 self.addEventListener('install', event => {

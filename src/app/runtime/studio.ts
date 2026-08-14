@@ -1185,6 +1185,9 @@ export function startStudioRuntime(
     reversePrimary:reversePrimaryTrailCommand,
     stitchTrails:stitchTrailsCommand,
     toggleMeasure:toggleMeasureCommand,
+    resetMeasure:measureReset,
+    reverseMeasure:measureReverse,
+    exitMeasure:measureExit,
     toggleSegment:toggleSegmentCommand,
     toggleWaypoint:toggleWaypointCommand,
     toggleEscape:toggleEscapeCommand,
@@ -1198,6 +1201,7 @@ export function startStudioRuntime(
     showGroups:() => activateSidebarTab('groups'),
     showTrails:() => activateSidebarTab('trails'),
     showItinerary:() => activateSidebarTab('days'),
+    closeSidebar:sidebarCollapseController.close,
   });
   const runtimeCommandDisposers = runtimeCommands.disposers;
   runtimeLifecycle.add(() => runtimeCommands.dispose());

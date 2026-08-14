@@ -4,6 +4,22 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v3.0.0 — 2026-08-15
+
+**中文**
+
+- 启用全新 Workbench 3.0，以地图为中心重构应用栏、活动导航、路线资料库与海拔分析区。
+- 统一桌面、平板与手机布局，改进安全边距、触摸目标、侧栏底部面板和响应式反馈。
+- 修正海拔/标注模式入口重叠，并将测距重选、反向和退出全部接入统一命令。
+- 精简轨迹导入窗口与顶部操作分隔，保持 v2.3 项目备份、轨迹数据和 Leaflet 渲染完全兼容。
+
+**English**
+
+- Launch Workbench 3.0 with a map-first app bar, activity navigation, route library, and elevation analysis dock.
+- Unify desktop, tablet, and phone layouts with safer insets, touch targets, mobile sheets, and responsive feedback.
+- Fix overlapping elevation and waypoint mode controls, and route measure reset, reverse, and exit through semantic commands.
+- Simplify the route import surface and toolbar grouping while preserving v2.3 project archives, trail data, and Leaflet rendering.
+
 ## v2.3.5 — 2026-08-14
 
 **中文**
