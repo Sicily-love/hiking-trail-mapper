@@ -122,7 +122,8 @@ function harness(options = {}) {
       'src/features/segment/runtime-owner.ts',
     ].map(file => fs.readFileSync(file, 'utf8')).join('\n');
     const feature = fs.readFileSync('src/features/project/runtime.ts', 'utf8');
-    assert.match(source, /createProjectRuntimeController\(\s*runtimeContext as unknown as HTM_APP\.RuntimeContext/);
+    assert.match(source, /createProjectRuntimeController\(runtimeContext/);
+    assert.doesNotMatch(source, /runtimeContext as unknown as HTM_APP\.RuntimeContext/);
     assert.match(feature, /createProjectHistoryController\(context/);
     assert.match(source, /EDIT_UNDO/);
     assert.match(source, /EDIT_REDO/);

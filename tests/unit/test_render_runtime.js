@@ -3,6 +3,7 @@ const assert = require('assert');
 const { read, runtimeSource: runtime } = require('./runtime_source');
 const elevationRuntime = read('src/features/elevation/runtime-owner.ts');
 const mapRuntime = read('src/features/map/runtime-owner.ts');
+const renderOwner = read('src/app/runtime/render-owner.ts');
 let passed = 0;
 let failed = 0;
 
@@ -27,10 +28,11 @@ function functionSource(name, nextName) {
 console.log('\nPerformance 2.0 runtime contracts');
 
 test('one RenderScheduler owns all seven runtime phases', () => {
-  assert.strictEqual((runtime.match(/new HTM_APP\.RenderScheduler\(/g) || []).length, 1);
+  assert.strictEqual((renderOwner.match(/new RenderScheduler</g) || []).length, 1);
   for(const phase of ['tracks', 'markers', 'sidebar', 'days', 'legend', 'chart', 'fit']) {
-    assert.match(runtime, new RegExp(`${phase}\\(context(?:: any)?\\)`), phase);
+    assert.match(renderOwner, new RegExp(`${phase}\\(context\\)`), phase);
   }
+  assert.ok(runtime.includes('createRuntimeRenderOwner'));
   assert.ok(runtime.includes('window.__HTM_RENDER_SCHEDULER__ = renderScheduler'));
   assert.ok(runtime.includes('window.__HTM_RENDER_STATS__ = renderRuntimeStats'));
 });

@@ -2938,6 +2938,8 @@ html[data-workbench='2'] .workbench-dialog--danger .workbench-dialog__title {
 /* Stable v2.3 refinement: denser hierarchy without changing workbench navigation. */
 html[data-workbench='2'] #tooltip {
   max-width:min(300px,calc(100vw - 20px));
+  max-height:min(70vh,calc(100vh - 20px));
+  overflow:auto;
   padding:9px 11px;
   border-color:rgba(245,158,11,.82);
   background:rgba(20,29,23,.96);
@@ -2955,6 +2957,32 @@ html[data-workbench='2'] #tooltip .row {
 
 html[data-workbench='2'] #tooltip .lab { color:#AFC0B5; }
 html[data-workbench='2'] #tooltip .val { color:#F8C56A; }
+
+@media (max-width:760px) {
+  html[data-workbench='2'] #tooltip {
+    width:min(260px,calc(100vw - 20px));
+  }
+
+  html[data-workbench='2'] #tooltip .row {
+    min-width:0;
+  }
+
+  html[data-workbench='2'] #tooltip .val {
+    min-width:0;
+    overflow-wrap:anywhere;
+    text-align:right;
+    white-space:normal;
+  }
+
+  html[data-workbench='2'] .waypoint-photo-card {
+    width:min(300px,calc(100vw - 20px));
+    max-width:none;
+  }
+
+  html[data-workbench='2'] .waypoint-card__image {
+    max-height:min(180px,30vh);
+  }
+}
 
 @media (min-width:1025px) {
   html[data-workbench='2'] .studio-workbench {

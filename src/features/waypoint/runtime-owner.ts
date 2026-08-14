@@ -7,12 +7,12 @@ import {
   type WaypointTrail,
 } from './controller.ts';
 
-export interface WaypointRuntimeDependencies {
+export interface WaypointRuntimeDependencies<TTrail extends WaypointTrail = WaypointTrail> {
   document: Document;
   leaflet: any;
   map: any;
   dialogs: any;
-  context: RuntimeContext<WaypointTrail>;
+  context: RuntimeContext<TTrail>;
   selectors: any;
   projectSelectors: any;
   language(): string;
@@ -22,7 +22,7 @@ export interface WaypointRuntimeDependencies {
   iconMarkup(tag: unknown): string;
   nearestPrimary(lat: number, lng: number): any;
   distance(lat1: number, lng1: number, lat2: number, lng2: number): number;
-  markRevision(trail: WaypointTrail): unknown;
+  markRevision(trail: TTrail): unknown;
   renderWaypoints(): void;
   renderFilters(): void;
   renderDays(): void;
@@ -40,18 +40,21 @@ export interface WaypointRuntimeDependencies {
   ownerIsCurrent(session?: InteractionSessionLike): boolean;
 }
 
-export interface WaypointRuntime {
-  readonly controller: WaypointController;
+export interface WaypointRuntime<TTrail extends WaypointTrail = WaypointTrail> {
+  readonly controller: WaypointController<TTrail>;
   readonly state: Readonly<WaypointControllerState>;
-  nextId(trail: WaypointTrail): number;
+  nextId(trail: TTrail): number;
   addManualWaypointAt(latlng: any, options?: {requireNear?: boolean; isCurrent?: (() => boolean) | null}): Promise<boolean>;
   enter(options?: {announce?: boolean}): InteractionSessionLike | null;
   exit(options?: {fromManager?: boolean; reason?: string}): void;
   dispatchTransientTap(latlng: any, source: string): boolean;
+  dispose(): void;
 }
 
 /** Owns manual-waypoint dialogs, map gestures, and the unified interaction session. */
-export function createWaypointRuntime(dependencies: WaypointRuntimeDependencies): WaypointRuntime {
+export function createWaypointRuntime<TTrail extends WaypointTrail>(
+  dependencies: WaypointRuntimeDependencies<TTrail>,
+): WaypointRuntime<TTrail> {
   const {
     document, leaflet:L, map, dialogs, context, selectors, projectSelectors,
     language, translate:t, tagColors, iconForTag, iconMarkup, nearestPrimary,
@@ -313,12 +316,13 @@ export function createWaypointRuntime(dependencies: WaypointRuntimeDependencies)
     });
   }
 
-  map.on('contextmenu', (event: any) => {
+  const onContextMenu = (event: any): void => {
     dispatchTransientWaypointTap(event.latlng, 'contextmenu');
-  });
+  };
+  map.on('contextmenu', onContextMenu);
   let longPressTimer:ReturnType<typeof setTimeout> | null = null;
   const mapContainer = map.getContainer();
-  mapContainer.addEventListener('touchstart', (event: TouchEvent) => {
+  const onTouchStart = (event: TouchEvent): void => {
     if(event.touches.length !== 1) return;
     const {clientX, clientY} = event.touches[0];
     longPressTimer = setTimeout(() => {
@@ -326,7 +330,8 @@ export function createWaypointRuntime(dependencies: WaypointRuntimeDependencies)
       const point = L.point(clientX - rect.left, clientY - rect.top);
       dispatchTransientWaypointTap(map.containerPointToLatLng(point), 'long-press');
     }, 600);
-  }, {passive:true});
+  };
+  mapContainer.addEventListener('touchstart', onTouchStart, {passive:true});
   const cancelLongPress = (): void => {
     if(longPressTimer) clearTimeout(longPressTimer);
     longPressTimer = null;
@@ -337,10 +342,18 @@ export function createWaypointRuntime(dependencies: WaypointRuntimeDependencies)
   return Object.freeze({
     controller,
     state:controller.state,
-    nextId:(trail: WaypointTrail) => controller.nextId(trail),
+    nextId:(trail: TTrail) => controller.nextId(trail),
     addManualWaypointAt,
     enter:enterAddWaypointMode,
     exit:exitAddWaypointMode,
     dispatchTransientTap:dispatchTransientWaypointTap,
+    dispose(): void {
+      cancelLongPress();
+      controller.exit();
+      map.off?.('contextmenu', onContextMenu);
+      mapContainer.removeEventListener('touchstart', onTouchStart);
+      mapContainer.removeEventListener('touchend', cancelLongPress);
+      mapContainer.removeEventListener('touchmove', cancelLongPress);
+    },
   });
 }

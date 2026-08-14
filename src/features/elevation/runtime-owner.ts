@@ -133,38 +133,43 @@ export function createElevationRuntime(dependencies: ElevationRuntimeDependencie
     return {index, point:points[index], mouseX};
   }
 
+  const onMouseMove = (event: MouseEvent): void => {
+    const hit = hitTest(event);
+    if(!hit) { if(crosshair) crosshair.style.display = 'none'; if(tip) tip.style.display = 'none'; return; }
+    const {point, mouseX} = hit;
+    if(crosshair) { crosshair.style.display = 'block'; crosshair.style.left = `${mouseX}px`; }
+    if(tip) {
+      tip.style.display = 'block';
+      tip.style.left = `${Math.max(4, Math.min(mouseX + 8, canvas.getBoundingClientRect().width - 210))}px`;
+      tip.innerHTML = `<b>${point[3] !== undefined ? `${point[3]}km` : ''}</b> · ${point[2]}m · ↑<b>${point[4]}m</b><span class="elev-tip-coordinate">${formatTrackPointCoordinates(point)}</span>`;
+    }
+  };
+  const onMouseLeave = (): void => {
+    if(crosshair) crosshair.style.display = 'none';
+    if(tip) tip.style.display = 'none';
+  };
+  const onCanvasClick = (event: MouseEvent): void => {
+    const point = hitTest(event)?.point;
+    if(!point || point[0] == null) return;
+    if(clickMarker) { clearTimeout(clickMarker._autoRemove); clickMarker.remove(); }
+    const latLng = [point[0], point[1]];
+    clickMarker = L.circleMarker(latLng, {
+      radius:7, color:'#fff', weight:2, fillColor:data?.color || '#fbbf24', fillOpacity:1, pane:'tooltipPane',
+    }).addTo(map);
+    const text = `<b>${point[3] !== undefined ? `${point[3]}km · ` : ''}${Math.round(point[2])}m</b><br><span class="track-point-coordinate">${formatTrackPointCoordinates(point)}</span>`;
+    clickMarker.bindTooltip(text, {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'}).openTooltip();
+    map.panTo(latLng, {animate:true, duration:.4});
+    clickMarker._autoRemove = window.setTimeout(() => { clickMarker?.remove(); clickMarker = null; }, 8000);
+  };
+  const onResize = (): void => { if(data) refresh(); };
+
   if(canvas) {
     canvas.style.pointerEvents = 'auto';
-    canvas.addEventListener('mousemove', (event:any) => {
-      const hit = hitTest(event);
-      if(!hit) { if(crosshair) crosshair.style.display = 'none'; if(tip) tip.style.display = 'none'; return; }
-      const {point, mouseX} = hit;
-      if(crosshair) { crosshair.style.display = 'block'; crosshair.style.left = `${mouseX}px`; }
-      if(tip) {
-        tip.style.display = 'block';
-        tip.style.left = `${Math.max(4, Math.min(mouseX + 8, canvas.getBoundingClientRect().width - 210))}px`;
-        tip.innerHTML = `<b>${point[3] !== undefined ? `${point[3]}km` : ''}</b> · ${point[2]}m · ↑<b>${point[4]}m</b><span class="elev-tip-coordinate">${formatTrackPointCoordinates(point)}</span>`;
-      }
-    });
-    canvas.addEventListener('mouseleave', () => {
-      if(crosshair) crosshair.style.display = 'none';
-      if(tip) tip.style.display = 'none';
-    });
-    canvas.addEventListener('click', (event:any) => {
-      const point = hitTest(event)?.point;
-      if(!point || point[0] == null) return;
-      if(clickMarker) { clearTimeout(clickMarker._autoRemove); clickMarker.remove(); }
-      const latLng = [point[0], point[1]];
-      clickMarker = L.circleMarker(latLng, {
-        radius:7, color:'#fff', weight:2, fillColor:data?.color || '#fbbf24', fillOpacity:1, pane:'tooltipPane',
-      }).addTo(map);
-      const text = `<b>${point[3] !== undefined ? `${point[3]}km · ` : ''}${Math.round(point[2])}m</b><br><span class="track-point-coordinate">${formatTrackPointCoordinates(point)}</span>`;
-      clickMarker.bindTooltip(text, {permanent:true, direction:'top', offset:[0,-8], className:'measure-tip'}).openTooltip();
-      map.panTo(latLng, {animate:true, duration:.4});
-      clickMarker._autoRemove = window.setTimeout(() => { clickMarker?.remove(); clickMarker = null; }, 8000);
-    });
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseleave', onMouseLeave);
+    canvas.addEventListener('click', onCanvasClick);
   }
-  window.addEventListener('resize', () => { if(data) refresh(); });
+  window.addEventListener('resize', onResize);
 
   return Object.freeze({
     canvas,
@@ -174,5 +179,14 @@ export function createElevationRuntime(dependencies: ElevationRuntimeDependencie
     refresh,
     updateBadges,
     get data() { return data; },
+    dispose():void {
+      window.removeEventListener('resize', onResize);
+      canvas?.removeEventListener('mousemove', onMouseMove);
+      canvas?.removeEventListener('mouseleave', onMouseLeave);
+      canvas?.removeEventListener('click', onCanvasClick);
+      if(clickMarker?._autoRemove) clearTimeout(clickMarker._autoRemove);
+      clickMarker?.remove?.();
+      clickMarker = null;
+    },
   });
 }

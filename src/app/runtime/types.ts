@@ -9,7 +9,7 @@ export type RuntimeTrackPoint = [
 ];
 
 export interface RuntimeWaypoint {
-  id: string;
+  id: string | number;
   lat: number;
   lng: number;
   tag?: string;

@@ -7,6 +7,10 @@ const root = path.resolve(__dirname, '../..');
 const { CommandRegistry, STUDIO_COMMANDS } = require(path.join(root, 'src/app/command.ts'));
 const bootstrapSource = fs.readFileSync(path.join(root, 'src/app/bootstrap.ts'), 'utf8');
 const { runtimeSource } = require('./runtime_source');
+const commandOwnerSource = fs.readFileSync(
+  path.join(root, 'src/app/runtime/command-owner.ts'),
+  'utf8',
+);
 const workbenchSource = fs.readFileSync(path.join(root, 'src/ui/layout/workbench.ts'), 'utf8');
 const dialogSource = fs.readFileSync(
   path.join(root, 'src/ui/dialog/controller.ts'),
@@ -209,8 +213,9 @@ test('runtime registers primary commands without native dialogs or onclick handl
     'FILE_IMPORT', 'FILE_EXPORT', 'PROJECT_CLEAR', 'TRAIL_REVERSE',
     'MEASURE_TOGGLE', 'SEGMENT_TOGGLE', 'WAYPOINT_TOGGLE', 'ESCAPE_TOGGLE',
     'MAP_RESET', 'HELP_OPEN', 'LANGUAGE_TOGGLE', 'INTERACTION_CANCEL',
-  ].forEach(name => assert.ok(runtimeSource.includes(`register(STUDIO_COMMANDS.${name}`), name));
-  assert.strictEqual(/(^|[^.\w])(alert|confirm|prompt)\s*\(/m.test(runtimeSource), false);
+  ].forEach(name => assert.ok(commandOwnerSource.includes(`register(STUDIO_COMMANDS.${name}`), name));
+  const runtimeCommandSources = `${runtimeSource}\n${commandOwnerSource}`;
+  assert.strictEqual(/(^|[^.\w])(alert|confirm|prompt)\s*\(/m.test(runtimeCommandSources), false);
   assert.strictEqual(runtimeSource.includes('onclick='), false);
   assert.strictEqual(/\.onclick\s*=/.test(runtimeSource), false);
   assert.strictEqual(runtimeSource.includes("document.getElementById('export-btn').addEventListener"), false);

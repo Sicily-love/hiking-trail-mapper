@@ -4,6 +4,18 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v2.3.5 — 2026-08-14
+
+**中文**
+
+- 拆分渲染、命令、生命周期和存储运行时所有权，进一步收紧状态与 DOM 边界
+- 优化移动端地图提示与标注卡片安全区域，并强化大型项目归档、缓存恢复和连续编辑测试
+
+**English**
+
+- Split render, command, lifecycle, and storage runtime ownership to tighten state and DOM boundaries
+- Improve mobile map overlay safety and strengthen large-project archive, cache restore, and continuous-edit tests
+
 ## v2.3.4 — 2026-08-14
 
 **中文**

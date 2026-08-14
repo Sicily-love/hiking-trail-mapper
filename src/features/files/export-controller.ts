@@ -41,8 +41,8 @@ export interface FileExportController {
 }
 
 /** Owns export selection and file plans without DOM, Blob, URL, Canvas, or fflate access. */
-export function createFileExportController(
-  context: RuntimeContext<ExportTrail>,
+export function createFileExportController<TTrail extends ExportTrail>(
+  context: RuntimeContext<TTrail>,
   dependencies: FileExportControllerDependencies,
 ): FileExportController {
   if(!dependencies.dayPalette.length) throw new TypeError('FileExportController requires a Day palette');

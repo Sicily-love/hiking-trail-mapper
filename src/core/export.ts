@@ -6,7 +6,7 @@ export interface ExportWaypoint {
   lng?: number;
   elev?: number;
   km?: number;
-  day?: number;
+  day?: number | null;
   label?: string;
   icon?: string;
   tag?: string;

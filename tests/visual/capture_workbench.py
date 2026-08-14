@@ -751,6 +751,46 @@ try:
     wait_for_map_tiles()
     sheet = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
     (OUTPUT / "workbench-390x844-sheet.png").write_bytes(base64.b64decode(sheet["result"]["data"]))
+    evaluate("toggleSidebar(false)")
+    time.sleep(0.35)
+    mobile_overlay_state = evaluate("""
+      (() => {
+        const mapRect = document.getElementById('map')?.getBoundingClientRect();
+        const marker = Object.values(wpMarkers)[0];
+        if(!mapRect || !marker) return {valid:false, reason:'missing-map-or-marker'};
+        marker.fire('click', {
+          originalEvent:{clientX:innerWidth - 2, clientY:mapRect.bottom - 2, stopPropagation(){}},
+        });
+        const card = document.getElementById('wp-photo-tip');
+        const cardRect = card?.getBoundingClientRect();
+        const closeRect = card?.querySelector('.waypoint-card__close')?.getBoundingClientRect();
+        const cardValid = !!cardRect && !!closeRect
+          && cardRect.left >= mapRect.left && cardRect.right <= mapRect.right
+          && cardRect.top >= mapRect.top && cardRect.bottom <= mapRect.bottom
+          && closeRect.width >= 44 && closeRect.height >= 44
+          && card.scrollWidth <= card.clientWidth;
+        card?.querySelector('.waypoint-card__close')?.click();
+
+        const main = DATA.trails.find(trail => trail.id === state.primaryTrailId);
+        const index = Math.floor(main.track.length * .5);
+        showTooltip(
+          {originalEvent:{clientX:2, clientY:mapRect.bottom - 2}},
+          main.track[index],
+          main.track[Math.min(main.track.length - 1, index + 1)],
+          main,
+        );
+        const tooltip = document.getElementById('tooltip');
+        const tooltipRect = tooltip?.getBoundingClientRect();
+        const tooltipValid = !!tooltipRect
+          && tooltipRect.left >= mapRect.left && tooltipRect.right <= mapRect.right
+          && tooltipRect.top >= mapRect.top && tooltipRect.bottom <= mapRect.bottom
+          && tooltip.scrollWidth <= tooltip.clientWidth;
+        return {valid:cardValid && tooltipValid, cardValid, tooltipValid};
+      })()
+    """)
+    mobile_overlay_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
+    (OUTPUT / "workbench-map-overlays-mobile.png").write_bytes(base64.b64decode(mobile_overlay_shot["result"]["data"]))
+    evaluate("hideTooltip()")
     evaluate("""
       (() => {
         toggleSidebar(false);
@@ -881,7 +921,7 @@ try:
         all(height >= 44 for height in mobile_segment_state.get("buttonHeights", [])),
     ])
     toast_state_valid = all(toast_state.values())
-    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not mobile_segment_valid or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
+    if not long_name_state.get("valid") or not group_state or not day_state or not measure_state_valid or not segment_state or not mobile_segment_valid or not escape_state or not mobile_escape_state or not waypoint_dialog_state or not waypoint_card_state or not mobile_overlay_state.get("valid") or not dialog_state or not restore_dialog_state or not stitch_dialog_state or not toast_state_valid or not mobile_dialog_state or not elevation_collapse_valid or not sheet_state:
         invalid.append("interaction-states")
     if invalid:
         print(json.dumps({
@@ -895,6 +935,7 @@ try:
             "mobileEscape":bool(mobile_escape_state),
             "waypointDialog":bool(waypoint_dialog_state),
             "waypointCard":bool(waypoint_card_state),
+            "mobileOverlay":mobile_overlay_state,
             "dialog":bool(dialog_state),
             "restoreDialog":bool(restore_dialog_state),
             "stitchDialog":bool(stitch_dialog_state),

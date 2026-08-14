@@ -180,6 +180,33 @@ try:
         const firstRenderMs = performance.now() - renderStarted;
         const afterFirst = snapshotStats();
 
+        const archiveStarted = performance.now();
+        const archive = HTM_CORE.createProjectArchive({
+          project:{title:DATA.title, trails:[...DATA.trails], calc_method:{...DATA.calc_method}},
+          state:state,
+          appVersion:APP_VERSION,
+          exportedAt:'2026-08-14T00:00:00.000Z',
+        });
+        const archiveText = HTM_CORE.serializeProjectArchive(archive);
+        const parsedArchive = projectArchiveController.parse(archiveText);
+        const archiveMs = performance.now() - archiveStarted;
+
+        const storageStarted = performance.now();
+        const storageSaved = await _doSave();
+        testDriver.mutateTrail(ids[0], trail => {
+          trail.name = 'Transient scale route';
+          delete trail._descCum;
+        });
+        const storageRestored = await loadFromStorage();
+        rebuildAll({fit:false});
+        await settle();
+        const restoredPrimary = DATA.trails.find(trail => trail.id === ids[0]);
+        const storageMs = performance.now() - storageStarted;
+
+        rebuildAll({fit:false});
+        await settle();
+        const stableMarkerDiff = snapshotStats().markers;
+
         // Project replacement can leave a mobile-sidebar fit callback in flight on slower CI.
         // Keep that setup work outside the reset measurement and assert the final explicit fit.
         await new Promise(resolve => setTimeout(resolve, 250));
@@ -191,10 +218,21 @@ try:
         const resetMs = performance.now() - resetStarted;
 
         const repeatStarted = performance.now();
-        rebuildAll({fit:false});
-        await settle();
+        const lifecycleSizeBefore = runtimeLifecycle.size;
+        const markerCounts = [];
+        const layerCounts = [];
+        for(let cycle = 0; cycle < 8; cycle += 1) {
+          testDriver.mutateTrail(ids[0], trail => {
+            trail.name = cycle % 2 ? 'Scale route 1' : 'Scale route 1 edited';
+          });
+          rebuildAll({fit:false});
+          await settle();
+          markerCounts.push(Object.keys(wpMarkers).length);
+          layerCounts.push(trackLayer.getLayers().length);
+        }
         const repeatRenderMs = performance.now() - repeatStarted;
         const afterRepeat = snapshotStats();
+        const lifecycleSizeAfter = runtimeLifecycle.size;
         const heapAfter = performance.memory?.usedJSHeapSize || null;
         const canvas = document.querySelector('#elev-bar canvas');
         return {
@@ -202,9 +240,21 @@ try:
           activeTrailCount:state.activeTrails.size,
           pointCount,
           buildMs, firstRenderMs, repeatRenderMs, resetMs, resetApplied, settleFrames,
+          archiveMs,
+          archiveBytes:new Blob([archiveText]).size,
+          archiveValid:parsedArchive.ok,
+          archiveTrailCount:parsedArchive.ok ? parsedArchive.archive.project.trails.length : 0,
+          storageMs, storageSaved, storageRestored,
+          restoredName:restoredPrimary?.name || null,
+          restoredDescentPoints:restoredPrimary?._descCum?.length || 0,
           frameDelta:afterFirst.frames - before.frames,
           trackLayerCount:trackLayer.getLayers().length,
           markerCount:Object.keys(wpMarkers).length,
+          stableMarkerDiff,
+          markerCounts,
+          layerCounts,
+          lifecycleSizeBefore,
+          lifecycleSizeAfter,
           markerRepeat:afterRepeat.markers,
           elevationSource:afterRepeat.elevation.sourcePoints,
           elevationRendered:afterRepeat.elevation.renderedPoints,
@@ -220,7 +270,11 @@ try:
         report("loads 12 trails and 216,000 points", metrics["trailCount"] == 12 and metrics["activeTrailCount"] == 12 and metrics["pointCount"] == 216000),
         report("coalesces the first workspace render", 1 <= metrics["frameDelta"] <= 4, f"{metrics['frameDelta']} frames"),
         report("keeps Leaflet elevation layers bounded", 1 <= metrics["trackLayerCount"] <= 500, f"{metrics['trackLayerCount']} layers"),
-        report("keeps marker instances stable on a repeated render", metrics["markerRepeat"]["add"] == 0 and metrics["markerRepeat"]["update"] == 0 and metrics["markerRepeat"]["remove"] == 0, str(metrics["markerRepeat"])),
+        report("keeps marker instances stable on an unchanged render", metrics["stableMarkerDiff"]["add"] == 0 and metrics["stableMarkerDiff"]["update"] == 0 and metrics["stableMarkerDiff"]["remove"] == 0, str(metrics["stableMarkerDiff"])),
+        report("round-trips a real large project archive", metrics["archiveValid"] and metrics["archiveTrailCount"] == 12 and metrics["archiveBytes"] > 5 * 1024 * 1024, f"{metrics['archiveBytes'] / 1024 / 1024:.1f} MiB / {metrics['archiveMs']:.0f} ms"),
+        report("restores the large project from IndexedDB", metrics["storageSaved"] and metrics["storageRestored"] and metrics["restoredName"] == "Scale route 1" and metrics["restoredDescentPoints"] == 18000, f"{metrics['storageMs']:.0f} ms"),
+        report("keeps markers and layers bounded across continuous edits", len(set(metrics["markerCounts"])) == 1 and len(set(metrics["layerCounts"])) == 1 and metrics["markerCounts"][0] == metrics["markerCount"], f"markers {metrics['markerCounts']} / layers {metrics['layerCounts']}"),
+        report("does not accumulate owned runtime resources", metrics["lifecycleSizeBefore"] == metrics["lifecycleSizeAfter"], f"{metrics['lifecycleSizeBefore']} -> {metrics['lifecycleSizeAfter']}"),
         report("downsamples the elevation canvas", metrics["elevationSource"] == 18000 and metrics["elevationRendered"] <= max(2, metrics["canvasWidth"] * 2 + 4), f"{metrics['elevationRendered']}/{metrics['elevationSource']}"),
         report("resets the large primary route without a stalled frame", metrics["resetApplied"] and metrics["resetMs"] < 5000, f"{metrics['resetMs']:.0f} ms"),
         report("renders within a conservative CI budget", metrics["buildMs"] < 5000 and metrics["firstRenderMs"] < 15000 and metrics["repeatRenderMs"] < 10000, f"build {metrics['buildMs']:.0f} / first {metrics['firstRenderMs']:.0f} / repeat {metrics['repeatRenderMs']:.0f} ms"),

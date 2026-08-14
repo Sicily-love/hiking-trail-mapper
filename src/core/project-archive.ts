@@ -20,8 +20,8 @@ export interface ProjectArchiveTrail {
   id: string;
   name: string;
   group: string;
-  track: ProjectArchiveJson[];
-  [key: string]: ProjectArchiveJson;
+  track: unknown[];
+  [key: string]: unknown;
 }
 
 export interface ProjectArchiveWorkspace {
@@ -372,7 +372,7 @@ export function serializeProjectArchive(archive: ProjectArchive): string {
   return `${JSON.stringify(archive, null, 2)}\n`;
 }
 
-function nestedArrayLength(value: ProjectArchiveJson | undefined): number {
+function nestedArrayLength(value: unknown): number {
   return Array.isArray(value) ? value.length : 0;
 }
 

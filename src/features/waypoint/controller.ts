@@ -54,9 +54,9 @@ export interface ManualWaypointInput {
   photo?: string;
 }
 
-export interface WaypointControllerDependencies {
+export interface WaypointControllerDependencies<TTrail extends WaypointTrail = WaypointTrail> {
   iconForTag: (tag: string) => string;
-  markRevision: (trail: WaypointTrail) => unknown;
+  markRevision: (trail: TTrail) => unknown;
   renderWaypoints: () => void;
   renderFilters: () => void;
   renderDays: () => void;
@@ -64,19 +64,19 @@ export interface WaypointControllerDependencies {
   notify: (message: string) => void;
 }
 
-export interface WaypointController {
+export interface WaypointController<TTrail extends WaypointTrail = WaypointTrail> {
   readonly state: Readonly<WaypointControllerState>;
   enter: (trailId: string) => boolean;
   exit: () => void;
-  nextId: (trail: WaypointTrail) => number;
+  nextId: (trail: TTrail) => number;
   addManualWaypoint: (anchor: ManualWaypointAnchor, input: ManualWaypointInput) => WaypointRecord | null;
 }
 
 /** Owns manual-waypoint state and project mutations without Leaflet or DOM access. */
-export function createWaypointController(
-  context: RuntimeContext<WaypointTrail>,
-  dependencies: WaypointControllerDependencies,
-): WaypointController {
+export function createWaypointController<TTrail extends WaypointTrail>(
+  context: RuntimeContext<TTrail>,
+  dependencies: WaypointControllerDependencies<TTrail>,
+): WaypointController<TTrail> {
   const state: WaypointControllerState = {active:false, trailId:null};
 
   const enter = (trailId: string): boolean => {
@@ -92,7 +92,7 @@ export function createWaypointController(
     state.trailId = null;
   };
 
-  const nextId = (trail: WaypointTrail): number => {
+  const nextId = (trail: TTrail): number => {
     const ids = (trail.waypoints || [])
       .map(waypoint => Number.parseInt(String(waypoint.id), 10))
       .filter(Number.isFinite);

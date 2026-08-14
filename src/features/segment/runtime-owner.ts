@@ -38,7 +38,7 @@ export interface SegmentRuntime<TTrail extends SegmentTrail = SegmentTrail> {
   redraw(): void;
 }
 
-interface SegmentRuntimeDependencies<TTrail extends SegmentTrail> {
+interface SegmentRuntimeDependencies<TTrail extends SegmentTrail, THistory> {
   document: Document;
   leaflet: any;
   map: any;
@@ -70,13 +70,13 @@ interface SegmentRuntimeDependencies<TTrail extends SegmentTrail> {
   persistNow: () => Promise<boolean>;
   rebuild: () => void;
   refreshElevation: () => void;
-  captureHistory: () => unknown;
-  commitHistory: (labelZh: string, labelEn: string, before: unknown) => void;
+  captureHistory: () => THistory;
+  commitHistory: (labelZh: string, labelEn: string, before: THistory) => void;
 }
 
 /** Owns itinerary segmentation DOM, Leaflet layers, prompts, and interaction effects. */
-export function createSegmentRuntime<TTrail extends SegmentTrail>(
-  dependencies: SegmentRuntimeDependencies<TTrail>,
+export function createSegmentRuntime<TTrail extends SegmentTrail, THistory = unknown>(
+  dependencies: SegmentRuntimeDependencies<TTrail, THistory>,
 ): SegmentRuntime<TTrail> {
   const {
     document, leaflet:L, map, dialogs, context, trackSnap, dayPalette, interactionMarkerHitSize,

@@ -127,6 +127,8 @@
   display:none;
   width:min(280px,calc(100vw - 20px));
   max-width:280px;
+  max-height:min(72vh,calc(100vh - 20px));
+  overflow:auto;
   padding:12px;
   pointer-events:none;
   background:rgba(22,30,25,.97);
@@ -184,6 +186,7 @@
 .waypoint-card__meta { flex:0 0 auto; color:#CBD7CF; }
 .waypoint-card__description {
   margin-top:6px;
+  overflow-wrap:anywhere;
   color:#DCE5DF;
   font-size:10px;
   line-height:1.45;
@@ -192,6 +195,19 @@
   margin-top:6px;
   color:#9FB0A5;
   font-size:9px;
+}
+
+@media (pointer:coarse) {
+  .waypoint-card__close {
+    width:44px;
+    height:44px;
+  }
+
+  .waypoint-card__trail {
+    max-width:calc(100% - 48px);
+    min-height:36px;
+    padding-top:5px;
+  }
 }
 
 .image-lightbox {

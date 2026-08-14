@@ -93,7 +93,7 @@ ok "  $RESULT_LINE  ($STUDIO_BROWSER_TEST)"
 PERF_OUTPUT=$(run_python_with_websocket "$ROOT/tests/browser/test_large_project_performance.py") || {
   echo "$PERF_OUTPUT"; fail "大项目性能测试失败"
 }
-echo "$PERF_OUTPUT" | grep -q "结果: 8/8 passed" || {
+echo "$PERF_OUTPUT" | grep -q "结果: 12/12 passed" || {
   echo "$PERF_OUTPUT"; fail "大项目性能测试缺少结果汇总"
 }
 PERF_METRICS=$(echo "$PERF_OUTPUT" | grep '^Metrics:' | tail -1 || true)

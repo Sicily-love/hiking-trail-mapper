@@ -119,10 +119,13 @@ function createContext(trails = [{id:'a', group:'A'}]) {
 
   await T('direct runtime remains a UI and migration adapter for typed storage', () => {
     const source = read('src/app/runtime/studio.ts');
-    assert.match(source, /createStorageController\(runtimeContext/);
-    assert.match(source, /storageController\.scheduleSave\(\)/);
-    assert.match(source, /storageController\.load\(selectors\.activeGroup\(\)\)/);
+    const runtimeOwner = read('src/features/storage/runtime-owner.ts');
+    assert.match(source, /createRuntimeStorageOwner<RuntimeTrail>/);
+    assert.match(runtimeOwner, /createStorageController\(dependencies\.context/);
+    assert.match(runtimeOwner, /controller\.load\(dependencies\.activeGroup\(\)\)/);
+    assert.match(runtimeOwner, /dependencies\.replaceTrails\(trails\)/);
     assert.doesNotMatch(source, /indexedDB\.open\(/);
+    assert.doesNotMatch(source, /restoredTrails\.forEach/);
     assert.doesNotMatch(source, /let _dbPromise/);
     assert.doesNotMatch(source, /let _saveTimer/);
   });

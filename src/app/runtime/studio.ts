@@ -28,6 +28,10 @@ import {
   DAY_ITINERARY_WAYPOINT_TAGS,
 } from '../../features/map/runtime-owner.ts';
 import { createRuntimeInteractionOwner } from './interaction-owner.ts';
+import { createRuntimeRenderOwner } from './render-owner.ts';
+import { createRuntimeCommandOwner } from './command-owner.ts';
+import { createRuntimeLifecycle } from './lifecycle.ts';
+import { createRuntimeStorageOwner } from '../../features/storage/runtime-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
 export interface StudioBootResult {
@@ -49,6 +53,7 @@ export function startStudioRuntime(
   const defaultView = document.defaultView as StudioBrowserWindow | null;
   if(!defaultView) throw new Error('Studio runtime requires a document with a window');
   const window:StudioBrowserWindow = defaultView;
+  const runtimeLifecycle = createRuntimeLifecycle(window);
   const studioTestMode = new URL(window.location.href).searchParams.has('studio-test');
   const commandRegistry = dependencies.commands;
   const studioDialogs = dependencies.dialogs;
@@ -202,7 +207,7 @@ export function startStudioRuntime(
   const projectStore = HTM_APP.createProjectStore(initialProject);
   const projectActions = HTM_APP.createProjectActions(projectStore);
   const projectSelectors = HTM_APP.createProjectSelectors<RuntimeTrail>(() => projectStore.snapshot());
-  appStateStore.subscribe(() => commandRegistry.notifyChanged());
+  runtimeLifecycle.add(appStateStore.subscribe(() => commandRegistry.notifyChanged()));
   const interactionManager = HTM_APP.createStudioInteractionManager();
   const interactionRuntime = createRuntimeInteractionOwner({
     manager:interactionManager,
@@ -229,39 +234,19 @@ export function startStudioRuntime(
   const revalidateRuntimeInteractionOwner = interactionRuntime.revalidate;
   const dispatchRuntimeInteraction = interactionRuntime.dispatch;
 
-  const renderRuntimeStats:any = {
-    frames: 0,
-    lastTimestamp: null,
-    lastMask: 0,
-    phases: {tracks:0, markers:0, sidebar:0, days:0, legend:0, chart:0, fit:0},
-    elevation: {sourcePoints:0, renderedPoints:0},
-    elevationBands: 0,
-    markers: {add:0, update:0, remove:0, keep:0},
-    fit: {requested:0, applied:0, superseded:0, lastEpoch:0, lastResetEpoch:0},
-  };
-  let workspaceController:any = null;
-  let kmlProjectBuilder:any = null;
-
-  function recordRenderPhase(context: any) {
-    if(renderRuntimeStats.lastTimestamp !== context.timestamp) {
-      renderRuntimeStats.frames += 1;
-      renderRuntimeStats.lastTimestamp = context.timestamp;
-    }
-    renderRuntimeStats.lastMask = context.frameMask;
-    renderRuntimeStats.phases[context.phase] += 1;
-  }
-
-  const renderScheduler = new HTM_APP.RenderScheduler({
-    handlers: {
-      tracks(context: any) { recordRenderPhase(context); renderTracksNow(); },
-      markers(context: any) { recordRenderPhase(context); renderWaypointsNow(); },
-      sidebar(context: any) { recordRenderPhase(context); renderSidebarNow(); },
-      days(context: any) { recordRenderPhase(context); renderDaysNow(); },
-      legend(context: any) { recordRenderPhase(context); renderLegendNow(); },
-      chart(context: any) { recordRenderPhase(context); renderElevationChartNow(); },
-      fit(context: any) { recordRenderPhase(context); workspaceController?.executeFit(context); },
-    },
+  let workspaceController:HTM_APP.WorkspaceController | null = null;
+  let kmlProjectBuilder:HTM_APP.KmlProjectBuilder | null = null;
+  const renderRuntime = createRuntimeRenderOwner<unknown>({
+    renderTracks:renderTracksNow,
+    renderMarkers:renderWaypointsNow,
+    renderSidebar:renderSidebarNow,
+    renderDays:renderDaysNow,
+    renderLegend:renderLegendNow,
+    renderChart:renderElevationChartNow,
+    executeFit:context => workspaceController?.executeFit(context),
   });
+  const renderScheduler = renderRuntime.scheduler;
+  const renderRuntimeStats = renderRuntime.stats;
   const runtimeContext:HTM_APP.RuntimeContext<RuntimeTrail, unknown> = HTM_APP.createRuntimeContext({
     projectActions,
     projectSelectors,
@@ -277,9 +262,7 @@ export function startStudioRuntime(
     window.__HTM_RENDER_STATS__ = renderRuntimeStats;
   }
 
-  function invalidateRender(mask: any) {
-    renderScheduler.invalidate(mask);
-  }
+  const invalidateRender = renderRuntime.invalidate;
 
   /* v1.17.0：state 变更 helpers ─────────────────────────────────
      统一"读-改-写-刷新-持久化"的常见组合，消除各处重复的 if/set/delete +
@@ -416,8 +399,13 @@ export function startStudioRuntime(
     L.DomEvent.disableClickPropagation(_toolbarEl);
     L.DomEvent.disableScrollPropagation(_toolbarEl);
     // 进一步：每个按钮再单独阻止 dblclick（双击放大 = map 的 doubleClickZoom）
-    _toolbarEl.querySelectorAll('button').forEach((btn: any) => {
-      btn.addEventListener('dblclick', (e: any) => { e.preventDefault(); e.stopPropagation(); });
+    _toolbarEl.querySelectorAll<HTMLButtonElement>('button').forEach(btn => {
+      const suppressMapDoubleClick = (event: MouseEvent): void => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      btn.addEventListener('dblclick', suppressMapDoubleClick);
+      runtimeLifecycle.add(() => btn.removeEventListener('dblclick', suppressMapDoubleClick));
     });
   }
   // 同时给 mini card 也加一层防护
@@ -515,12 +503,18 @@ export function startStudioRuntime(
 
   // KML/ZIP import DOM is owned by createImportRuntime.
 
+  const requireKmlProjectBuilder = (): HTM_APP.KmlProjectBuilder => {
+    if(!kmlProjectBuilder) throw new Error('KML project builder is not initialized');
+    return kmlProjectBuilder;
+  };
   const importRuntime = HTM_APP.createImportRuntime({
     document, HTM_APP, fflate, runtimeContext, trailContentHash, applyChange,
     resetView:(options: any) => workspaceController?.resetView(options),
     selectors, projectActions, projectSelectors,
-    buildEscapeRoutes:(...args: any[]) => kmlProjectBuilder.buildEscapeRoutes(...args),
-    parseAndProcessKml:(...args: any[]) => kmlProjectBuilder.parseAndProcessKml(...args),
+    buildEscapeRoutes:(waypoints: any[], points: any[], otherTrails: any[]) =>
+      requireKmlProjectBuilder().buildEscapeRoutes(waypoints, points, otherTrails),
+    parseAndProcessKml:(xmlText: string, filename?: string) =>
+      requireKmlProjectBuilder().parseAndProcessKml(xmlText, filename),
     escapeUiText, t, studioDialogs, getCurrentLang,
   });
   const {
@@ -634,93 +628,36 @@ export function startStudioRuntime(
   });
 
   /* ============ Typed elevation Canvas owner ============ */
-  let elevationRuntime:any = null;
-  let elevCanvas:any = null;
-  let elevationCanvasRenderer:any = null;
-  function drawElevBar(points:any, color:any, label:any, options:any) {
+  let elevationRuntime:ReturnType<typeof createElevationRuntime> | null = null;
+  let elevCanvas:HTMLCanvasElement | null = null;
+  let elevationCanvasRenderer:unknown = null;
+  function drawElevBar(points:RuntimeTrail['track'], color?:string, label?:string, options:Record<string, unknown> = {}) {
     return elevationRuntime?.draw(points, color, label, options);
   }
   function renderElevationChartNow() { elevationRuntime?.renderNow(); }
   function refreshElevBar() { elevationRuntime?.refresh(); }
-  function updateElevBadges(badges:any) { elevationRuntime?.updateBadges(badges); }
+  function updateElevBadges(badges:{ascentText:string; descentText:string}) { elevationRuntime?.updateBadges(badges); }
 
   /* ============ Persistence (IndexedDB) ============ */
-  const DB_NAME = 'hiking_trail_db';
-  const STORE_NAME = 'trails';
-  const DATA_KEY = 'main';
-  let sandboxWarningShown = false;
-
-  function handleStorageControllerEvent(event: any) {
-    if(event.type === 'storage.saved') {
-      showToast(`✓ 已自动保存（${event.trailCount} 条轨迹）`);
-    } else if(event.type === 'storage.quota-exceeded') {
-      showToast(`❌ 存储已满（${event.trailCount} 条轨迹）。请删除部分后重试`, 'error', 5000);
-    } else if(event.type === 'storage.unavailable') {
-      console.warn('storage unavailable:', event.error);
-      if(!sandboxWarningShown) {
-        sandboxWarningShown = true;
-        const detail = event.error && event.error.message ? `：${event.error.message}` : '';
-        showToast(`ℹ 当前环境不支持自动保存${detail}`, 'info', 5000);
-      }
-    } else if(event.type === 'storage.failed') {
-      console.warn(`${event.operation} failed:`, event.error);
-    }
-  }
-
-  const storageController = HTM_APP.createStorageController(runtimeContext, {
-    openDatabase:() => HTM_APP.openIndexedDbDatabase(window.indexedDB, DB_NAME, 1, [STORE_NAME]),
-    execute:HTM_APP.executeIndexedDbOperation,
-    storeName:STORE_NAME,
-    dataKey:DATA_KEY,
-    onEvent:handleStorageControllerEvent,
+  const storageController = createRuntimeStorageOwner<RuntimeTrail>({
+    context:runtimeContext,
+    indexedDB:window.indexedDB,
+    activeGroup:selectors.activeGroup,
+    autoGenerateEscape:selectors.autoGenerateEscape,
+    computeSegmentedMetrics:(track, breaks) => computeSegmentedTrackMetrics(track, breaks, 10),
+    computeDescent:elevations => accumulatorDescent(elevations, 10),
+    buildEscapeRoutes:(waypoints, points, others) =>
+      requireKmlProjectBuilder().buildEscapeRoutes(waypoints, points, others),
+    replaceTrails:trails => projectActions.replaceTrails(trails, 'storage.restore'),
+    restoreWorkspace:stateActions.restoreWorkspace,
+    notify:(message, type, durationMs) => showToast(message, type, durationMs),
+    warn:(message, error) => console.warn(message, error),
   });
-
   function openDB() { return storageController.open(); }
   function saveToStorage() { storageController.scheduleSave(); }
-  async function _doSave() { return storageController.flush(); }
-
-  async function loadFromStorage() {
-    const restored = await storageController.load(selectors.activeGroup());
-    if(!restored) return false;
-    try {
-      const restoredTrails = restored.trails;
-      // 兼容旧数据：缺 descent_m 则现场补算
-      restoredTrails.forEach((tr: any) => {
-        const segmentedMetrics = tr.track?.length && tr.track_breaks?.length
-          ? computeSegmentedTrackMetrics(tr.track, tr.track_breaks, 10)
-          : null;
-        if(tr.stats && (tr.stats.descent_m === undefined || tr.stats.descent_m === null) && tr.track && tr.track.length) {
-          const elevs = tr.track.map((p: any) => p[2] || 0);
-          const arr = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(elevs, 10);
-          tr.stats.descent_m = Math.round(arr[arr.length-1] || 0);
-        }
-        // 兼容旧数据：补算 _descCum
-        if(!tr._descCum && tr.track && tr.track.length) {
-          tr._descCum = segmentedMetrics?.cumulativeDescentM || accumulatorDescent(tr.track.map((p: any) => p[2] || 0), 10);
-        }
-        // 兼容旧数据：escape_routes 为空则从 waypoints + track 重新推算（v1.12.3：默认关闭，仅 state.autoGenerateEscape=true 时启用）
-        if(selectors.autoGenerateEscape() && (!tr.escape_routes || tr.escape_routes.length === 0) && tr.waypoints && tr.track && tr.track.length) {
-          const fakePts = tr.track.map((p: any) => ({ lat: p[0], lng: p[1], elev: p[2] || 0 }));
-          const others = restoredTrails.filter((t: any) => t.id !== tr.id);
-          tr.escape_routes = buildEscapeRoutes(tr.waypoints, fakePts, others);
-        }
-      });
-      projectActions.replaceTrails(restoredTrails as RuntimeTrail[], 'storage.restore');
-      stateActions.restoreWorkspace({
-        activeTrails:restored.activeTrails,
-        activeGroup:restored.activeGroup,
-        primaryByGroup:restored.primaryByGroup as Record<string, string>,
-      });
-      return true;
-    } catch(e) {
-      console.warn('load failed:', e);
-      return false;
-    }
-  }
-
-  async function clearStorage() {
-    return storageController.clear();
-  }
+  function _doSave() { return storageController.flush(); }
+  function loadFromStorage() { return storageController.load(); }
+  function clearStorage() { return storageController.clear(); }
 
   /* ── 下载单条轨迹为 KML 文件 ── */
   const browserFileAdapter = HTM_APP.createBrowserFileAdapter({
@@ -750,7 +687,7 @@ export function startStudioRuntime(
     }
   }
 
-  const fileExportController:any = HTM_APP.createFileExportController(runtimeContext, {
+  const fileExportController = HTM_APP.createFileExportController(runtimeContext, {
     archive:fileArchiveAdapter,
     files:browserFileAdapter,
     dayPalette,
@@ -761,8 +698,7 @@ export function startStudioRuntime(
     onEvent:handleFileExportEvent,
   });
 
-  const projectRuntimeController:any = HTM_APP.createProjectRuntimeController(
-    runtimeContext as unknown as HTM_APP.RuntimeContext<import('../../core/project-archive.ts').ProjectArchiveTrail>, {
+  const projectRuntimeController = HTM_APP.createProjectRuntimeController(runtimeContext, {
     files:browserFileAdapter,
     appVersion:APP_VERSION,
     getLanguage:() => getCurrentLang() === 'en' ? 'en' : 'zh',
@@ -1126,7 +1062,7 @@ export function startStudioRuntime(
 
   const waypointRuntime = createWaypointRuntime({
     document, leaflet:L, map, dialogs:studioDialogs,
-    context:runtimeContext as unknown as HTM_APP.RuntimeContext<HTM_APP.WaypointTrail>,
+    context:runtimeContext,
     selectors, projectSelectors, language:getCurrentLang, translate:t, tagColors,
     iconForTag:waypointIcon, iconMarkup:waypointIconMarkup,
     nearestPrimary:nearestTrackIdxOnPrimary, distance:haversine,
@@ -1233,59 +1169,48 @@ export function startStudioRuntime(
     return false;
   }
 
-  function registerRuntimeCommands() {
-    const register = (id: any, execute: any, options: any = {}) => commandRegistry.register({id, execute, ...options});
-    const hasTrails = () => projectSelectors.trails().length > 0;
-    const disposers = [
-      register(STUDIO_COMMANDS.FILE_IMPORT, () => addModal.classList.add('open')),
-      register(STUDIO_COMMANDS.FILE_EXPORT, exportOffline, {enabled:hasTrails}),
-      register(STUDIO_COMMANDS.PROJECT_CLEAR, clearAllTrails, {enabled:hasTrails}),
-      register(STUDIO_COMMANDS.EDIT_UNDO, () => projectHistoryController.undo(), {
-        enabled:() => projectHistoryController.canUndo,
-      }),
-      register(STUDIO_COMMANDS.EDIT_REDO, () => projectHistoryController.redo(), {
-        enabled:() => projectHistoryController.canRedo,
-      }),
-      register(STUDIO_COMMANDS.TRAIL_REVERSE, reversePrimaryTrailCommand, {enabled:hasPrimaryTrail}),
-      register(STUDIO_COMMANDS.TRAIL_STITCH, stitchTrailsCommand, {enabled:() => projectSelectors.trails().length >= 2}),
-      register(STUDIO_COMMANDS.MEASURE_TOGGLE, toggleMeasureCommand, {
-        enabled:hasPrimaryTrail,
-        checked:() => interactionManager.current.kind === 'measure',
-      }),
-      register(STUDIO_COMMANDS.SEGMENT_TOGGLE, toggleSegmentCommand, {
-        enabled:hasPrimaryTrail,
-        checked:() => interactionManager.current.kind === 'segment',
-      }),
-      register(STUDIO_COMMANDS.WAYPOINT_TOGGLE, toggleWaypointCommand, {
-        enabled:hasPrimaryTrail,
-        checked:() => interactionManager.current.kind === 'waypoint',
-      }),
-      register(STUDIO_COMMANDS.ESCAPE_TOGGLE, toggleEscapeCommand, {
-        enabled:hasPrimaryTrail,
-        checked:() => interactionManager.current.kind === 'escape',
-      }),
-      register(STUDIO_COMMANDS.MAP_RESET, () => resetView({restoreActive:true, gesture:true}), {enabled:hasTrails}),
-      register(STUDIO_COMMANDS.HELP_OPEN, showHelp),
-      register(STUDIO_COMMANDS.LANGUAGE_TOGGLE, () => {
-        setLang(getCurrentLang() === 'zh' ? 'en' : 'zh');
-      }),
-      register(STUDIO_COMMANDS.APP_RENAME, workspaceTitleController.rename),
-      register(STUDIO_COMMANDS.INTERACTION_CANCEL, cancelActiveCommand),
-      register(STUDIO_COMMANDS.MODE_ELEVATION, () => setMapMode('elev'), {
-        checked:() => selectors.mode() === 'elev',
-      }),
-      register(STUDIO_COMMANDS.MODE_WAYPOINT, () => setMapMode('waypoint'), {
-        checked:() => selectors.mode() === 'waypoint',
-      }),
-      register(STUDIO_COMMANDS.WORKSPACE_GROUPS, () => activateSidebarTab('groups')),
-      register(STUDIO_COMMANDS.WORKSPACE_TRAILS, () => activateSidebarTab('trails')),
-      register(STUDIO_COMMANDS.WORKSPACE_ITINERARY, () => activateSidebarTab('days')),
-    ];
-    commandRegistry.notifyChanged();
-    return disposers;
-  }
-
-  const runtimeCommandDisposers = registerRuntimeCommands();
+  const runtimeCommands = createRuntimeCommandOwner({
+    registry:commandRegistry,
+    trailCount:() => projectSelectors.trails().length,
+    hasPrimaryTrail,
+    interactionKind:() => interactionManager.current.kind,
+    mode:selectors.mode,
+    canUndo:() => projectHistoryController.canUndo,
+    canRedo:() => projectHistoryController.canRedo,
+    openImport:() => addModal.classList.add('open'),
+    exportProject:exportOffline,
+    clearProject:clearAllTrails,
+    undo:() => projectHistoryController.undo(),
+    redo:() => projectHistoryController.redo(),
+    reversePrimary:reversePrimaryTrailCommand,
+    stitchTrails:stitchTrailsCommand,
+    toggleMeasure:toggleMeasureCommand,
+    toggleSegment:toggleSegmentCommand,
+    toggleWaypoint:toggleWaypointCommand,
+    toggleEscape:toggleEscapeCommand,
+    resetMap:() => resetView({restoreActive:true, gesture:true}),
+    showHelp,
+    toggleLanguage:() => setLang(getCurrentLang() === 'zh' ? 'en' : 'zh'),
+    renameWorkspace:workspaceTitleController.rename,
+    cancelInteraction:cancelActiveCommand,
+    setElevationMode:() => setMapMode('elev'),
+    setWaypointMode:() => setMapMode('waypoint'),
+    showGroups:() => activateSidebarTab('groups'),
+    showTrails:() => activateSidebarTab('trails'),
+    showItinerary:() => activateSidebarTab('days'),
+  });
+  const runtimeCommandDisposers = runtimeCommands.disposers;
+  runtimeLifecycle.add(() => runtimeCommands.dispose());
+  runtimeLifecycle.add(() => renderRuntime.dispose());
+  runtimeLifecycle.add(() => storageController.dispose());
+  runtimeLifecycle.add(() => mapRuntime.dispose());
+  runtimeLifecycle.add(() => mapInteractionInput.destroy());
+  runtimeLifecycle.add(() => waypointRuntime.dispose());
+  runtimeLifecycle.add(() => elevationRuntime?.dispose());
+  runtimeLifecycle.add(() => lightboxController.destroy());
+  runtimeLifecycle.add(() => sidebarCollapseController.destroy());
+  runtimeLifecycle.add(() => exportMenuController.destroy());
+  runtimeLifecycle.add(() => toastController.dispose());
 
   const bootPromise = _boot();
   if(studioTestMode) window.__HTM_BOOT_READY__ = bootPromise as Promise<StudioBootResult>;
@@ -1351,7 +1276,7 @@ export function startStudioRuntime(
       "projectHistoryController":() => projectHistoryController, "queueMeasureLiveUpdate":() => queueMeasureLiveUpdate, "rebuildAll":() => rebuildAll,
       "redrawSegmentLayer":() => redrawSegmentLayer, "refreshElevBar":() => refreshElevBar, "renderBatchToolbar":() => renderBatchToolbar,
       "renderGroupTabs":() => renderGroupTabs, "renderKmlImportRow":() => renderKmlImportRow, "renderMeasureSegmentLine":() => renderMeasureSegmentLine,
-      "renderRuntimeStats":() => renderRuntimeStats, "renderScheduler":() => renderScheduler, "runtimeCommandDisposers":() => runtimeCommandDisposers, "renderTrailCard":() => renderTrailCard, "resetMeasureElevReadout":() => resetMeasureElevReadout,
+      "renderRuntimeStats":() => renderRuntimeStats, "renderScheduler":() => renderScheduler, "runtimeLifecycle":() => runtimeLifecycle, "runtimeCommandDisposers":() => runtimeCommandDisposers, "renderTrailCard":() => renderTrailCard, "resetMeasureElevReadout":() => resetMeasureElevReadout,
       "resetView":() => resetView, "restoreProjectFile":() => restoreProjectFile, "revalidateRuntimeInteractionOwner":() => revalidateRuntimeInteractionOwner,
       "saveToStorage":() => saveToStorage, "schedulePostRestoreReset":() => schedulePostRestoreReset, "schedulePrimaryMiniPositionApply":() => schedulePrimaryMiniPositionApply,
       "segmentApply":() => segmentApply, "segmentRestore":() => segmentRestore, "segmentController":() => segmentController,

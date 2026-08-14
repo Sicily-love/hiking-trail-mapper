@@ -57,12 +57,61 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
 }
 
+interface OverlayBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 /** Owns the two transient map DOM surfaces and keeps runtime orchestration DOM-free. */
 export function createMapOverlayController(options: MapOverlayControllerOptions): MapOverlayController {
   const tooltip = options.document.getElementById('tooltip');
   const waypointCard = options.document.getElementById('wp-photo-tip');
   if(!tooltip || !waypointCard) throw new Error('Map overlay elements are missing');
   let disposed = false;
+
+  const visibleMapBounds = (): OverlayBounds => {
+    const mapRect = options.document.getElementById('map')?.getBoundingClientRect();
+    const viewportBounds = {
+      left:0,
+      top:0,
+      right:options.viewport.innerWidth,
+      bottom:options.viewport.innerHeight,
+    };
+    if(!mapRect || mapRect.width < 80 || mapRect.height < 80) return viewportBounds;
+    return {
+      left:clamp(mapRect.left, viewportBounds.left, viewportBounds.right),
+      top:clamp(mapRect.top, viewportBounds.top, viewportBounds.bottom),
+      right:clamp(mapRect.right, viewportBounds.left, viewportBounds.right),
+      bottom:clamp(mapRect.bottom, viewportBounds.top, viewportBounds.bottom),
+    };
+  };
+
+  const positionInsideMap = (
+    element: HTMLElement,
+    anchor: MapOverlayAnchor,
+    placement: 'tooltip' | 'card',
+  ): void => {
+    const bounds = visibleMapBounds();
+    const inset = 10;
+    const rect = element.getBoundingClientRect();
+    const minimumLeft = bounds.left + inset;
+    const maximumLeft = bounds.right - rect.width - inset;
+    const minimumTop = bounds.top + inset;
+    const maximumTop = bounds.bottom - rect.height - inset;
+    const preferredLeft = anchor.clientX - rect.width / 2;
+    const spaceBelow = bounds.bottom - anchor.clientY;
+    const showBelow = placement === 'card'
+      ? spaceBelow >= rect.height + 26
+      : anchor.clientY - bounds.top < rect.height + 24;
+    const preferredTop = showBelow
+      ? anchor.clientY + 16
+      : anchor.clientY - rect.height - 16;
+    element.style.transform = 'none';
+    element.style.left = `${clamp(preferredLeft, minimumLeft, maximumLeft)}px`;
+    element.style.top = `${clamp(preferredTop, minimumTop, maximumTop)}px`;
+  };
 
   const hideTooltip = () => {
     tooltip.style.display = 'none';
@@ -92,9 +141,7 @@ export function createMapOverlayController(options: MapOverlayControllerOptions)
     });
     tooltip.replaceChildren(...fragments);
     tooltip.style.display = 'block';
-    const rect = tooltip.getBoundingClientRect();
-    tooltip.style.left = `${clamp(anchor.clientX, rect.width / 2 + 10, options.viewport.innerWidth - rect.width / 2 - 10)}px`;
-    tooltip.style.top = `${clamp(anchor.clientY, rect.height + 12, options.viewport.innerHeight - 12)}px`;
+    positionInsideMap(tooltip, anchor, 'tooltip');
   };
 
   const showWaypointCard = (model: WaypointCardModel, anchor: MapOverlayAnchor) => {
@@ -169,11 +216,7 @@ export function createMapOverlayController(options: MapOverlayControllerOptions)
 
     waypointCard.style.display = 'block';
     waypointCard.style.pointerEvents = 'auto';
-    const rect = waypointCard.getBoundingClientRect();
-    const left = clamp(anchor.clientX - rect.width / 2, 10, options.viewport.innerWidth - rect.width - 10);
-    const top = clamp(anchor.clientY + 16, 10, options.viewport.innerHeight - rect.height - 10);
-    waypointCard.style.left = `${left}px`;
-    waypointCard.style.top = `${top}px`;
+    positionInsideMap(waypointCard, anchor, 'card');
   };
 
   const dispose = () => {

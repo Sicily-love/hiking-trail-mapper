@@ -14,6 +14,7 @@ const mainPath = path.join(root, 'src/main.ts');
 const bootstrapPath = path.join(root, 'src/app/bootstrap.ts');
 const shellPath = path.join(root, 'src/ui/layout/app-shell.ts');
 const runtimePath = path.join(root, 'src/app/runtime/studio.ts');
+const commandOwnerPath = path.join(root, 'src/app/runtime/command-owner.ts');
 const sidebarRuntimePath = path.join(root, 'src/ui/sidebar/runtime-owner.ts');
 const stitchRuntimePath = path.join(root, 'src/features/stitch/runtime-owner.ts');
 const iconSource = fs.readFileSync(iconPath, 'utf8');
@@ -25,7 +26,7 @@ const toastSource = fs.readFileSync(toastPath, 'utf8');
 const mainSource = fs.readFileSync(mainPath, 'utf8');
 const bootstrapSource = fs.readFileSync(bootstrapPath, 'utf8');
 const shellSource = fs.readFileSync(shellPath, 'utf8');
-const runtimeSource = [runtimePath, sidebarRuntimePath]
+const runtimeSource = [runtimePath, commandOwnerPath, sidebarRuntimePath]
   .map(file => fs.readFileSync(file, 'utf8'))
   .join('\n');
 const stitchRuntimeSource = fs.readFileSync(stitchRuntimePath, 'utf8');

@@ -17,6 +17,10 @@ EXPECTED_VERSION = re.search(
 RUNTIME_SOURCE_FILES = [
     ROOT / "src/app/runtime/studio.ts",
     ROOT / "src/app/runtime/interaction-owner.ts",
+    ROOT / "src/app/runtime/render-owner.ts",
+    ROOT / "src/app/runtime/command-owner.ts",
+    ROOT / "src/app/runtime/lifecycle.ts",
+    ROOT / "src/ui/map-overlays.ts",
     ROOT / "src/ui/sidebar/runtime-owner.ts",
     ROOT / "src/ui/sidebar/collapse-controller.ts",
     ROOT / "src/ui/measure-panel.ts",
@@ -24,6 +28,7 @@ RUNTIME_SOURCE_FILES = [
     ROOT / "src/ui/version-badge.ts",
     ROOT / "src/ui/import/runtime-owner.ts",
     ROOT / "src/features/localization/runtime-owner.ts",
+    ROOT / "src/features/storage/runtime-owner.ts",
     ROOT / "src/features/map/workspace-controller.ts",
     ROOT / "src/features/map/runtime-owner.ts",
     ROOT / "src/features/elevation/runtime-owner.ts",

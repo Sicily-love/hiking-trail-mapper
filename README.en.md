@@ -6,7 +6,7 @@
 
 [中文](README.md) · [Open online](https://sicily-love.github.io/hiking-trail-mapper/) · [Features](docs/FEATURES.en.md)
 
-![version](https://img.shields.io/badge/version-v2.3.4-blue)
+![version](https://img.shields.io/badge/version-v2.3.5-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -109,7 +109,7 @@ Further reading:
 
 ## Release
 
-- Current version: v2.3.4
+- Current version: v2.3.5
 - `PATCH`: fixes, compatibility, documentation, and small interaction refinements.
 - `MINOR`: new user-visible capabilities or data formats.
 - `MAJOR`: incompatible data or export-format changes.

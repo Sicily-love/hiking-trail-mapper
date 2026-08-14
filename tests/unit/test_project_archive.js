@@ -302,7 +302,8 @@ function stateInput(overrides = {}) {
     const sidebar = read('src/ui/sidebar/runtime-owner.ts');
     const projectRuntime = read('src/features/project/runtime.ts');
     const projectRestoreUi = read('src/ui/import/project-restore.ts');
-    assert.match(source, /createProjectRuntimeController\(\s*runtimeContext as unknown as HTM_APP\.RuntimeContext/);
+    assert.match(source, /createProjectRuntimeController\(runtimeContext/);
+    assert.doesNotMatch(source, /runtimeContext as unknown as HTM_APP\.RuntimeContext/);
     assert.match(projectRuntime, /createProjectArchiveController\(context/);
     assert.match(projectRestoreUi, /archive\.parse/);
     assert.match(projectRestoreUi, /archive\.restore/);

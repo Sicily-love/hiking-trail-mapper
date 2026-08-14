@@ -26,7 +26,7 @@ function positiveInteger(value: unknown): number | null {
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
-function normalizeTrack(rawTrack: ProjectArchiveJson[]): TrackTuple[] {
+function normalizeTrack(rawTrack: unknown[]): TrackTuple[] {
   return rawTrack.map(rawPoint => {
     const source = Array.isArray(rawPoint) ? rawPoint : [];
     const point: Array<number | null> = [
