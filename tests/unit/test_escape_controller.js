@@ -197,7 +197,8 @@ T('direct runtime retains escape effects but delegates business state and writes
   assert.doesNotMatch(source, /function snapToTrail\(/);
   assert.doesNotMatch(controllerSource, /\blayer:/);
   assert.match(owner, /const planningLayer = L\.layerGroup\(\)\.addTo\(map\)/);
-  assert.match(runtime, /escapeReferenceTrailId:addEscapeState\.active/);
+  assert.match(runtime, /escapeReferenceTrailId:\(\) => escapeReferenceTrailId\(\)/);
+  assert.match(runtime, /escapeReferenceTrailId = \(\) => addEscapeState\.active/);
   assert.doesNotMatch(runtime, /getElementById\('addescape-/);
   assert.match(owner, /required<HTMLElement>\('ae-day'\)/);
   assert.match(owner, /addescape-day-select/);

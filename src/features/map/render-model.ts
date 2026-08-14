@@ -52,8 +52,8 @@ export interface MapRenderController {
 }
 
 /** Reads map state through RuntimeContext so browser orchestration does not mirror selection rules. */
-export function createMapRenderController(
-  context: RuntimeContext<TrackRenderTrail>,
+export function createMapRenderController<TTrail extends TrackRenderTrail>(
+  context: RuntimeContext<TTrail>,
 ): MapRenderController {
   const buildTracks = (
     options: Pick<BuildTrackRenderModelOptions, 'dayPalette' | 'elevationBandCount' | 'escapeReferenceTrailId'>,

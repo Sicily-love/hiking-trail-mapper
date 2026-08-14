@@ -67,11 +67,11 @@ trail、storage、file import/export、project archive/history runtime、waypoin
 - IndexedDB adapter 负责事务与 snapshot；
 - file/browser adapter 负责 ZIP、Blob、ObjectURL、保存选择器和导出画布。
 
-标注点编辑器、图片读取、右键/长按手势与统一交互会话由 `features/waypoint/runtime-owner.ts` 持有。Lightbox 的缩放/拖动/触摸生命周期与侧栏收起后的主轨迹浮卡由 `ui/` controller 持有；轨迹点临时检查由 `features/map/inspection-controller.ts` 产生 render model，再交给 Leaflet adapter 创建和销毁 Marker。`studio.ts` 不再持有这些 listener、timer 或位置状态。
+标注点编辑器、图片读取、右键/长按手势与统一交互会话由 `features/waypoint/runtime-owner.ts` 持有。地图轨迹、Marker、提示卡与轨迹点检查由 `features/map/runtime-owner.ts` 统一组装 typed render model、Leaflet adapter 和 overlay controller。Lightbox 的缩放/拖动/触摸生命周期与侧栏收起后的主轨迹浮卡由 `ui/` controller 持有；`studio.ts` 不再持有这些 listener、timer、图层差异更新或位置状态。
 
 ### Direct Runtime
 
-`src/app/runtime/studio.ts` 已从约 6200 行压到约 1560 行。KML 项目构建、地图复位/fit、侧栏/行程 DOM、导入 DOM、轨迹拼接、测距、分段、标注点交互、下撤规划和海拔 Canvas 分别由独立 controller/owner 持有；共享轨迹吸附和地图输入也由专门模块管理。全部 TypeScript 源码通过严格检查，不再存在 `@ts-nocheck`。主 runtime 负责 store、actions、selectors、命令和浏览器能力的装配，不直接持有测距/分段 DOM 或 Leaflet 图层。生产环境不发布业务全局，仅 `?studio-test=1` 创建深只读测试 inspector，并通过专用 `testDriver` 构造夹具。
+`src/app/runtime/studio.ts` 已从约 6200 行压到约 1370 行。KML 项目构建、地图复位/fit、地图渲染、侧栏/行程 DOM、导入 DOM、轨迹拼接、测距、分段、标注点交互、下撤规划和海拔 Canvas 分别由独立 controller/owner 持有；共享轨迹吸附和地图输入也由专门模块管理。全部 TypeScript 源码通过严格检查，不再存在 `@ts-nocheck`。主 runtime 负责 store、actions、selectors、命令和浏览器能力的装配，不直接持有测距/分段 DOM 或 Leaflet 渲染实现。生产环境不发布业务全局，仅 `?studio-test=1` 创建深只读测试 inspector，并通过专用 `testDriver` 构造夹具。
 
 真实浏览器测试在 URL 带 `?studio-test=1` 时获得冻结且嵌套对象不可写的 inspector；测试夹具修改通过 `testDriver` 进入 `ProjectActions`。正常发布不创建这些测试接口，也不暴露 `HikingTrailCore`、`HikingTrailApp`、命令或 dialog classic globals。
 

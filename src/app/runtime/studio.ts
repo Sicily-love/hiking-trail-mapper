@@ -14,7 +14,6 @@ import { createToastController } from '../../ui/toast.ts';
 import { createVersionBadgeController } from '../../ui/version-badge.ts';
 import { createWorkspaceTitleController } from '../../ui/workspace-title.ts';
 import { createExportMenuController } from '../../ui/export-menu.ts';
-import { createMapOverlayController } from '../../ui/map-overlays.ts';
 import { createStitchRuntime } from '../../features/stitch/runtime-owner.ts';
 import { createElevationRuntime } from '../../features/elevation/runtime-owner.ts';
 import { createLocalizationRuntime } from '../../features/localization/runtime-owner.ts';
@@ -24,6 +23,10 @@ import { createMeasureRuntime } from '../../features/measure/runtime-owner.ts';
 import { createSegmentRuntime } from '../../features/segment/runtime-owner.ts';
 import { createTrackSnapService } from '../../features/map/track-snap.ts';
 import { createMapInteractionInput } from '../../features/map/interaction-input.ts';
+import {
+  createMapRuntime,
+  DAY_ITINERARY_WAYPOINT_TAGS,
+} from '../../features/map/runtime-owner.ts';
 import { createRuntimeInteractionOwner } from './interaction-owner.ts';
 import type {RuntimeTrail, StudioBrowserWindow} from './types.ts';
 
@@ -259,7 +262,7 @@ export function startStudioRuntime(
       fit(context: any) { recordRenderPhase(context); workspaceController?.executeFit(context); },
     },
   });
-  const runtimeContext:any = HTM_APP.createRuntimeContext({
+  const runtimeContext:HTM_APP.RuntimeContext<RuntimeTrail, unknown> = HTM_APP.createRuntimeContext({
     projectActions,
     projectSelectors,
     stateActions,
@@ -435,159 +438,52 @@ export function startStudioRuntime(
   const highPointLayer = L.layerGroup().addTo(map);
   const escapeLayer = L.layerGroup().addTo(map);
   const networkLayer = L.layerGroup().addTo(map);
+  let escapeReferenceTrailId = (): string | null => null;
 
-  /* ============ Color helpers ============ */
-  // 天数分色：柔和但有区分度，适合卫星图与米色面板上的连续天数阅读
-  const dayPalette = ['#2F6B5F','#D96C4A','#E1A93B','#5577B8','#8A6BBE','#C45D83','#5E9F65','#C58B54'];
-
-  /* ============ Draw Track ============ */
-  const mapRenderController = HTM_APP.createMapRenderController(runtimeContext);
-  const leafletTrackRenderer = HTM_APP.createLeafletTrackRenderer({
+  const mapRuntime = createMapRuntime({
+    document,
+    viewport:window,
     leaflet:L,
+    map,
+    context:runtimeContext,
     trackLayer,
     networkLayer,
-    requestFrame:(callback: any) => requestAnimationFrame(callback),
-    cancelFrame:(handle: any) => cancelAnimationFrame(handle),
+    waypointLayer:wpLayer,
+    highPointLayer,
     interactionBlocked:() => interactionManager.current.kind !== 'idle',
-    onHover:(event: any, model: any) => {
-      const track = model.trail.track;
-      const i = nearestTrackIdx(track, event.latlng.lat, event.latlng.lng);
-      showTooltip(event, track[i], track[Math.min(i + 1, track.length - 1)], model.trail, false);
-    },
-    onHoverEnd:() => hideTooltip(),
-    onInspectPoint:(event: any, model: any) => inspectTrackPoint(event, model.trail),
-    onSelectTrail:(trailId: any) => {
+    escapeReferenceTrailId:() => escapeReferenceTrailId(),
+    invalidateTracks:() => invalidateRender(HTM_APP.RENDER_DIRTY.TRACKS),
+    invalidateMarkers:() => invalidateRender(HTM_APP.RENDER_DIRTY.MARKERS),
+    selectTrail:trailId => {
       stateActions.setPrimaryTrail(trailId);
       rebuildAll({fit:false});
       saveToStorage();
     },
+    language:() => getCurrentLang() === 'en' ? 'en' : 'zh',
+    translate:t,
+    openImage:(source, caption) => openLightbox(source, caption),
+    recordElevationBands:count => { renderRuntimeStats.elevationBands = count; },
+    recordMarkerDiff:diff => { renderRuntimeStats.markers = diff; },
   });
+  const dayPalette = mapRuntime.dayPalette;
+  const tagColors = mapRuntime.tagColors;
+  const tagLabels = mapRuntime.tagLabels;
+  const wpMarkers = mapRuntime.waypointRegistry;
+  const drawTracks = mapRuntime.drawTracks;
+  const drawWaypoints = mapRuntime.drawWaypoints;
+  const drawHighPoints = mapRuntime.drawHighPoints;
+  const collectWaypointMarkerModels = mapRuntime.collectWaypointMarkerModels;
+  const nearestTrackIdx = mapRuntime.nearestTrackIndex;
+  const waypointIcon = mapRuntime.waypointIcon;
+  const waypointIconMarkup = mapRuntime.waypointIconMarkup;
+  const addWpMarker = mapRuntime.buildWaypointMarker;
+  const inspectTrackPoint = mapRuntime.inspectTrackPoint;
+  const showTooltip = mapRuntime.showTooltip;
+  const hideTooltip = mapRuntime.hideTooltip;
 
-  function renderTracksNow() {
-    const model = mapRenderController.buildTracks({
-      dayPalette,
-      elevationBandCount:40,
-      escapeReferenceTrailId:addEscapeState.active ? addEscapeState.referenceTrailId : null,
-    });
-    leafletTrackRenderer.render(model);
-    renderRuntimeStats.elevationBands = model.elevationBands;
-  }
+  function renderTracksNow() { mapRuntime.renderTracks(); }
+  function renderWaypointsNow() { mapRuntime.renderWaypoints(); }
 
-  function drawTracks() {
-    invalidateRender(HTM_APP.RENDER_DIRTY.TRACKS);
-  }
-
-  // 用于鼠标悬停时找最近轨迹点
-  function nearestTrackIdx(track: any, lat: any, lng: any) {
-    let best = 0, bestD = Infinity;
-    for(let i=0; i<track.length; i+=Math.max(1, Math.floor(track.length/200))) {
-      const dx = track[i][0] - lat, dy = track[i][1] - lng;
-      const d = dx*dx + dy*dy;
-      if(d < bestD) { bestD = d; best = i; }
-    }
-    // 在最佳点附近精修
-    const lo = Math.max(0, best - 20), hi = Math.min(track.length, best + 20);
-    for(let i=lo; i<hi; i++) {
-      const dx = track[i][0] - lat, dy = track[i][1] - lng;
-      const d = dx*dx + dy*dy;
-      if(d < bestD) { bestD = d; best = i; }
-    }
-    return best;
-  }
-  /* ============ Waypoints ============ */
-  const tagColors:Record<string, string> = {
-    start:'#5eb3ff', end:'#5eb3ff',
-    fork:'#ff8c42',
-    camp:'#22c55e',
-    pass:'#ef4444',
-    water:'#3b82f6',
-    supply:'#facc15',
-    warn:'#dc2626',
-    shelter:'#a855f7',
-    village:'#d97706',
-    bridge:'#06b6d4',
-    river:'#06b6d4',
-    other:'#94a3b8',
-  };
-  const tagIcons:Record<string, string> = {
-    start:'🚩',
-    end:'🏁',
-    fork:'⑫',
-    camp:'🏕',
-    pass:'🏔',
-    water:'💧',
-    supply:'🏪',
-    warn:'⚠',
-    shelter:'🏠',
-    village:'🏘',
-    bridge:'🌉',
-    river:'🏞',
-    highpoint:'⛰',
-    other:'📍',
-    view:'📍',
-  };
-  function waypointIcon(wpOrTag: any) {
-    const tag = typeof wpOrTag === 'string' ? wpOrTag : (wpOrTag && wpOrTag.tag);
-    return tagIcons[tag] || (wpOrTag && wpOrTag.icon) || '📍';
-  }
-  const waypointVectorIconNames:Record<string, string> = {
-    fork:'git-fork',
-    warn:'triangle-alert',
-    other:'map-pin',
-  };
-  function waypointIconMarkup(wpOrTag: any, className: any = '') {
-    const tag = typeof wpOrTag === 'string' ? wpOrTag : (wpOrTag && wpOrTag.tag);
-    const vectorName = waypointVectorIconNames[tag];
-    if(vectorName) {
-      return createWorkbenchIcon(document, vectorName as any, {
-        size:16,
-        strokeWidth:2.2,
-        className:`waypoint-symbol waypoint-symbol--${tag} ${className}`.trim(),
-      }).outerHTML;
-    }
-    const symbol = document.createElement('span');
-    symbol.className = `waypoint-symbol waypoint-symbol--emoji ${className}`.trim();
-    symbol.textContent = waypointIcon(wpOrTag);
-    return symbol.outerHTML;
-  }
-  const tagLabels = {
-    start:'起终点', end:'起终点',
-    fork:'分叉点', camp:'营地', pass:'垭口',
-    water:'水源', supply:'补给', warn:'高强度',
-    shelter:'庇护', village:'村落/牧民', bridge:'桥梁',
-    river:'小溪', other:'其他'
-  };
-  const DAY_ITINERARY_WAYPOINT_TAGS = new Set([
-    'pass','water','supply','bridge','river','village','shelter','warn','fork','start','end','highpoint',
-  ]);
-
-  const wpMarkers = {};
-  const markerRenderController = HTM_APP.createMarkerRenderController(runtimeContext, {
-    tagColors,
-    iconForWaypoint:waypointIconMarkup,
-  });
-
-  const leafletMarkerRenderer = HTM_APP.createLeafletMarkerRenderer({
-    leaflet:L,
-    waypointLayer:wpLayer,
-    highPointLayer,
-    waypointRegistry:wpMarkers,
-    onWaypointClick:(event: any, model: any) => pinWpCard(event, model.waypoint, model.trail),
-  });
-
-  function collectWaypointMarkerModels() {
-    return markerRenderController.build().waypoints;
-  }
-
-  function renderWaypointsNow() {
-    const scene = markerRenderController.build();
-    renderRuntimeStats.markers = leafletMarkerRenderer.renderWaypoints(scene.waypoints);
-    leafletMarkerRenderer.renderHighPoints(scene.highPoints);
-  }
-
-  function drawWaypoints() {
-    invalidateRender(HTM_APP.RENDER_DIRTY.MARKERS);
-  }
   function showHelp() {
     return studioDialogs.content(HTM_APP.buildHelpDialogModel(
       getCurrentLang(),
@@ -596,91 +492,8 @@ export function startStudioRuntime(
       t('changelog.close'),
     ));
   }
-  function addWpMarker(trail: any, wp: any, isPrimary: any) {
-        const color = tagColors[wp.tag] || '#aaa';
-        const isWpMode = selectors.mode() === 'waypoint';
-        const iconText = waypointIconMarkup(wp);
-        return HTM_APP.buildWaypointMarkerModel({trail, waypoint:wp, isPrimary, waypointMode:isWpMode, color, iconText});
-  }
-
-  function drawHighPoints() {
-    leafletMarkerRenderer.renderHighPoints(markerRenderController.build().highPoints);
-  }
-
-  /* ============ Tooltip ============ */
-  const formatCoordinate = HTM_APP.formatCoordinate;
   const formatTrackPointCoordinates = HTM_APP.formatTrackPointCoordinates;
-  const trackPointInspector = HTM_APP.createTrackPointInspectionController({
-    renderer:HTM_APP.createLeafletTrackPointInspectionRenderer({leaflet:L, map}),
-    nearestIndex:(track: any, lat: any, lng: any) => nearestTrackIdx(track, lat, lng),
-  });
-
-  /* ============ Waypoint Photo Hover ============ */
   const escapeUiText = escapeHtmlText;
-  const mapOverlayController = createMapOverlayController({
-    document,
-    viewport:window,
-    openImage:(source, caption) => openLightbox(source, caption),
-  });
-  function pinWpCard(e: any, wp: any, trail: any) {
-    const description = wp.description || (wp.name && wp.name !== wp.label ? wp.name : '');
-    const oe = e.originalEvent;
-    mapOverlayController.showWaypointCard({
-      iconHtml:waypointIconMarkup(wp),
-      label:String(wp.label || wp.name || ''),
-      meta:`· ${wp.km}${t('header.km')} · ${wp.elev}m`,
-      trailLabel:trail ? t('popup.trailLabel') : undefined,
-      trailName:trail?.name,
-      trailColor:trail?.color,
-      description,
-      photo:wp.photo,
-      photoHint:wp.photo ? t('popup.clickPhotoZoom') : undefined,
-      photoCaption:`${wp.label} · ${wp.km}${t('header.km')} · ${wp.elev}m`,
-    }, {
-      clientX:oe?.clientX ?? window.innerWidth / 2,
-      clientY:oe?.clientY ?? window.innerHeight / 2,
-    });
-    oe?.stopPropagation?.();
-  }
-
-  function hideWpPhoto() {
-    mapOverlayController.hideWaypointCard();
-  }
-
-  // 点击地图空白处 → 关闭卡片
-  if(typeof map !== 'undefined' && map) {
-    map.on('click', () => hideWpPhoto());
-  }
-
-  function showTooltip(e: any, a: any, b: any, trail: any, heat: any) {
-    // a[4] = 累计爬升，通过 trail 反查累计下降
-    let descVal = '-';
-    if(trail && trail._descCum && a[3] !== undefined) {
-      // 找最近索引的累计下降
-      const idx = trail.track ? trail.track.findIndex((p: any) => p[3] >= a[3]) : -1;
-      if(idx >= 0 && trail._descCum[idx] !== undefined) descVal = Math.round(trail._descCum[idx]) + ' m';
-    }
-    const rows = [
-      {label:'里程', value:`${a[3]} km`},
-      {label:'海拔', value:`${a[2]} m`},
-      {label:'爬升', value:`${a[4]} m`},
-      {label:'下降', value:descVal},
-      {label:'天数', value:`D${a[5]}`},
-      {label:'纬度', value:formatCoordinate(a[0]), coordinate:true},
-      {label:'经度', value:formatCoordinate(a[1]), coordinate:true},
-      {label:'轨迹', value:String(trail.name || ''), color:trail.color},
-    ];
-    if(heat !== undefined) rows.push({label:'重合度', value:`${heat}x`});
-    mapOverlayController.showTooltip(rows, {
-      clientX:e.originalEvent.clientX,
-      clientY:e.originalEvent.clientY,
-    });
-  }
-  function hideTooltip() { mapOverlayController.hideTooltip(); }
-
-  function inspectTrackPoint(event: any, trail: any) {
-    return trackPointInspector.inspect(event, trail);
-  }
   /* ============ Escape ============ */
   const escapeRuntime = createEscapeRuntime({
     document, leaflet:L, map, displayLayer:escapeLayer, context:runtimeContext,
@@ -694,6 +507,7 @@ export function startStudioRuntime(
   });
   const escapeController = escapeRuntime.controller;
   const addEscapeState = escapeRuntime.state;
+  escapeReferenceTrailId = () => addEscapeState.active ? addEscapeState.referenceTrailId : null;
   const showEscape = escapeRuntime.showRoute;
   const clearEscape = escapeRuntime.clearRoute;
   /* ============ Build sidebar ============ */
@@ -947,7 +761,8 @@ export function startStudioRuntime(
     onEvent:handleFileExportEvent,
   });
 
-  const projectRuntimeController:any = HTM_APP.createProjectRuntimeController(runtimeContext, {
+  const projectRuntimeController:any = HTM_APP.createProjectRuntimeController(
+    runtimeContext as unknown as HTM_APP.RuntimeContext<import('../../core/project-archive.ts').ProjectArchiveTrail>, {
     files:browserFileAdapter,
     appVersion:APP_VERSION,
     getLanguage:() => getCurrentLang() === 'en' ? 'en' : 'zh',
@@ -1310,7 +1125,8 @@ export function startStudioRuntime(
   elevationCanvasRenderer = elevationRuntime.renderer;
 
   const waypointRuntime = createWaypointRuntime({
-    document, leaflet:L, map, dialogs:studioDialogs, context:runtimeContext,
+    document, leaflet:L, map, dialogs:studioDialogs,
+    context:runtimeContext as unknown as HTM_APP.RuntimeContext<HTM_APP.WaypointTrail>,
     selectors, projectSelectors, language:getCurrentLang, translate:t, tagColors,
     iconForTag:waypointIcon, iconMarkup:waypointIconMarkup,
     nearestPrimary:nearestTrackIdxOnPrimary, distance:haversine,

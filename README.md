@@ -6,7 +6,7 @@
 
 [English](README.en.md) · [在线使用](https://sicily-love.github.io/hiking-trail-mapper/) · [功能说明](docs/FEATURES.md)
 
-![version](https://img.shields.io/badge/version-v2.3.3-blue)
+![version](https://img.shields.io/badge/version-v2.3.4-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -109,7 +109,7 @@ src/
 
 ## 发布
 
-- 当前版本：v2.3.3
+- 当前版本：v2.3.4
 - `PATCH`：修复、兼容性、文档和小型交互优化。
 - `MINOR`：新增用户可见功能或数据格式。
 - `MAJOR`：不兼容的数据或导出格式变化。

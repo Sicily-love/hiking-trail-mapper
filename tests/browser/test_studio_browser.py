@@ -25,6 +25,7 @@ RUNTIME_SOURCE_FILES = [
     ROOT / "src/ui/import/runtime-owner.ts",
     ROOT / "src/features/localization/runtime-owner.ts",
     ROOT / "src/features/map/workspace-controller.ts",
+    ROOT / "src/features/map/runtime-owner.ts",
     ROOT / "src/features/elevation/runtime-owner.ts",
     ROOT / "src/features/waypoint/runtime-owner.ts",
     ROOT / "src/features/measure/runtime-owner.ts",
@@ -532,7 +533,11 @@ try:
               });
               return model.iconHtml.includes('wp-day-badge') && model.iconHtml.includes('D2');
             })()
-          """) and source_has('function addWpMarker', 'const result = controller.apply()', 'rebuild();'))
+          """) and source_has(
+              'const addWpMarker = mapRuntime.buildWaypointMarker',
+              'const buildWaypointMarker =',
+              'markerRenderController.build()',
+          ))
     check("标注点图标按 tag 统一渲染",
           evalj("""
             waypointIconMarkup('fork').includes('data-lucide=\"git-fork\"')

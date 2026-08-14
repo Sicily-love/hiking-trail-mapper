@@ -45,7 +45,7 @@ interface SegmentRuntimeDependencies<TTrail extends SegmentTrail> {
   dialogs: DialogController;
   context: RuntimeContext<TTrail>;
   trackSnap: TrackSnapService<TTrail>;
-  dayPalette: string[];
+  dayPalette: readonly string[];
   interactionMarkerHitSize: number;
   language: () => 'zh' | 'en';
   formatCoordinates: (point: [number, number]) => string;

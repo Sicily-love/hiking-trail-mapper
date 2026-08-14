@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v2.3.4',
+    date: '2026-08-14',
+    items: {
+      zh: ['将地图轨迹、Marker、提示卡与轨迹点检查迁入 typed map runtime owner，主 runtime 缩减至约 1370 行', '收紧 RuntimeContext、轨迹与标注点泛型边界，仅在归档和标注适配处保留显式类型转换', '统一高点标记样式归属，并补充中英文地图提示与架构边界回归测试'],
+      en: ['Move map tracks, markers, overlays, and track-point inspection into a typed map runtime owner, reducing the main runtime to roughly 1,370 lines', 'Tighten RuntimeContext, trail, and waypoint generic boundaries, retaining explicit casts only at archive and waypoint adapters', 'Centralize high-point marker styling and add bilingual map overlays plus architecture-boundary regression coverage'],
+    },
+  },
+  {
     version: 'v2.3.3',
     date: '2026-08-11',
     items: {

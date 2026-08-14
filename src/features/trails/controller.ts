@@ -4,10 +4,11 @@ import { computeSegmentedTrackMetrics, normalizeTrackBreaks } from '../../core/t
 export type MutableTrailPoint = [
   lat: number,
   lng: number,
-  elevation: number,
+  elevation?: number,
   distanceKm?: number,
   ascentM?: number,
   dayId?: number | null,
+  ...extra: unknown[],
 ];
 
 export interface MutableTrailWaypoint {
@@ -21,7 +22,7 @@ export interface MutableTrailWaypoint {
 export interface MutableTrailStats {
   distance_km: number;
   ascent_m: number;
-  descent_m: number;
+  descent_m?: number;
 }
 
 export interface MutableTrail {
@@ -37,11 +38,11 @@ export interface MutableTrail {
   escape_routes?: Array<{_anchor?: {trailId: string; trailName: string} | null}>;
 }
 
-export interface TrailControllerDependencies {
+export interface TrailControllerDependencies<TTrail extends MutableTrail = MutableTrail> {
   haversine: (lat1: number, lng1: number, lat2: number, lng2: number) => number;
   accumulatorAscent: (elevations: number[], threshold: number) => number[];
   accumulatorDescent: (elevations: number[], threshold: number) => number[];
-  markRevision: (trail: MutableTrail) => unknown;
+  markRevision: (trail: TTrail) => unknown;
   persist: () => void;
   render: (options?: {fit?: boolean}) => void;
   clearStorage: () => Promise<void>;
@@ -55,16 +56,16 @@ export interface TrailController {
   clearTrails: () => Promise<boolean>;
 }
 
-function requireDependencies(dependencies: TrailControllerDependencies): void {
+function requireDependencies<TTrail extends MutableTrail>(dependencies: TrailControllerDependencies<TTrail>): void {
   for(const [name, dependency] of Object.entries(dependencies)) {
     if(typeof dependency !== 'function') throw new TypeError(`TrailController requires ${name}`);
   }
 }
 
 /** Owns trail collection mutations while UI confirmation remains in the caller. */
-export function createTrailController(
-  context: RuntimeContext<MutableTrail>,
-  dependencies: TrailControllerDependencies,
+export function createTrailController<TTrail extends MutableTrail>(
+  context: RuntimeContext<TTrail>,
+  dependencies: TrailControllerDependencies<TTrail>,
 ): TrailController {
   requireDependencies(dependencies);
 
@@ -145,7 +146,7 @@ export function createTrailController(
             }
             waypoint.gps_idx = nearestIndex;
             waypoint.km = +(candidate.track[nearestIndex][3] || 0).toFixed(1);
-            waypoint.elev = Math.round(candidate.track[nearestIndex][2]);
+            waypoint.elev = Math.round(candidate.track[nearestIndex][2] || 0);
           } else if(waypoint.gps_idx != null) {
             waypoint.gps_idx = candidate.track.length - 1 - waypoint.gps_idx;
           }

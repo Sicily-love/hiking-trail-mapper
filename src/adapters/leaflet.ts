@@ -41,7 +41,7 @@ interface LeafletEventedLayer {
   addTo(layer: unknown): LeafletEventedLayer;
 }
 
-interface LeafletRenderApi {
+export interface LeafletRenderApi {
   polyline(latLngs: unknown, style: Record<string, unknown>): LeafletEventedLayer;
   divIcon(options: Record<string, unknown>): unknown;
   marker(position: [number, number], options: Record<string, unknown>): LeafletEventedLayer;
@@ -82,7 +82,7 @@ export function createLeafletTrackPointInspectionRenderer(options: {
   });
 }
 
-interface LeafletLayerGroup {
+export interface LeafletLayerGroup {
   clearLayers(): void;
   removeLayer(layer: unknown): void;
 }

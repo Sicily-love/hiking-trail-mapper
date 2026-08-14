@@ -68,6 +68,7 @@ test('browser capabilities have one explicit module owner', () => {
   const escape = read('src/features/escape/runtime-owner.ts');
   const measure = read('src/features/measure/runtime-owner.ts');
   const segment = read('src/features/segment/runtime-owner.ts');
+  const mapRuntime = read('src/features/map/runtime-owner.ts');
   const workspace = read('src/features/map/workspace-controller.ts');
   const interaction = read('src/app/runtime/interaction-owner.ts');
   for(const functionName of ['loadFromStorage', 'renderWaypointsNow', 'renderTracksNow', 'drawElevBar']) {
@@ -92,6 +93,10 @@ test('browser capabilities have one explicit module owner', () => {
   assert.strictEqual(runtimeSource.includes('function handleFiles('), false);
   assert.match(workspace, /const resetView =/);
   assert.match(runtimeSource, /createWorkspaceController\(/);
+  assert.match(runtimeSource, /createMapRuntime\(/);
+  assert.match(mapRuntime, /createLeafletTrackRenderer\(/);
+  assert.match(mapRuntime, /createLeafletMarkerRenderer\(/);
+  assert.doesNotMatch(runtimeSource, /createLeaflet(?:Track|Marker)Renderer\(/);
   assert.match(runtimeSource, /createSidebarRuntime\(/);
   assert.match(runtimeSource, /createImportRuntime\(/);
   assert.match(runtimeSource, /createWaypointRuntime\(/);

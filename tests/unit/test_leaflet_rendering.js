@@ -211,6 +211,8 @@ T('high-point models stay declarative and render in their dedicated layer', () =
   }, true);
   assert.ok(model);
   assert.deepStrictEqual(model.position, [31,101]);
+  assert.ok(model.iconHtml.includes('highpoint-marker__icon'));
+  assert.ok(model.iconHtml.includes('highpoint-marker__label'));
   renderer.renderHighPoints([model]);
   assert.strictEqual(highPointLayer.clears, 1);
   assert.strictEqual(highPointLayer.added.length, 1);

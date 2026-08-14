@@ -296,6 +296,15 @@ export {
   type WorkspaceTrail,
 } from '../features/map/workspace-controller.ts';
 export {
+  createMapRuntime,
+  DAY_ITINERARY_WAYPOINT_TAGS,
+  MAP_DAY_PALETTE,
+  MAP_WAYPOINT_TAG_COLORS,
+  MAP_WAYPOINT_TAG_LABELS,
+  type MapRuntime,
+  type MapRuntimeDependencies,
+} from '../features/map/runtime-owner.ts';
+export {
   createSidebarRuntime,
   type SidebarRuntimeDependencies,
 } from '../ui/sidebar/runtime-owner.ts';

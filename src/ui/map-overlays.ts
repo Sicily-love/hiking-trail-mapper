@@ -14,6 +14,7 @@ export interface MapTooltipRow {
 }
 
 export interface WaypointCardModel {
+  closeLabel?: string;
   iconHtml: string;
   label: string;
   meta: string;
@@ -103,7 +104,7 @@ export function createMapOverlayController(options: MapOverlayControllerOptions)
     const close = options.document.createElement('button');
     close.type = 'button';
     close.className = 'waypoint-card__close';
-    close.setAttribute('aria-label', 'Close waypoint details');
+    close.setAttribute('aria-label', model.closeLabel || 'Close waypoint details');
     close.appendChild(createWorkbenchIcon(options.document, 'x', {size:15}));
     close.addEventListener('click', event => {
       event.stopPropagation();

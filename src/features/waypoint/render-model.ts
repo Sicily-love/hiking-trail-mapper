@@ -6,7 +6,7 @@ export interface WaypointRenderRecord {
   id: string | number;
   lat: number;
   lng: number;
-  tag: string;
+  tag?: string;
   km?: number;
   elev?: number;
   day?: number | null;
@@ -103,7 +103,7 @@ export function buildHighPointMarkerModel(
   }
   if(maxElevation === -Infinity) return null;
   const point = trail.track[maxIndex];
-  const iconHtml = `<div style="display:flex;flex-direction:column;align-items:center;pointer-events:auto"><div style="font-size:18px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6))">⛰</div><div style="background:${sanitizeHexColor(trail.color)};color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;margin-top:2px;white-space:nowrap;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.3)">${maxElevation} m</div></div>`;
+  const iconHtml = `<div class="highpoint-marker" style="--highpoint-color:${sanitizeHexColor(trail.color)}"><span class="highpoint-marker__icon">⛰</span><span class="highpoint-marker__label">${maxElevation} m</span></div>`;
   return {
     key:`highpoint:${trail.id}`,
     signature:JSON.stringify([trail.name, trail.color, point[0], point[1], point[3], maxElevation, isPrimary]),
@@ -115,8 +115,8 @@ export function buildHighPointMarkerModel(
 }
 
 /** Centralizes marker visibility and model creation outside browser orchestration. */
-export function createMarkerRenderController(
-  context: RuntimeContext<WaypointRenderTrail>,
+export function createMarkerRenderController<TTrail extends WaypointRenderTrail>(
+  context: RuntimeContext<TTrail>,
   options: MarkerRenderControllerOptions,
 ): MarkerRenderController {
   const build = (): MarkerRenderScene => {
@@ -132,13 +132,13 @@ export function createMarkerRenderController(
       const isPrimary = trail.id === state.primaryTrailId;
       if(state.showLabel && (waypointMode || (active && isPrimary))) {
         for(const waypoint of trail.waypoints || []) {
-          if(!state.visibleTags.has(waypoint.tag)) continue;
+          if(!state.visibleTags.has(waypoint.tag || 'other')) continue;
           waypoints.push(buildWaypointMarkerModel({
             trail,
             waypoint,
             isPrimary,
             waypointMode,
-            color:options.tagColors[waypoint.tag] || '#aaa',
+            color:options.tagColors[waypoint.tag || 'other'] || '#aaa',
             iconText:options.iconForWaypoint(waypoint),
           }));
         }

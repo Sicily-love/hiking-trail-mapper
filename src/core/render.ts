@@ -24,7 +24,7 @@ export function buildMeasureSegmentRenderModel(
 export function buildSegmentLayerModel(
   track: TrackTuple[],
   points: TrackIndexPoint[],
-  dayColors: string[],
+  dayColors: readonly string[],
   maxPoints = 900,
   trackBreaks: number[] = [],
 ) {

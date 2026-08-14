@@ -7,6 +7,7 @@ export type WaypointTrackPoint = [
   distanceKm?: number,
   ascentM?: number,
   dayId?: number | null,
+  ...extra: unknown[],
 ];
 
 export interface WaypointRecord {

@@ -2,6 +2,7 @@
 const assert = require('assert');
 const { read, runtimeSource: runtime } = require('./runtime_source');
 const elevationRuntime = read('src/features/elevation/runtime-owner.ts');
+const mapRuntime = read('src/features/map/runtime-owner.ts');
 let passed = 0;
 let failed = 0;
 
@@ -35,15 +36,15 @@ test('one RenderScheduler owns all seven runtime phases', () => {
 });
 
 test('legacy redraw entrypoints only invalidate dirty flags', () => {
-  const tracks = functionSource('drawTracks', 'nearestTrackIdx');
-  const markers = functionSource('drawWaypoints', 'showHelp');
   const chart = functionSource('refreshElevBar');
-  assert.ok(tracks.includes('RENDER_DIRTY.TRACKS'));
-  assert.ok(markers.includes('RENDER_DIRTY.MARKERS'));
+  assert.match(runtime, /invalidateTracks:\(\) => invalidateRender\(HTM_APP\.RENDER_DIRTY\.TRACKS\)/);
+  assert.match(runtime, /invalidateMarkers:\(\) => invalidateRender\(HTM_APP\.RENDER_DIRTY\.MARKERS\)/);
+  assert.match(mapRuntime, /drawTracks:dependencies\.invalidateTracks/);
+  assert.match(mapRuntime, /drawWaypoints:dependencies\.invalidateMarkers/);
   assert.ok(chart.includes('elevationRuntime?.refresh'));
   assert.ok(elevationRuntime.includes('invalidateChart()'));
-  assert.strictEqual(tracks.includes('trackLayer.clearLayers'), false);
-  assert.strictEqual(markers.includes('wpLayer.clearLayers'), false);
+  assert.strictEqual(mapRuntime.includes('trackLayer.clearLayers'), false);
+  assert.strictEqual(mapRuntime.includes('waypointLayer.clearLayers'), false);
 });
 
 test('rebuildAll schedules the complete ordered render set', () => {
@@ -57,17 +58,18 @@ test('rebuildAll schedules the complete ordered render set', () => {
 });
 
 test('track runtime delegates bounded elevation rendering to the typed model and Leaflet adapter', () => {
-  const source = functionSource('renderTracksNow', 'drawTracks');
-  assert.ok(source.includes('mapRenderController.buildTracks'));
-  assert.ok(source.includes('elevationBandCount:40'));
-  assert.ok(source.includes('leafletTrackRenderer.render(model)'));
-  assert.ok(source.includes('renderRuntimeStats.elevationBands = model.elevationBands'));
+  const source = functionSource('renderTracksNow', 'renderWaypointsNow');
+  assert.ok(source.includes('mapRuntime.renderTracks()'));
+  assert.ok(mapRuntime.includes('mapRenderController.buildTracks'));
+  assert.ok(mapRuntime.includes('elevationBandCount:40'));
+  assert.ok(mapRuntime.includes('trackRenderer.render(model)'));
+  assert.ok(mapRuntime.includes('recordElevationBands(model.elevationBands)'));
   assert.strictEqual(source.includes('L.polyline'), false);
   assert.strictEqual(source.includes('DATA.'), false);
   assert.strictEqual(source.includes('state.'), false);
-  assert.ok(runtime.includes('HTM_APP.createLeafletTrackRenderer'));
-  assert.ok(runtime.includes('HTM_APP.createMapRenderController'));
-  assert.match(runtime, /onInspectPoint:\(event(?:: any)?, model(?:: any)?\) => inspectTrackPoint\(event, model\.trail\)/);
+  assert.ok(mapRuntime.includes('createLeafletTrackRenderer'));
+  assert.ok(mapRuntime.includes('createMapRenderController'));
+  assert.match(mapRuntime, /onInspectPoint:\(event, model\) => trackPointInspector\.inspect/);
   assert.ok(elevationRuntime.includes('formatTrackPointCoordinates(point)'));
 });
 
@@ -94,13 +96,14 @@ test('Canvas elevation rendering downsamples without replacing full hit data', (
 });
 
 test('waypoint runtime delegates keyed Marker ownership to the Leaflet adapter', () => {
-  const source = functionSource('renderWaypointsNow', 'drawWaypoints');
-  assert.ok(source.includes('leafletMarkerRenderer.renderWaypoints'));
+  const source = functionSource('renderWaypointsNow', 'showHelp');
+  assert.ok(source.includes('mapRuntime.renderWaypoints()'));
+  assert.ok(mapRuntime.includes('markerRenderer.renderWaypoints'));
   assert.strictEqual(source.includes('wpLayer.clearLayers'), false);
   assert.strictEqual(source.includes('L.marker'), false);
-  assert.ok(runtime.includes('HTM_APP.createLeafletMarkerRenderer'));
-  assert.ok(runtime.includes('HTM_APP.createMarkerRenderController'));
-  assert.ok(runtime.includes('waypointRegistry:wpMarkers'));
+  assert.ok(mapRuntime.includes('createLeafletMarkerRenderer'));
+  assert.ok(mapRuntime.includes('createMarkerRenderController'));
+  assert.ok(mapRuntime.includes('waypointRegistry'));
   assert.strictEqual(source.includes('DATA.'), false);
   assert.strictEqual(source.includes('state.'), false);
 });

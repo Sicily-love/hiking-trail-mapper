@@ -62,6 +62,7 @@ test('RuntimeContext and feature modules expose selectors and actions, not raw s
     'src/features/escape/controller.ts',
     'src/features/itinerary/controller.ts',
     'src/features/map/render-model.ts',
+    'src/features/map/runtime-owner.ts',
     'src/features/waypoint/render-model.ts',
   ];
   for(const file of featureFiles) {

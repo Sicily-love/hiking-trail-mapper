@@ -96,7 +96,7 @@ T('direct runtime transition modals delegate to one dialog controller without HT
     ),
     studioRuntime.slice(
       studioRuntime.indexOf('function showHelp'),
-      studioRuntime.indexOf('function addWpMarker'),
+      studioRuntime.indexOf('const formatTrackPointCoordinates'),
     ),
     studioRuntime.slice(
       studioRuntime.indexOf('async function showStorageInfo'),
