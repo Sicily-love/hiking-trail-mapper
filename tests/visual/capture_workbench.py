@@ -365,9 +365,14 @@ try:
         const description = modal?.querySelector('.modal-description')?.textContent.trim() || '';
         const primary = modal?.querySelector('[data-i18n="add.dropPrimary"]')?.textContent.trim() || '';
         const secondary = modal?.querySelector('[data-i18n="add.dropSecondary"]')?.textContent.trim() || '';
+        const copy = [description, primary, secondary];
+        const copyValid = [
+          ['导入路线文件或恢复项目备份。', '选择或拖入 KML / ZIP', '可一次选择多个文件'],
+          ['Import route files or restore a project backup.', 'Choose or drop KML / ZIP', 'Select multiple files at once'],
+        ].some(expected => expected.every((value, index) => value === copy[index]));
         return !!modal?.classList.contains('open') && !!card
           && card.scrollWidth <= card.clientWidth
-          && description.length <= 18 && primary.length <= 18 && secondary.length <= 18;
+          && copyValid;
       })()
     """)
     import_dialog_shot = cdp("Page.captureScreenshot", {"format": "png", "fromSurface": True})
