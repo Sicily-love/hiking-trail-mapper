@@ -73,21 +73,31 @@ def freeport():
     s = socket.socket(); s.bind(("", 0)); p = s.getsockname()[1]; s.close(); return p
 port = freeport()
 udir = f"/tmp/chrome-v15-test-{os.getpid()}"
+chrome_log_path = Path(f"/tmp/chrome-v15-test-{os.getpid()}.log")
+chrome_log = chrome_log_path.open("w", encoding="utf-8")
 chrome = subprocess.Popen([
-    chrome_bin(), "--headless=new", "--disable-gpu", "--no-sandbox",
-    "--remote-allow-origins=*",
+    chrome_bin(), "--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox",
+    "--disable-crash-reporter", "--no-first-run", "--no-default-browser-check",
+    "--remote-allow-origins=*", "--remote-debugging-address=127.0.0.1",
     f"--remote-debugging-port={port}", f"--user-data-dir={udir}",
     f"file://{TMPL}?studio-test=1"
-], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+], stdout=chrome_log, stderr=subprocess.STDOUT)
 try:
-    for _ in range(30):
+    targets = None
+    for _ in range(60):
+        if chrome.poll() is not None:
+            break
         try:
-            r = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=1).read())
-            if r: break
+            targets = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=1).read())
+            if targets:
+                break
         except Exception: time.sleep(0.3)
-    else:
-        raise RuntimeError("Chrome 起不来")
+    if not targets:
+        chrome_log.flush()
+        detail = chrome_log_path.read_text(encoding="utf-8", errors="replace")[-3000:]
+        raise RuntimeError(f"Chrome 起不来（exit={chrome.poll()}）\n{detail}")
 
+    r = targets
     tabs = [t for t in r if t.get('type')=='page']
     page = next((t for t in tabs if TMPL.name in t.get('url', '')), tabs[0])
     ws_url = page["webSocketDebuggerUrl"]
@@ -1811,7 +1821,7 @@ try:
           });
           return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
         };
-        const rgb = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+        const rgb = value => (value.match(/[0-9.]+/g) || []).slice(0, 3).map(Number);
         const contrast = (foreground, background) => {
           const first = luminance(rgb(foreground));
           const second = luminance(rgb(background));
@@ -2038,4 +2048,6 @@ finally:
     chrome.terminate()
     try: chrome.wait(timeout=3)
     except: chrome.kill()
+    chrome_log.close()
+    chrome_log_path.unlink(missing_ok=True)
     subprocess.run(["rm", "-rf", udir], capture_output=True)
