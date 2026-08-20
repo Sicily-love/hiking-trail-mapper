@@ -1,4 +1,4 @@
-/** Workbench UI 3.0 static and dependency-free DOM contracts. */
+/** Workbench UI 3.x static and dependency-free DOM contracts. */
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -57,7 +57,7 @@ function test(name, fn) {
   }
 }
 
-console.log('\nWorkbench UI 3.0 contracts');
+console.log('\nWorkbench UI 3.x contracts');
 
 test('Lucide uses named tree-shakeable imports and one icon helper', () => {
   assert.ok(iconSource.includes("} from 'lucide';"));
@@ -361,8 +361,8 @@ test('Workbench is the only chrome owner', () => {
   assert.ok(workbenchSource.includes('function prepareElevationToggle('));
 });
 
-test('Workbench 3 palette includes the four restrained semantic color families', () => {
-  ['--v3-app:', '--v3-pine:', '--v3-amber:', '--v3-coral:', '--v3-paper:']
+test('Workbench 3 palette includes restrained alpine semantic color families', () => {
+  ['--v3-app:', '--v3-pine:', '--v3-amber:', '--v3-blue:', '--v3-coral:', '--v3-paper:']
     .forEach(token => assert.ok(v3Css.includes(token), token));
   assert.ok(v3Css.includes('--studio-forest:var(--v3-pine)'));
   assert.ok(v3Css.includes('--studio-orange:var(--v3-amber)'));
@@ -399,7 +399,7 @@ test('Workbench 3 CSS owns desktop, tablet, phone, and coarse-pointer contracts'
   assert.ok(v3Css.includes('grid-template-columns:repeat(5,minmax(0,1fr));'));
   assert.ok(v3Css.includes('(pointer:coarse) and (max-height:520px)'));
   assert.ok(v3Css.includes('--studio-safe-bottom'));
-  assert.ok(v3Css.includes('height:min(72dvh,640px);'));
+  assert.ok(v3Css.includes('height:min(76dvh,680px);'));
   assert.ok(workbenchCss.includes("#measure-panel.studio-elevation-measure-actions"));
   assert.strictEqual(v3Css.includes(".studio-bottom-pane:not([hidden]) > #segment-panel"), false);
   assert.ok(workbenchCss.includes("html[data-workbench='3'] [hidden]"));

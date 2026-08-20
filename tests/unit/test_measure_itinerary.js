@@ -213,17 +213,17 @@ T('computeElevationRenderModel exposes paths, ticks, and badges', () => {
     descentText: '↓120m',
   });
   assert.deepStrictEqual(model.background.gradient.stops, [
-    { offset: 0, color: '#F7F9F6' },
-    { offset: 1, color: '#E6ECE7' },
+    { offset: 0, color: '#F8FAF7' },
+    { offset: 1, color: '#EDF3EF' },
   ]);
   assert.deepStrictEqual(model.background.noise, {
-    count: 110,
-    rgb: [46, 74, 57],
-    maxAlpha: 0.035,
+    count: 72,
+    rgb: [35, 80, 60],
+    maxAlpha: 0.022,
     size: 1,
   });
   assert.deepStrictEqual(model.gridStyle, {
-    strokeStyle: 'rgba(78,101,86,0.24)',
+    strokeStyle: 'rgba(73,103,86,0.2)',
     lineWidth: 1,
     lineDash: [2, 4],
   });
@@ -233,27 +233,27 @@ T('computeElevationRenderModel exposes paths, ticks, and badges', () => {
     { offset: 1, color: 'rgba(220,226,200,0.18)' },
   ]);
   assert.deepStrictEqual(model.curveStyle, {
-    strokeStyle: '#294C39',
-    lineWidth: 1.6,
+    strokeStyle: '#1F513D',
+    lineWidth: 1.8,
     lineJoin: 'round',
     lineCap: 'round',
   });
   assert.deepStrictEqual(model.baselineStyle, {
-    strokeStyle: 'rgba(88,108,95,0.58)',
+    strokeStyle: 'rgba(82,111,94,0.54)',
     lineWidth: 1,
   });
   assert.deepStrictEqual(model.axisStyle, {
     tickLine: {
-      strokeStyle: 'rgba(88,108,95,0.64)',
+      strokeStyle: 'rgba(82,111,94,0.58)',
       lineWidth: 1,
     },
     tickText: {
-      fillStyle: '#526259',
-      font: "italic 9.5px 'Source Serif 4', serif",
+      fillStyle: '#53675C',
+      font: "10px 'SF Pro Text', 'Segoe UI', 'PingFang SC', sans-serif",
     },
     axisLabel: {
-      fillStyle: '#7A887F',
-      font: "9px 'Source Serif 4', 'PingFang SC', serif",
+      fillStyle: '#75867C',
+      font: "9px 'SF Pro Text', 'Segoe UI', 'PingFang SC', sans-serif",
       textAlign: 'center',
     },
   });

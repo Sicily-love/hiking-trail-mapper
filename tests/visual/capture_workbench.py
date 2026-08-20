@@ -763,11 +763,26 @@ try:
         const rect = toast?.getBoundingClientRect();
         const dockRect = dock?.getBoundingClientRect();
         const style = toast ? getComputedStyle(toast) : null;
+        const rgb = value => (value?.match(/[\\d.]+/g) || []).slice(0, 3).map(Number);
+        const luminance = value => {
+          const channels = rgb(value).map(channel => {
+            const normalized = channel / 255;
+            return normalized <= .03928
+              ? normalized / 12.92
+              : ((normalized + .055) / 1.055) ** 2.4;
+          });
+          return channels.length === 3
+            ? .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2]
+            : 0;
+        };
+        const foreground = luminance(style?.color);
+        const background = luminance(style?.backgroundColor);
+        const contrast = (Math.max(foreground, background) + .05)
+          / (Math.min(foreground, background) + .05);
         return {
           visible:!!toast && toast.classList.contains('is-visible') && style.visibility === 'visible',
           readable:parseFloat(style?.fontSize || '0') >= 13
-            && style?.color === 'rgb(23, 33, 27)'
-            && style?.backgroundColor === 'rgb(248, 251, 249)',
+            && contrast >= 4.5,
           clearsDock:!!rect && !!dockRect && rect.bottom <= dockRect.top - 8,
           inViewport:!!rect && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0,
           semantic:toast?.getAttribute('role') === 'status' && toast?.getAttribute('aria-live') === 'polite',

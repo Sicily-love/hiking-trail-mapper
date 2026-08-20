@@ -9,6 +9,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG = [
   {
+    version: 'v3.0.1',
+    date: '2026-08-20',
+    items: {
+      zh: ['重设计 Workbench 视觉系统：统一深色应用栏、浅色活动导航、路线资料库、海拔分析、浮动面板与对话框层级。', '提升桌面与移动端字号、对比度和触摸目标，并优化横屏地图空间、长名称省略及侧栏 320px 宽度约束。', '更新海拔剖面配色与字体，并将真实 Chrome 视觉回归改为基于对比度的提示条可读性验证。'],
+      en: ['Redesign the Workbench visual system across the dark app bar, light activity navigation, route library, elevation analysis, floating panels, and dialogs.', 'Improve desktop and mobile typography, contrast, and touch targets while preserving landscape map space, long-name truncation, and the 320px sidebar limit.', 'Refresh elevation-profile colors and typography, and validate toast readability by contrast in the real-Chrome visual suite.'],
+    },
+  },
+  {
     version: 'v3.0.0',
     date: '2026-08-15',
     items: {

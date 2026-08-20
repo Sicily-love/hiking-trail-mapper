@@ -304,8 +304,8 @@ try:
           and changelog_scroll_contract.get('actionVisible') is True,
           str(changelog_scroll_contract))
     evalj("document.querySelector('dialog[open] .workbench-dialog__button')?.click()")
-    check("Studio v3 主题变量已生效",
-          evalj("getComputedStyle(document.documentElement).getPropertyValue('--v3-pine').trim().toUpperCase() === '#27624B'"))
+    check("Studio v3.0.1 主题变量与浅色活动栏已生效",
+          evalj("(() => { const root = getComputedStyle(document.documentElement); const rail = document.querySelector('.studio-activity-rail'); const channels = (getComputedStyle(rail).backgroundColor.match(/[0-9.]+/g) || []).map(Number); return root.getPropertyValue('--v3-pine').trim().toUpperCase() === '#27634F' && root.getPropertyValue('--v3-app').trim().toUpperCase() === '#162A25' && channels.length >= 3 && channels[0] > 230 && channels[1] > 230 && channels[2] > 230; })()"))
     check("旧命令节点已无损迁移到多项菜单或顶栏直接操作区",
           evalj("['reverse-btn','stitch-btn','clear-btn','segment-btn','add-escape-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-popup')) && ['add-trail-btn','measure-btn','add-waypoint-btn','export-btn','reset-btn','help-btn','lang-btn'].every(id => document.getElementById(id)?.closest('.studio-menu-list')?.classList.contains('studio-menu-list'))"))
     check("轨迹组选择拥有独立入口和独立页面",

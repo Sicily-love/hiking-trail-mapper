@@ -197,7 +197,7 @@ function decorateControl(
     ? 'tb-label studio-command-label'
     : 'studio-control-label');
   iconWrap.setAttribute('aria-hidden', 'true');
-  iconWrap.appendChild(createWorkbenchIcon(document, definition.icon, { size: kind === 'command' ? 16 : 15 }));
+  iconWrap.appendChild(createWorkbenchIcon(document, definition.icon, { size: kind === 'command' ? 17 : 16 }));
   labelNode.textContent = label;
   const i18nKey = control.dataset.i18n;
   if(i18nKey) {
@@ -289,7 +289,7 @@ function buildActivityRail(document: Document, language: WorkbenchLanguage): {
         delete button.dataset.i18n;
         labelNode.dataset.i18n = i18nKey;
       }
-      button.replaceChildren(createWorkbenchIcon(document, definition.icon, { size: 17 }), labelNode);
+      button.replaceChildren(createWorkbenchIcon(document, definition.icon, { size: 20 }), labelNode);
       modeButtons.set(definition.mode, button);
     }
     root.appendChild(modeSwitcher);
@@ -308,7 +308,7 @@ function buildActivityRail(document: Document, language: WorkbenchLanguage): {
     button.setAttribute('aria-pressed', 'false');
     button.tabIndex = -1;
     label.textContent = localized;
-    button.append(createWorkbenchIcon(document, definition.icon, { size: 19 }), label);
+    button.append(createWorkbenchIcon(document, definition.icon, { size: 21 }), label);
     root.appendChild(button);
     buttons.set(definition.key, button);
   }
@@ -403,7 +403,7 @@ function prepareBrand(
 
   const mark = createElement(document, 'span', 'brand-icon studio-brand-mark');
   const copy = createElement(document, 'span', 'studio-brand-copy');
-  mark.appendChild(createWorkbenchIcon(document, 'mountain', { size: 19 }));
+  mark.appendChild(createWorkbenchIcon(document, 'mountain', { size: 21 }));
   const titleRow = createElement(document, 'span', 'studio-brand-title-row');
   titleRow.append(title, edition);
   copy.append(titleRow, context);
@@ -508,7 +508,7 @@ export function upgradeWorkbenchLayout(
     const localized = localizedLabel(definition, language);
     trigger.title = localized;
     label.textContent = localized;
-    trigger.append(createWorkbenchIcon(document, definition.icon, { size: 14 }), label,
+    trigger.append(createWorkbenchIcon(document, definition.icon, { size: 17 }), label,
       createWorkbenchIcon(document, 'chevron-down', { className: 'studio-menu-caret', size: 12 }));
 
     panel.id = menuId;
