@@ -46,6 +46,7 @@ port = free_port()
 process = subprocess.Popen([
     chrome, "--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox",
     "--disable-crash-reporter", "--enable-precise-memory-info", "--remote-allow-origins=*",
+    "--js-flags=--expose-gc",
     "--window-size=1440,1000",
     f"--remote-debugging-port={port}", f"--user-data-dir={profile}",
     f"file://{HTML}?studio-test=1",
@@ -175,21 +176,27 @@ try:
         stateActions.setGroupPrimary('Scale 200k', ids[0]);
         stateActions.setPrimaryTrail(ids[0]);
         stateActions.setMode('elev');
+        stateActions.replaceVisibleTags([...tags, 'highpoint']);
+        stateActions.setDisplay('showLabel', true);
+        stateActions.setDisplay('showHighPoint', true);
         rebuildAll({fit:false});
         const settleFrames = await settle();
         const firstRenderMs = performance.now() - renderStarted;
         const afterFirst = snapshotStats();
 
         const archiveStarted = performance.now();
-        const archive = HTM_CORE.createProjectArchive({
+        let archive = HTM_CORE.createProjectArchive({
           project:{title:DATA.title, trails:[...DATA.trails], calc_method:{...DATA.calc_method}},
           state:state,
           appVersion:APP_VERSION,
           exportedAt:'2026-08-14T00:00:00.000Z',
         });
-        const archiveText = HTM_CORE.serializeProjectArchive(archive);
-        const parsedArchive = projectArchiveController.parse(archiveText);
+        let archiveText = HTM_CORE.serializeProjectArchive(archive);
+        let parsedArchive = projectArchiveController.parse(archiveText);
         const archiveMs = performance.now() - archiveStarted;
+        const archiveBytes = new Blob([archiveText]).size;
+        const archiveValid = parsedArchive.ok;
+        const archiveTrailCount = parsedArchive.ok ? parsedArchive.archive.project.trails.length : 0;
 
         const storageStarted = performance.now();
         const storageSaved = await _doSave();
@@ -219,6 +226,7 @@ try:
 
         const repeatStarted = performance.now();
         const lifecycleSizeBefore = runtimeLifecycle.size;
+        const layerIdsBefore = trackLayer.getLayers().map(layer => L.stamp(layer)).sort((a, b) => a - b);
         const markerCounts = [];
         const layerCounts = [];
         for(let cycle = 0; cycle < 8; cycle += 1) {
@@ -232,18 +240,37 @@ try:
         }
         const repeatRenderMs = performance.now() - repeatStarted;
         const afterRepeat = snapshotStats();
+        const layerIdsAfter = trackLayer.getLayers().map(layer => L.stamp(layer)).sort((a, b) => a - b);
         const lifecycleSizeAfter = runtimeLifecycle.size;
-        const heapAfter = performance.memory?.usedJSHeapSize || null;
+        const heapPeak = performance.memory?.usedJSHeapSize || null;
+        archive = null;
+        archiveText = null;
+        parsedArchive = null;
+        trails.length = 0;
+        for(let cycle = 0; cycle < 3; cycle += 1) {
+          globalThis.gc?.();
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+        const heapStable = performance.memory?.usedJSHeapSize || null;
         const canvas = document.querySelector('#elev-bar canvas');
+        const labelRects = [...document.querySelectorAll(
+          '.map-marker-label-visible .wp-marker-label, .map-marker-label-visible .highpoint-marker__label'
+        )].map(element => element.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0);
+        let labelOverlaps = 0;
+        for(let left = 0; left < labelRects.length; left += 1) {
+          for(let right = left + 1; right < labelRects.length; right += 1) {
+            const a = labelRects[left];
+            const b = labelRects[right];
+            if(a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) labelOverlaps += 1;
+          }
+        }
         return {
           trailCount:DATA.trails.length,
           activeTrailCount:state.activeTrails.size,
           pointCount,
           buildMs, firstRenderMs, repeatRenderMs, resetMs, resetApplied, settleFrames,
           archiveMs,
-          archiveBytes:new Blob([archiveText]).size,
-          archiveValid:parsedArchive.ok,
-          archiveTrailCount:parsedArchive.ok ? parsedArchive.archive.project.trails.length : 0,
+          archiveBytes, archiveValid, archiveTrailCount,
           storageMs, storageSaved, storageRestored,
           restoredName:restoredPrimary?.name || null,
           restoredDescentPoints:restoredPrimary?._descCum?.length || 0,
@@ -253,14 +280,24 @@ try:
           stableMarkerDiff,
           markerCounts,
           layerCounts,
+          layerIdsStable:JSON.stringify(layerIdsBefore) === JSON.stringify(layerIdsAfter),
           lifecycleSizeBefore,
           lifecycleSizeAfter,
           markerRepeat:afterRepeat.markers,
           elevationSource:afterRepeat.elevation.sourcePoints,
           elevationRendered:afterRepeat.elevation.renderedPoints,
+          mapSourcePoints:afterRepeat.map.sourcePoints,
+          mapRenderedPoints:afterRepeat.map.renderedPoints,
+          mapRenderTier:afterRepeat.map.tier,
+          mapPointBudget:afterRepeat.map.maxPointsPerTrail,
+          visibleLabels:afterRepeat.map.visibleLabels,
+          labelBudget:afterRepeat.map.labelBudget,
+          labelDomCount:labelRects.length,
+          labelOverlaps,
           canvasWidth:canvas?.getBoundingClientRect().width || 0,
-          heapBefore, heapAfter,
-          heapDelta:heapBefore && heapAfter ? heapAfter - heapBefore : null,
+          heapBefore, heapPeak, heapStable,
+          heapPeakDelta:heapBefore && heapPeak ? heapPeak - heapBefore : null,
+          heapStableDelta:heapBefore && heapStable ? heapStable - heapBefore : null,
         };
       })()
     """)
@@ -274,11 +311,15 @@ try:
         report("round-trips a real large project archive", metrics["archiveValid"] and metrics["archiveTrailCount"] == 12 and metrics["archiveBytes"] > 5 * 1024 * 1024, f"{metrics['archiveBytes'] / 1024 / 1024:.1f} MiB / {metrics['archiveMs']:.0f} ms"),
         report("restores the large project from IndexedDB", metrics["storageSaved"] and metrics["storageRestored"] and metrics["restoredName"] == "Scale route 1" and metrics["restoredDescentPoints"] == 18000, f"{metrics['storageMs']:.0f} ms"),
         report("keeps markers and layers bounded across continuous edits", len(set(metrics["markerCounts"])) == 1 and len(set(metrics["layerCounts"])) == 1 and metrics["markerCounts"][0] == metrics["markerCount"], f"markers {metrics['markerCounts']} / layers {metrics['layerCounts']}"),
+        report("reuses Leaflet track instances across unchanged geometry", metrics["layerIdsStable"], "stable layer ids"),
         report("does not accumulate owned runtime resources", metrics["lifecycleSizeBefore"] == metrics["lifecycleSizeAfter"], f"{metrics['lifecycleSizeBefore']} -> {metrics['lifecycleSizeAfter']}"),
         report("downsamples the elevation canvas", metrics["elevationSource"] == 18000 and metrics["elevationRendered"] <= max(2, metrics["canvasWidth"] * 2 + 4), f"{metrics['elevationRendered']}/{metrics['elevationSource']}"),
+        report("bounds map display geometry without changing source points", metrics["mapSourcePoints"] == 216000 and 0 < metrics["mapRenderedPoints"] <= 60000, f"{metrics['mapRenderedPoints']}/{metrics['mapSourcePoints']} ({metrics['mapRenderTier']})"),
+        report("declutters visible map labels", metrics["visibleLabels"] <= metrics["labelBudget"] and metrics["labelDomCount"] <= metrics["labelBudget"] and metrics["labelOverlaps"] == 0, f"{metrics['labelDomCount']}/{metrics['labelBudget']} labels, {metrics['labelOverlaps']} overlaps"),
         report("resets the large primary route without a stalled frame", metrics["resetApplied"] and metrics["resetMs"] < 5000, f"{metrics['resetMs']:.0f} ms"),
         report("renders within a conservative CI budget", metrics["buildMs"] < 5000 and metrics["firstRenderMs"] < 15000 and metrics["repeatRenderMs"] < 10000, f"build {metrics['buildMs']:.0f} / first {metrics['firstRenderMs']:.0f} / repeat {metrics['repeatRenderMs']:.0f} ms"),
-        report("stays below the large-project heap guard", metrics["heapAfter"] is None or metrics["heapAfter"] < 700 * 1024 * 1024, f"{(metrics['heapAfter'] or 0) / 1024 / 1024:.1f} MiB"),
+        report("keeps transient archive work below the peak heap guard", metrics["heapPeak"] is None or metrics["heapPeak"] < 620 * 1024 * 1024, f"{(metrics['heapPeak'] or 0) / 1024 / 1024:.1f} MiB"),
+        report("releases transient copies after backup and restore", metrics["heapStable"] is None or metrics["heapStable"] < 320 * 1024 * 1024, f"{(metrics['heapStable'] or 0) / 1024 / 1024:.1f} MiB"),
     ]
     print("Metrics:", json.dumps(metrics, ensure_ascii=False, separators=(",", ":")))
     print(f"结果: {sum(checks)}/{len(checks)} passed")

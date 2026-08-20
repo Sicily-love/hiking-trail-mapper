@@ -191,6 +191,18 @@ Cover at least wide desktop, narrow desktop, 390px, and 320px:
 
 Visual regression should use real sample KML and capture at least empty state, route list, Day, A/B measurement, two-day segmentation, dialogs, and the mobile sidebar.
 
+## Android Device Acceptance
+
+Automation covers 390×844, 360×800, 320×568, and landscape viewports, but it cannot replace a real device such as the vivo S30 mini. Run this checklist once before freezing a release:
+
+1. Open both Pages and the downloaded single HTML in Chrome. After cache restore, confirm there is one reset and that the sidebar, bottom bar, and elevation dock do not cover the map.
+2. Import projects around 50k, 100k, and 200k points. Switch groups, primary trails, and elevation/waypoint modes, then pan and zoom repeatedly without a blank screen or browser exit.
+3. Exercise A/B measurement dragging, Day preview, segment apply/restore, waypoint creation, escape planning, and partial-trail stitching.
+4. Export KML, itinerary, ZIP, and a complete project backup, then restore that backup. Days, waypoint images, escape plans, and workspace selection must match.
+5. After one online launch, enable airplane mode and confirm that the app shell and local data still work. Satellite tiles still require a network connection and are not treated as guaranteed offline maps.
+
+Record the device, Android/Chrome versions, project point count, result, and screenshots for failures. Simulated viewport coverage must not be reported as completed vivo device testing.
+
 ## Failure Diagnostics
 
 ```bash

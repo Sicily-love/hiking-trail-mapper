@@ -12,6 +12,14 @@ export interface RuntimeRenderStats {
   lastMask: number;
   phases: Record<RenderPhase, number>;
   elevation: {sourcePoints: number; renderedPoints: number};
+  map: {
+    sourcePoints: number;
+    renderedPoints: number;
+    tier: 'compact' | 'balanced' | 'full';
+    maxPointsPerTrail: number;
+    visibleLabels: number;
+    labelBudget: number;
+  };
   elevationBands: number;
   markers: {add: number; update: number; remove: number; keep: number};
   fit: {requested: number; applied: number; superseded: number; lastEpoch: number; lastResetEpoch: number};
@@ -44,6 +52,14 @@ export function createRuntimeRenderOwner<TFitRequest>(
     lastMask:0,
     phases:{tracks:0, markers:0, sidebar:0, days:0, legend:0, chart:0, fit:0},
     elevation:{sourcePoints:0, renderedPoints:0},
+    map:{
+      sourcePoints:0,
+      renderedPoints:0,
+      tier:'full',
+      maxPointsPerTrail:0,
+      visibleLabels:0,
+      labelBudget:0,
+    },
     elevationBands:0,
     markers:{add:0, update:0, remove:0, keep:0},
     fit:{requested:0, applied:0, superseded:0, lastEpoch:0, lastResetEpoch:0},

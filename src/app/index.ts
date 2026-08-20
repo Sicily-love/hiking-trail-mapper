@@ -103,6 +103,7 @@ export {
   buildHighPointMarkerModel,
   buildWaypointMarkerModel,
   createMarkerRenderController,
+  setMarkerLabelVisibility,
   type LeafletMarkerRenderModel,
   type WaypointRenderRecord,
   type WaypointRenderTrail,

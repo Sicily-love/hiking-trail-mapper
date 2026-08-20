@@ -22,10 +22,15 @@ function createLeafletHarness() {
   let nextId = 0;
   const created = {polylines:[], markers:[], icons:[]};
   const evented = kind => ({
-    id:++nextId, kind, events:{},
+    id:++nextId, kind, events:{}, front:0, offCalls:0,
     on(names, listener) { for(const name of names.split(' ')) this.events[name] = listener; return this; },
+    off() { this.events = {}; this.offCalls++; return this; },
     bindTooltip(content, options) { this.tooltip = {content, options}; return this; },
+    unbindTooltip() { delete this.tooltip; return this; },
     bindPopup(content, options) { this.popup = {content, options}; return this; },
+    setLatLngs(latLngs) { this.latLngs = latLngs; this.latLngUpdates = (this.latLngUpdates || 0) + 1; return this; },
+    setStyle(style) { this.style = style; this.styleUpdates = (this.styleUpdates || 0) + 1; return this; },
+    bringToFront() { this.front++; return this; },
     addTo(layer) { layer.added.push(this); return this; },
   });
   return {
@@ -65,6 +70,28 @@ T('track model preserves z-order and bounds elevation polylines to 40 groups', (
   assert.ok(model.polylines.find(line => line.key === 'a:bloom-outer'));
   assert.ok(model.elevationBands > 0 && model.elevationBands <= 80);
   assert.ok(model.polylines.every(line => line.latLngs.length > 0));
+});
+
+T('track model keeps full source data while bounding map display points', () => {
+  const points = Array.from({length:12000}, (_, index) => [
+    30 + index / 100000,
+    100 + Math.sin(index / 70) / 1000,
+    index === 7011 ? 4900 : 1000 + (index % 900),
+    index / 10,
+    0,
+    index < 6000 ? 1 : 2,
+  ]);
+  const trail = {id:'dense', name:'Dense', color:'#080', track:points, active:true};
+  const model = app.buildTrackRenderModel({
+    trails:[trail], primaryTrailId:'dense', mode:'elev', showTrack:true,
+    activeEscape:null, dayPalette:['#123456'], elevationBandCount:24, maxPointsPerTrail:900,
+  });
+  assert.strictEqual(model.sourcePoints, 12000);
+  assert.ok(model.renderedPoints <= 900);
+  assert.ok(model.renderedPoints >= 2);
+  const renderedCoordinates = model.polylines.flatMap(line =>
+    Array.isArray(line.latLngs[0]?.[0]) ? line.latLngs.flat() : line.latLngs);
+  assert.ok(renderedCoordinates.some(point => point[0] === points[7011][0] && point[1] === points[7011][1]));
 });
 
 T('map controller owns active-group selection without classic globals', () => {
@@ -169,6 +196,17 @@ T('track adapter exclusively creates layers and throttles hover callbacks', () =
   }], elevationBands:0, minElevation:1000, maxElevation:1100});
   trackLayer.added[0].events.click({latlng:{lat:30,lng:100}});
   assert.strictEqual(inspected, 1);
+  assert.strictEqual(leaflet.created.polylines.length, 2);
+  renderer.render({polylines:[{
+    key:'a:inspect', signature:'changed', trail, latLngs:[[30,100],[32,102]],
+    lineStyle:{color:'#080'}, hoverable:true,
+  }], elevationBands:0, minElevation:1000, maxElevation:1100});
+  assert.strictEqual(leaflet.created.polylines.length, 2);
+  assert.strictEqual(trackLayer.clears, 1);
+  assert.strictEqual(trackLayer.added[0].latLngUpdates, 1);
+  renderer.render({polylines:[], elevationBands:0, minElevation:0, maxElevation:0});
+  assert.strictEqual(trackLayer.removed.length, 2);
+  renderer.dispose();
 });
 
 T('Marker adapter keeps stable instances and replaces only changed keys', () => {
@@ -192,11 +230,27 @@ T('Marker adapter keeps stable instances and replaces only changed keys', () => 
   const stable = registry['a#1'];
   assert.deepStrictEqual(renderer.renderWaypoints([first]), {add:0, update:0, remove:0, keep:1});
   assert.strictEqual(registry['a#1'], stable);
-  const changed = {...first, signature:'changed'};
+  const hidden = app.setMarkerLabelVisibility(first, false);
+  assert.deepStrictEqual(renderer.renderWaypoints([hidden]), {add:0, update:1, remove:0, keep:0});
+  assert.strictEqual(registry['a#1'], stable);
+  const changed = {...first, signature:'changed', baseSignature:'changed'};
   assert.deepStrictEqual(renderer.renderWaypoints([changed]), {add:0, update:1, remove:0, keep:0});
   assert.notStrictEqual(registry['a#1'], stable);
   assert.deepStrictEqual(renderer.renderWaypoints([]), {add:0, update:0, remove:1, keep:0});
   assert.strictEqual(registry['a#1'], undefined);
+  renderer.dispose();
+});
+
+T('decluttering hides only marker text and keeps the icon model intact', () => {
+  const trail = {id:'a', name:'A', color:'#080', track:[[30,100,1000,0]], waypoints:[]};
+  const waypoint = {id:1, lat:30, lng:100, tag:'camp', km:0, elev:1000, label:'Camp'};
+  const model = app.buildWaypointMarkerModel({
+    trail, waypoint, isPrimary:true, waypointMode:false, color:'#22c55e', iconText:'C',
+  });
+  const hidden = app.setMarkerLabelVisibility(model, false);
+  assert.ok(hidden.className.includes('map-marker-label-hidden'));
+  assert.ok(hidden.iconHtml.includes('wp-marker-emoji'));
+  assert.notStrictEqual(hidden.signature, model.signature);
 });
 
 T('high-point models stay declarative and render in their dedicated layer', () => {
@@ -217,6 +271,10 @@ T('high-point models stay declarative and render in their dedicated layer', () =
   assert.strictEqual(highPointLayer.clears, 1);
   assert.strictEqual(highPointLayer.added.length, 1);
   assert.ok(highPointLayer.added[0].popup.content.includes('1200'));
+  const createdMarkers = leaflet.created.markers.length;
+  renderer.renderHighPoints([model]);
+  assert.strictEqual(leaflet.created.markers.length, createdMarkers);
+  renderer.dispose();
 });
 
 T('Marker controller owns mode, group, tag, and primary visibility', () => {

@@ -16,7 +16,19 @@ import {
   type TrackPointInspectionEvent,
 } from './inspection-controller.ts';
 import {createMapRenderController} from './render-model.ts';
-import {buildWaypointMarkerModel, createMarkerRenderController} from '../waypoint/render-model.ts';
+import {
+  buildWaypointMarkerModel,
+  createMarkerRenderController,
+  setMarkerLabelVisibility,
+  type LeafletMarkerRenderModel,
+} from '../waypoint/render-model.ts';
+import {
+  mapLabelBudgetForZoom,
+  planMapLabelVisibility,
+  resolveMapRenderPolicy,
+  type MapRenderPolicy,
+  type MapRenderTier,
+} from '../../core/performance/map-rendering.ts';
 
 export const MAP_DAY_PALETTE = Object.freeze([
   '#2F6B5F','#D96C4A','#E1A93B','#5577B8','#8A6BBE','#C45D83','#5E9F65','#C58B54',
@@ -56,6 +68,19 @@ interface LeafletPointerEvent {
 interface LeafletMapEventSource {
   on(event: string, listener: () => void): unknown;
   off?(event: string, listener: () => void): unknown;
+  getCenter?(): {lat: number; lng: number};
+  getZoom?(): number;
+  getSize?(): {x: number; y: number};
+  latLngToContainerPoint?(position: [number, number]): {x: number; y: number};
+}
+
+export interface MapRuntimeRenderStats {
+  sourcePoints: number;
+  renderedPoints: number;
+  tier: MapRenderTier;
+  maxPointsPerTrail: number;
+  visibleLabels: number;
+  labelBudget: number;
 }
 
 export interface MapRuntimeDependencies {
@@ -78,6 +103,7 @@ export interface MapRuntimeDependencies {
   openImage(source: string, caption: string): void;
   recordElevationBands(count: number): void;
   recordMarkerDiff(diff: LeafletMarkerDiffStats): void;
+  recordMapStats(stats: MapRuntimeRenderStats): void;
 }
 
 export interface MapRuntime {
@@ -178,6 +204,53 @@ export function createMapRuntime(dependencies: MapRuntimeDependencies): MapRunti
     viewport,
     openImage:dependencies.openImage,
   });
+  const navigatorHints = viewport.navigator as Navigator & {
+    deviceMemory?: number;
+    connection?: {saveData?: boolean};
+  };
+  const resolveRenderPolicy = (): MapRenderPolicy => {
+    const state = context.stateSelectors.snapshot();
+    const active = context.projectSelectors.trails().filter(trail => state.activeGroup !== null
+      && (trail.group || '默认') === state.activeGroup
+      && state.activeTrails.has(trail.id));
+    return resolveMapRenderPolicy({
+      viewportWidth:viewport.innerWidth,
+      coarsePointer:viewport.matchMedia?.('(pointer: coarse)').matches === true,
+      deviceMemoryGb:navigatorHints.deviceMemory,
+      hardwareConcurrency:navigatorHints.hardwareConcurrency,
+      saveData:navigatorHints.connection?.saveData === true,
+    }, {
+      activeTrailCount:active.length,
+      totalTrackPoints:active.reduce((sum, trail) => sum + trail.track.length, 0),
+    });
+  };
+  let currentPolicy = resolveRenderPolicy();
+  let mapStats:MapRuntimeRenderStats = {
+    sourcePoints:0,
+    renderedPoints:0,
+    tier:currentPolicy.tier,
+    maxPointsPerTrail:currentPolicy.maxPointsPerTrail,
+    visibleLabels:0,
+    labelBudget:0,
+  };
+  const recordMapStats = (patch: Partial<MapRuntimeRenderStats>): void => {
+    mapStats = {...mapStats, ...patch};
+    dependencies.recordMapStats({...mapStats});
+  };
+  const mapViewportSignature = (): string | null => {
+    const center = map.getCenter?.();
+    const size = map.getSize?.();
+    const zoom = map.getZoom?.();
+    if(!center || !size || !Number.isFinite(zoom)) return null;
+    return [
+      Number(center.lat).toFixed(6),
+      Number(center.lng).toFixed(6),
+      Number(zoom).toFixed(3),
+      Math.round(size.x),
+      Math.round(size.y),
+    ].join(':');
+  };
+  let lastLabelViewportSignature = mapViewportSignature();
 
   const tooltipLabel = (zh: string, en: string): string => dependencies.language() === 'zh' ? zh : en;
   const showTooltip = (
@@ -259,18 +332,50 @@ export function createMapRuntime(dependencies: MapRuntimeDependencies): MapRunti
   });
 
   const renderTracks = (): void => {
+    currentPolicy = resolveRenderPolicy();
     const model = mapRenderController.buildTracks({
       dayPalette:MAP_DAY_PALETTE,
-      elevationBandCount:40,
+      elevationBandCount:currentPolicy.elevationBandCount,
+      maxPointsPerTrail:currentPolicy.maxPointsPerTrail,
       escapeReferenceTrailId:dependencies.escapeReferenceTrailId(),
     });
     trackRenderer.render(model);
     dependencies.recordElevationBands(model.elevationBands);
+    recordMapStats({
+      sourcePoints:model.sourcePoints,
+      renderedPoints:model.renderedPoints,
+      tier:currentPolicy.tier,
+      maxPointsPerTrail:currentPolicy.maxPointsPerTrail,
+    });
   };
   const renderWaypoints = (): void => {
+    currentPolicy = resolveRenderPolicy();
     const scene = markerRenderController.build();
-    dependencies.recordMarkerDiff(markerRenderer.renderWaypoints(scene.waypoints));
-    markerRenderer.renderHighPoints(scene.highPoints);
+    const zoom = map.getZoom?.() ?? 14;
+    const labelBudget = mapLabelBudgetForZoom(currentPolicy, zoom);
+    const labelModels = [...scene.waypoints, ...scene.highPoints].filter(model => model.labelLayout);
+    let visibleKeys = new Set(labelModels.slice(0, labelBudget).map(model => model.key));
+    if(map.latLngToContainerPoint && labelModels.length) {
+      const size = map.getSize?.() || {x:viewport.innerWidth, y:viewport.innerHeight};
+      visibleKeys = planMapLabelVisibility(labelModels.map(model => {
+        const point = map.latLngToContainerPoint!(model.position);
+        const layout = model.labelLayout!;
+        return {key:model.key, x:point.x, y:point.y, ...layout};
+      }), {
+        viewportWidth:size.x,
+        viewportHeight:size.y,
+        maxLabels:labelBudget,
+        padding:4,
+      });
+    }
+    const applyVisibility = (model: LeafletMarkerRenderModel) =>
+      setMarkerLabelVisibility(model, visibleKeys.has(model.key));
+    const waypoints = scene.waypoints.map(applyVisibility);
+    const highPoints = scene.highPoints.map(applyVisibility);
+    dependencies.recordMarkerDiff(markerRenderer.renderWaypoints(waypoints));
+    markerRenderer.renderHighPoints(highPoints);
+    lastLabelViewportSignature = mapViewportSignature();
+    recordMapStats({visibleLabels:visibleKeys.size, labelBudget});
   };
   const drawHighPoints = (): void => markerRenderer.renderHighPoints(markerRenderController.build().highPoints);
   const buildWaypointMarker = (trail: RuntimeTrail, waypoint: RuntimeWaypoint, isPrimary: boolean) =>
@@ -283,7 +388,18 @@ export function createMapRuntime(dependencies: MapRuntimeDependencies): MapRunti
       iconText:waypointIconMarkup(waypoint),
     });
   const onMapClick = (): void => overlays.hideWaypointCard();
+  let viewportMarkerFrame: number | null = null;
+  const onMapViewportChanged = (): void => {
+    if(viewportMarkerFrame !== null) return;
+    viewportMarkerFrame = viewport.requestAnimationFrame(() => {
+      viewportMarkerFrame = null;
+      const signature = mapViewportSignature();
+      if(signature !== null && signature === lastLabelViewportSignature) return;
+      dependencies.invalidateMarkers();
+    });
+  };
   map.on('click', onMapClick);
+  map.on('moveend resize', onMapViewportChanged);
 
   return Object.freeze({
     dayPalette:MAP_DAY_PALETTE,
@@ -305,6 +421,11 @@ export function createMapRuntime(dependencies: MapRuntimeDependencies): MapRunti
     hideTooltip:overlays.hideTooltip,
     dispose() {
       map.off?.('click', onMapClick);
+      map.off?.('moveend resize', onMapViewportChanged);
+      if(viewportMarkerFrame !== null) viewport.cancelAnimationFrame(viewportMarkerFrame);
+      viewportMarkerFrame = null;
+      trackRenderer.dispose();
+      markerRenderer.dispose();
       trackPointInspector.destroy();
       overlays.dispose();
     },

@@ -2026,8 +2026,10 @@ try:
         check("最终复位范围包含主轨迹端点",
               performance_flow.get('boundsContainEndpoints') is True)
         reset_render_delta = performance_flow.get('resetRenderDelta', {})
-        check("稳定状态复位不触发业务图层全量重绘",
-              all(value == 0 for value in reset_render_delta.values()),
+        check("稳定状态复位仅允许一次标签布局刷新",
+              reset_render_delta.get('markers', 0) <= 1
+              and all(reset_render_delta.get(name, 0) == 0
+                      for name in ['tracks', 'sidebar', 'legend', 'chart']),
               str(reset_render_delta))
         check("渲染队列最终归零", performance_flow.get('schedulerIdle') is True)
     else:

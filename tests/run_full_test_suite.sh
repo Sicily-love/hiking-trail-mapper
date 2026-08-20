@@ -93,11 +93,14 @@ ok "  $RESULT_LINE  ($STUDIO_BROWSER_TEST)"
 PERF_OUTPUT=$(run_python_with_websocket "$ROOT/tests/browser/test_large_project_performance.py") || {
   echo "$PERF_OUTPUT"; fail "大项目性能测试失败"
 }
-echo "$PERF_OUTPUT" | grep -q "结果: 12/12 passed" || {
+PERF_RESULT=$(echo "$PERF_OUTPUT" | grep -E '^结果: [0-9]+/[0-9]+ passed$' | tail -1 || true)
+PERF_PASSED=$(echo "$PERF_RESULT" | sed -E 's/^结果: ([0-9]+)\/([0-9]+) passed$/\1/')
+PERF_TOTAL=$(echo "$PERF_RESULT" | sed -E 's/^结果: ([0-9]+)\/([0-9]+) passed$/\2/')
+[ -n "$PERF_RESULT" ] && [ "$PERF_PASSED" = "$PERF_TOTAL" ] || {
   echo "$PERF_OUTPUT"; fail "大项目性能测试缺少结果汇总"
 }
 PERF_METRICS=$(echo "$PERF_OUTPUT" | grep '^Metrics:' | tail -1 || true)
-ok "  12 条轨迹 / 21.6 万点真实 Chrome 性能通过"
+ok "  12 条轨迹 / 21.6 万点真实 Chrome 性能通过（${PERF_RESULT}）"
 [ -z "$PERF_METRICS" ] || echo "    ${PERF_METRICS#Metrics: }"
 
 PWA_OUTPUT=$(HTM_PWA_DIST="$ROOT/.vite-build" run_python_with_websocket "$ROOT/tests/browser/test_pwa_offline.py") || {

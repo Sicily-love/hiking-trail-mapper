@@ -50,6 +50,10 @@ T('exports the performance core contract', () => {
     'downsampleMinMaxIndices',
     'downsampleForCanvas',
     'downsampleTrackForCanvas',
+    'downsampleTrackForMap',
+    'resolveMapRenderPolicy',
+    'mapLabelBudgetForZoom',
+    'planMapLabelVisibility',
     'planKeyedWaypointDiff',
     'planWaypointDiff',
     'createTrackSignature',
@@ -179,6 +183,58 @@ T('track canvas wrapper keeps tuple identity and extreme elevations', () => {
   assert.strictEqual(samples.at(-1), track.at(-1));
   assert.ok(samples.includes(track[411]));
   assert.ok(samples.includes(track[812]));
+});
+
+T('map downsampling preserves endpoints, elevation extrema, and Day boundaries', () => {
+  const track = makeTrack(10000, index => 1800 + Math.sin(index / 17) * 120);
+  track.forEach((point, index) => { point[5] = index < 4700 ? 1 : 2; });
+  track[2311][2] = -5000;
+  track[8123][2] = 9000;
+  const samples = performanceCore.downsampleTrackForMap(track, 640);
+  assert.ok(samples.length <= 640);
+  assert.strictEqual(samples[0], track[0]);
+  assert.strictEqual(samples.at(-1), track.at(-1));
+  assert.ok(samples.includes(track[2311]));
+  assert.ok(samples.includes(track[8123]));
+  assert.ok(samples.includes(track[4699]));
+  assert.ok(samples.includes(track[4700]));
+  assertOrderedSubset(samples, track);
+  assert.deepStrictEqual(
+    performanceCore.downsampleTrackForMap(track, 2),
+    [track[0], track.at(-1)],
+  );
+});
+
+T('device policy defines stable 50k, 100k, and 200k mobile tiers', () => {
+  for(const [points, trails] of [[50000, 2], [100000, 4], [200000, 8]]) {
+    const policy = performanceCore.resolveMapRenderPolicy({
+      viewportWidth:390, coarsePointer:true, deviceMemoryGb:4, hardwareConcurrency:8,
+    }, {activeTrailCount:trails, totalTrackPoints:points});
+    assert.strictEqual(policy.tier, 'compact');
+    assert.ok(policy.maxPointsPerTrail >= 700 && policy.maxPointsPerTrail <= 2400);
+    assert.ok(policy.maxPointsPerTrail * trails <= 12000);
+    assert.strictEqual(policy.elevationBandCount, 24);
+  }
+  const desktop = performanceCore.resolveMapRenderPolicy({
+    viewportWidth:1440, deviceMemoryGb:16, hardwareConcurrency:10,
+  }, {activeTrailCount:12, totalTrackPoints:216000});
+  assert.deepStrictEqual({tier:desktop.tier, maxPointsPerTrail:desktop.maxPointsPerTrail}, {
+    tier:'full', maxPointsPerTrail:5000,
+  });
+});
+
+T('zoom density and collision planning keep higher-priority labels', () => {
+  const policy = performanceCore.resolveMapRenderPolicy({viewportWidth:390}, {
+    activeTrailCount:1, totalTrackPoints:50000,
+  });
+  assert.strictEqual(performanceCore.mapLabelBudgetForZoom(policy, 8), 0);
+  assert.ok(performanceCore.mapLabelBudgetForZoom(policy, 11) > 0);
+  const visible = performanceCore.planMapLabelVisibility([
+    {key:'low', x:20, y:20, width:80, height:20, priority:1},
+    {key:'high', x:24, y:22, width:80, height:20, priority:100},
+    {key:'separate', x:180, y:100, width:80, height:20, priority:10},
+  ], {viewportWidth:390, viewportHeight:800, maxLabels:2, padding:3});
+  assert.deepStrictEqual([...visible].sort(), ['high', 'separate']);
 });
 
 T('waypoint diff plans add/update/remove/keep in stable list order', () => {

@@ -63,9 +63,13 @@ test('track runtime delegates bounded elevation rendering to the typed model and
   const source = functionSource('renderTracksNow', 'renderWaypointsNow');
   assert.ok(source.includes('mapRuntime.renderTracks()'));
   assert.ok(mapRuntime.includes('mapRenderController.buildTracks'));
-  assert.ok(mapRuntime.includes('elevationBandCount:40'));
+  assert.ok(mapRuntime.includes('resolveMapRenderPolicy'));
+  assert.ok(mapRuntime.includes('elevationBandCount:currentPolicy.elevationBandCount'));
+  assert.ok(mapRuntime.includes('maxPointsPerTrail:currentPolicy.maxPointsPerTrail'));
   assert.ok(mapRuntime.includes('trackRenderer.render(model)'));
   assert.ok(mapRuntime.includes('recordElevationBands(model.elevationBands)'));
+  assert.ok(mapRuntime.includes('recordMapStats'));
+  assert.ok(mapRuntime.includes('planMapLabelVisibility'));
   assert.strictEqual(source.includes('L.polyline'), false);
   assert.strictEqual(source.includes('DATA.'), false);
   assert.strictEqual(source.includes('state.'), false);

@@ -21,6 +21,22 @@ export {
 export type { NumericAccessor } from './downsample.ts';
 
 export {
+  downsampleTrackForMap,
+  mapLabelBudgetForZoom,
+  planMapLabelVisibility,
+  resolveMapRenderPolicy,
+} from './map-rendering.ts';
+
+export type {
+  MapLabelCandidate,
+  MapLabelLayout,
+  MapRenderCapabilities,
+  MapRenderLoad,
+  MapRenderPolicy,
+  MapRenderTier,
+} from './map-rendering.ts';
+
+export {
   planKeyedWaypointDiff,
   planWaypointDiff,
 } from './waypoint-diff.ts';

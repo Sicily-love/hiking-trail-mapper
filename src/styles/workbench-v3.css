@@ -1325,3 +1325,8 @@ html[data-workbench='3'] :focus-visible {
     animation-duration:.01ms !important;
   }
 }
+/* Map labels keep their icons visible while the viewport declutterer hides text. */
+.map-marker-label-hidden .wp-marker-label,
+.map-marker-label-hidden .highpoint-marker__label {
+  display:none !important;
+}

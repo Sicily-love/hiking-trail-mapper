@@ -49,7 +49,7 @@ export function bindProjectRestoreUi<TTrail extends ProjectArchiveTrail>(
       setStage('review', zh ? '备份检查通过，等待确认' : 'Backup passed validation; awaiting confirmation');
       const decision = await dialogs.content(buildProjectRestorePreview(data, {
         language:dependencies.getLanguage(),
-        archiveBytes:new TextEncoder().encode(text).byteLength,
+        archiveBytes:file.size,
         migratedFrom:result.migratedFrom,
       }));
       if(decision !== 'restore') { setStage('idle', ''); return false; }

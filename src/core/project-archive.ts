@@ -173,6 +173,23 @@ function stringList(value: unknown): string[] {
   return [...new Set(value.filter((item): item is string => typeof item === 'string' && !!item.trim()))];
 }
 
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for(let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if(code <= 0x7f) bytes += 1;
+    else if(code <= 0x7ff) bytes += 2;
+    else if(code >= 0xd800 && code <= 0xdbff
+      && index + 1 < value.length
+      && value.charCodeAt(index + 1) >= 0xdc00
+      && value.charCodeAt(index + 1) <= 0xdfff) {
+      bytes += 4;
+      index += 1;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
 function mapMode(value: unknown): ProjectArchiveMapMode {
   return value === 'day' || value === 'waypoint' ? value : 'elev';
 }
@@ -320,7 +337,7 @@ export function parseProjectArchive(
   options: ProjectArchiveParseOptions = {},
 ): ProjectArchiveParseResult {
   if(typeof text !== 'string') return {ok:false, code:'invalid-json', message:'Project archive must be text'};
-  const bytes = new TextEncoder().encode(text).byteLength;
+  const bytes = utf8ByteLength(text);
   if(bytes > (options.maxBytes ?? PROJECT_ARCHIVE_DEFAULT_LIMITS.maxBytes)) {
     return {ok:false, code:'too-large', message:'Project archive is too large'};
   }
@@ -363,13 +380,13 @@ export function createProjectArchive<TTrail>(
       autoGenerateEscape:input.state.autoGenerateEscape,
     },
   };
-  const result = parseProjectArchive(JSON.stringify(raw));
+  const result = normalizeArchive(raw, {});
   if(!result.ok) throw new TypeError(result.message);
   return result.archive;
 }
 
 export function serializeProjectArchive(archive: ProjectArchive): string {
-  return `${JSON.stringify(archive, null, 2)}\n`;
+  return `${JSON.stringify(archive)}\n`;
 }
 
 function nestedArrayLength(value: unknown): number {

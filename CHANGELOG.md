@@ -4,6 +4,22 @@
 
 All notable changes to Hiking Trail Mapper. Both Chinese and English entries preserved from in-app CHANGELOG.
 
+## v3.0.2 — 2026-08-20
+
+**中文**
+
+- 大项目地图按设备能力自适应抽稀，仅减少显示点，原始轨迹、吸附、统计和导出保持全量精度。
+- Leaflet 轨迹与高点图层按 key 复用并显式释放，21.6 万点压力场景稳定堆降至约 43 MiB。
+- 地图标注按缩放级别控制密度并进行屏幕碰撞避让，主轨迹层级更清晰。
+- 完整项目备份改为兼容的紧凑 JSON，并减少校验和恢复期间的临时内存与文件体积。
+
+**English**
+
+- Adapt map display sampling to device capacity while preserving full source fidelity for snapping, statistics, and export.
+- Reuse and explicitly release keyed Leaflet trail and high-point layers, reducing stable heap to about 43 MiB in the 216k-point stress case.
+- Control map-label density by zoom and avoid screen-space collisions while strengthening primary-trail hierarchy.
+- Use compatible compact JSON project archives and reduce temporary memory and file size during validation and restore.
+
 ## v3.0.1 — 2026-08-20
 
 **中文**

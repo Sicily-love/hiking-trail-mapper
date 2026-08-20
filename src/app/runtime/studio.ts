@@ -452,6 +452,7 @@ export function startStudioRuntime(
     openImage:(source, caption) => openLightbox(source, caption),
     recordElevationBands:count => { renderRuntimeStats.elevationBands = count; },
     recordMarkerDiff:diff => { renderRuntimeStats.markers = diff; },
+    recordMapStats:stats => { renderRuntimeStats.map = stats; },
   });
   const dayPalette = mapRuntime.dayPalette;
   const tagColors = mapRuntime.tagColors;
